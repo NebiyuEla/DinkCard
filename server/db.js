@@ -5,10 +5,20 @@ import bcrypt from 'bcryptjs';
 import { config } from './config.js';
 import { generateId, nowIso } from './utils.js';
 
-fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
-fs.mkdirSync(config.uploadDir, { recursive: true });
+/**
+ * Render fix:
+ * Do NOT use /var/data unless you added a persistent disk.
+ * This keeps the app running without adding any Render disk.
+ */
+const DATA_DIR = path.join(process.cwd(), 'data');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
+const DATABASE_PATH = path.join(DATA_DIR, 'dinkcard.sqlite');
 
-export const db = new DatabaseSync(config.databasePath);
+fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+export const db = new DatabaseSync(DATABASE_PATH);
+
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 
@@ -29,6 +39,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS wallets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL UNIQUE,
@@ -39,6 +50,7 @@ CREATE TABLE IF NOT EXISTS wallets (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS wallet_transactions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -54,6 +66,7 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   metadata TEXT,
   created_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS kyc_submissions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -80,6 +93,7 @@ CREATE TABLE IF NOT EXISTS kyc_submissions (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS virtual_cards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -101,6 +115,7 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS deposits (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -131,6 +146,7 @@ CREATE TABLE IF NOT EXISTS deposits (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS notifications (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -141,6 +157,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   link TEXT,
   created_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS support_tickets (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -155,6 +172,7 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS support_messages (
   id TEXT PRIMARY KEY,
   ticket_id TEXT NOT NULL,
@@ -164,6 +182,7 @@ CREATE TABLE IF NOT EXISTS support_messages (
   attachment_url TEXT,
   created_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS fee_settings (
   id TEXT PRIMARY KEY,
   key TEXT NOT NULL UNIQUE,
@@ -185,6 +204,7 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS card_funding_requests (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -198,6 +218,7 @@ CREATE TABLE IF NOT EXISTS card_funding_requests (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   admin_id TEXT NOT NULL,
@@ -210,6 +231,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   reason TEXT,
   created_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS payment_methods (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
@@ -226,6 +248,7 @@ CREATE TABLE IF NOT EXISTS payment_methods (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+
 CREATE TABLE IF NOT EXISTS webhook_events (
   id TEXT PRIMARY KEY,
   provider TEXT NOT NULL,
@@ -238,7 +261,11 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 db.exec(schema);
 
 function ensureColumn(table, column, definition) {
-  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some((row) => row.name === column);
+  const exists = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all()
+    .some((row) => row.name === column);
+
   if (!exists) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition};`);
   }
@@ -246,19 +273,25 @@ function ensureColumn(table, column, definition) {
 
 ensureColumn('kyc_submissions', 'resubmission_scope', 'TEXT');
 ensureColumn('kyc_submissions', 'resubmission_fields', 'TEXT');
+
 ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');
 ensureColumn('deposits', 'source', "TEXT NOT NULL DEFAULT 'dinkcard'");
 ensureColumn('deposits', 'verified_at', 'TEXT');
+
 db.prepare("UPDATE deposits SET source = 'dinkcard' WHERE source IS NULL OR source = ''").run();
+
 ensureColumn('users', 'account_status', "TEXT NOT NULL DEFAULT 'active'");
 ensureColumn('users', 'restricted_reason', 'TEXT');
 ensureColumn('users', 'restricted_by', 'TEXT');
 ensureColumn('users', 'restricted_at', 'TEXT');
+
 db.prepare("UPDATE users SET account_status = 'active' WHERE account_status IS NULL OR account_status = ''").run();
 
 const now = nowIso();
+
 const defaultSettings = db.prepare('SELECT id FROM fee_settings WHERE key = ?').get('default');
+
 if (!defaultSettings) {
   db.prepare(`
     INSERT INTO fee_settings (
@@ -277,6 +310,7 @@ db.prepare(`
 `).run(now);
 
 const chapaMethod = db.prepare('SELECT id FROM payment_methods WHERE name = ?').get('chapa');
+
 if (!chapaMethod) {
   db.prepare(`
     INSERT INTO payment_methods (
@@ -288,10 +322,14 @@ if (!chapaMethod) {
 db.prepare('UPDATE payment_methods SET instructions = ?, updated_at = ? WHERE name = ?')
   .run('Secure hosted checkout.', now, 'chapa');
 
-const superadmin = db.prepare('SELECT id FROM users WHERE username = ?').get(config.superadmin.username);
+const superadmin = db
+  .prepare('SELECT id FROM users WHERE username = ?')
+  .get(config.superadmin.username);
+
 if (!superadmin) {
   const userId = generateId('usr');
   const hash = bcrypt.hashSync(config.superadmin.password, 12);
+
   db.prepare(`
     INSERT INTO users (
       id, email, username, password_hash, full_name, phone, role, terms_accepted_version, created_at, updated_at
@@ -306,23 +344,36 @@ if (!superadmin) {
     now,
     now
   );
+
   db.prepare(`
-    INSERT INTO wallets (id, user_id, currency, available_balance, locked_balance, status, created_at, updated_at)
-    VALUES (?, ?, 'USD', 0, 0, 'active', ?, ?)
+    INSERT INTO wallets (
+      id, user_id, currency, available_balance, locked_balance, status, created_at, updated_at
+    ) VALUES (?, ?, 'USD', 0, 0, 'active', ?, ?)
   `).run(generateId('wal'), config.superadmin.email, now, now);
 }
 
-const superadminUser = db.prepare('SELECT id, email FROM users WHERE username = ?').get(config.superadmin.username);
+const superadminUser = db
+  .prepare('SELECT id, email FROM users WHERE username = ?')
+  .get(config.superadmin.username);
+
 if (superadminUser) {
-  const legacyWallet = db.prepare('SELECT id FROM wallets WHERE user_id = ?').get(superadminUser.id);
-  const emailWallet = db.prepare('SELECT id FROM wallets WHERE user_id = ?').get(superadminUser.email);
+  const legacyWallet = db
+    .prepare('SELECT id FROM wallets WHERE user_id = ?')
+    .get(superadminUser.id);
+
+  const emailWallet = db
+    .prepare('SELECT id FROM wallets WHERE user_id = ?')
+    .get(superadminUser.email);
+
   if (legacyWallet && !emailWallet) {
-    db.prepare('UPDATE wallets SET user_id = ?, updated_at = ? WHERE id = ?').run(superadminUser.email, nowIso(), legacyWallet.id);
+    db.prepare('UPDATE wallets SET user_id = ?, updated_at = ? WHERE id = ?')
+      .run(superadminUser.email, nowIso(), legacyWallet.id);
   }
 }
 
 export function mapRow(row) {
   if (!row) return row;
+
   return Object.fromEntries(
     Object.entries(row).map(([key, value]) => {
       if (key === 'created_at') return ['created_date', value];
