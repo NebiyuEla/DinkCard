@@ -14,6 +14,15 @@ import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
 import { changeCardStatus, createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook, revealCardDetails, terminateCard, verifyBitnobWebhook } from './bitnob.js';
 
+const UPLOAD_DIR =
+  process.env.UPLOAD_DIR ||
+  (process.env.RENDER ? "/tmp/uploads" : path.join(process.cwd(), "uploads"));
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+
 fs.mkdirSync(config.uploadDir, { recursive: true });
 const distDir = path.join(config.rootDir, 'dist');
 const indexHtml = path.join(distDir, 'index.html');
