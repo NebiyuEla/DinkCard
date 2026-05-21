@@ -1,0 +1,147 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'pdf'];
+
+async function request(path, options = {}) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      },
+      ...options
+    });
+  } catch {
+    const networkError = new Error('Cannot reach the server. Make sure the backend is running and try again.');
+    networkError.status = 0;
+    throw networkError;
+  }
+
+  if (!response.ok) {
+    let message = 'Request failed';
+    try {
+      const payload = await response.json();
+      message = payload.message || message;
+    } catch {}
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
+}
+
+function validateUploadFile(file) {
+  if (!file) throw new Error('Choose a file to upload.');
+  if (file.size > UPLOAD_MAX_BYTES) throw new Error('File is too large. Upload a file under 10MB.');
+  const ext = String(file.name || '').split('.').pop()?.toLowerCase();
+  const hasAllowedExt = ext && UPLOAD_EXTENSIONS.includes(ext);
+  const hasAllowedMime = file.type?.startsWith('image/') || file.type === 'application/pdf';
+  if (!hasAllowedExt && !hasAllowedMime) {
+    throw new Error('Upload failed. Please try another file.');
+  }
+}
+
+function buildQuery(filter, sort, limit) {
+  const params = new URLSearchParams();
+  if (filter && Object.keys(filter).length) params.set('filter', JSON.stringify(filter));
+  if (sort) params.set('sort', sort);
+  if (limit) params.set('limit', String(limit));
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+function entityApi(entity) {
+  return {
+    list: (sort = '-created_date', limit = 100) =>
+      request(`/api/entities/${entity}${buildQuery({}, sort, limit)}`),
+    filter: (filter = {}, sort = '-created_date', limit) =>
+      request(`/api/entities/${entity}${buildQuery(filter, sort, limit)}`),
+    create: (data) => request(`/api/entities/${entity}`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/api/entities/${entity}/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+  };
+}
+
+export const apiClient = {
+  auth: {
+    me: () => request('/api/auth/me'),
+    login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+    register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+    logout: async (redirectTo = '/') => {
+      await request('/api/auth/logout', { method: 'POST' });
+      window.location.href = redirectTo;
+    },
+    updateMe: (payload) => request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) })
+  },
+  entities: {
+    User: entityApi('User'),
+    Wallet: entityApi('Wallet'),
+    WalletTransaction: entityApi('WalletTransaction'),
+    KYCSubmission: entityApi('KYCSubmission'),
+    VirtualCard: entityApi('VirtualCard'),
+    Deposit: entityApi('Deposit'),
+    Notification: entityApi('Notification'),
+    SupportTicket: entityApi('SupportTicket'),
+    SupportMessage: entityApi('SupportMessage'),
+    FeeSettings: entityApi('FeeSettings'),
+    CardFundingRequest: entityApi('CardFundingRequest'),
+    AuditLog: entityApi('AuditLog'),
+    PaymentMethod: entityApi('PaymentMethod')
+  },
+  integrations: {
+    Core: {
+      UploadFile: async ({ file }) => {
+        validateUploadFile(file);
+        const form = new FormData();
+        form.append('file', file);
+        let response;
+        try {
+          response = await fetch(`${API_BASE_URL}/api/uploads`, {
+            method: 'POST',
+            credentials: 'include',
+            body: form
+          });
+        } catch {
+          throw new Error('Upload could not reach the server. Check your connection and try again.');
+        }
+        if (!response.ok) {
+          const payload = await response.json().catch(() => ({}));
+          throw new Error(payload.message || 'Upload failed');
+        }
+        return response.json();
+      }
+    }
+  },
+  payments: {
+    initializeChapa: (payload) => request('/api/payments/chapa/initialize', { method: 'POST', body: JSON.stringify(payload) }),
+    getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`)
+  },
+  cards: {
+    create: (payload) => request('/api/cards', { method: 'POST', body: JSON.stringify(payload) }),
+    fund: (cardId, amount) => request(`/api/cards/${cardId}/fund`, { method: 'POST', body: JSON.stringify({ amount }) }),
+    updateStatus: (cardId, status) => request(`/api/cards/${cardId}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+    terminate: (cardId) => request(`/api/cards/${cardId}`, { method: 'DELETE' }),
+    reveal: (cardId, password) => request(`/api/cards/${cardId}/reveal`, { method: 'POST', body: JSON.stringify({ password }) })
+  },
+  admin: {
+    kyc: {
+      approve: (id) => request(`/api/admin/kyc/${id}/approve`, { method: 'POST' }),
+      requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) })
+    },
+    users: {
+      suspend: (id, reason) => request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
+      activate: (id) => request(`/api/admin/users/${id}/activate`, { method: 'POST' }),
+      setRole: (id, role, reason) => request(`/api/admin/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role, reason }) }),
+      delete: (id, reason) => request(`/api/admin/users/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
+    },
+    cards: {
+      suspend: (id, reason) => request(`/api/admin/cards/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
+      activate: (id, reason) => request(`/api/admin/cards/${id}/activate`, { method: 'POST', body: JSON.stringify({ reason }) }),
+      terminate: (id, reason) => request(`/api/admin/cards/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
+    }
+  }
+};
+

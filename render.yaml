@@ -1,0 +1,65 @@
+services:
+  - type: web
+    name: dinkcard
+    runtime: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/health
+    disk:
+      name: dinkcard-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: APP_URL
+        value: https://dinkcard.et
+      - key: API_URL
+        value: https://dinkcard.et
+      - key: VITE_API_BASE_URL
+        value: ""
+      - key: DATABASE_PATH
+        value: /var/data/dinkcard.db
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: TERMS_VERSION
+        value: v1.2
+      - key: CHAPA_CALLBACK_URL
+        value: https://dinkcard.et/api/payments/chapa/callback
+      - key: CHAPA_RETURN_URL
+        value: https://dinkcard.et/add-money
+      - key: BITNOB_BASE_URL
+        value: https://api.bitnob.com
+      - key: BITNOB_WEBHOOK_URL
+        value: https://dinkcard.et/api/webhooks/bitnob
+      - key: JWT_SECRET
+        sync: false
+      - key: COOKIE_SECRET
+        sync: false
+      - key: CARD_DATA_ENCRYPTION_KEY
+        sync: false
+      - key: SUPERADMIN_USERNAME
+        value: NebiyuEla
+      - key: SUPERADMIN_PASSWORD
+        sync: false
+      - key: SUPERADMIN_EMAIL
+        sync: false
+      - key: CHAPA_MODE
+        value: live
+      - key: CHAPA_PUBLIC_KEY
+        sync: false
+      - key: VITE_CHAPA_PUBLIC_KEY
+        sync: false
+      - key: CHAPA_SECRET_KEY
+        sync: false
+      - key: CHAPA_WEBHOOK_SECRET
+        sync: false
+      - key: BITNOB_CLIENT_ID
+        sync: false
+      - key: BITNOB_CLIENT_SECRET
+        sync: false
+      - key: BITNOB_WEBHOOK_SECRET
+        sync: false
