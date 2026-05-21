@@ -14,17 +14,13 @@ import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
 import { changeCardStatus, createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook, revealCardDetails, terminateCard, verifyBitnobWebhook } from './bitnob.js';
 
-const UPLOAD_DIR = path.resolve(
-  process.env.UPLOAD_DIR ||
-  (process.env.RENDER ? '/tmp/uploads' : path.join(process.cwd(), 'uploads'))
-);
+const uploadsDir =
+  process.env.UPLOADS_DIR ||
+  path.join(process.cwd(), "uploads");
 
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const distDir = path.join(config.rootDir, 'dist');
-const indexHtml = path.join(distDir, 'index.html');
-const uploadLimitBytes = Number(process.env.UPLOAD_MAX_BYTES || 10 * 1024 * 1024);
-
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
 const allowedUploadTypes = new Set([
   'image/jpeg',
   'image/png',
