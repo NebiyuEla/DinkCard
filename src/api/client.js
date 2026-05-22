@@ -64,7 +64,12 @@ export const apiClient = {
     login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
     register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
     logout: async (redirectTo = '/') => {
-      await request('/api/auth/logout', { method: 'POST' });
+      try {
+        await request('/api/auth/logout', { method: 'POST' });
+      } finally {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
       window.location.href = redirectTo;
     },
     updateMe: (payload) => request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) })
@@ -112,6 +117,10 @@ export const apiClient = {
     initializeChapa: (payload) => request('/api/payments/chapa/initialize', { method: 'POST', body: JSON.stringify(payload) }),
     getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`)
   },
+  notifications: {
+    markRead: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),
+    markAllRead: () => request('/api/notifications/read-all', { method: 'POST' })
+  },
   cards: {
     create: (payload) => request('/api/cards', { method: 'POST', body: JSON.stringify(payload) }),
     fund: (cardId, amount) => request(`/api/cards/${cardId}/fund`, { method: 'POST', body: JSON.stringify({ amount }) }),
@@ -153,6 +162,7 @@ export const apiClient = {
       get: (id) => request(`/api/admin/customers/${encodeURIComponent(id)}`),
       create: (payload) => request('/api/admin/customers', { method: 'POST', body: JSON.stringify(payload) }),
       update: (id, payload) => request(`/api/admin/customers/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+      delete: (id, payload) => request(`/api/admin/customers/${encodeURIComponent(id)}`, { method: 'DELETE', body: JSON.stringify(payload || {}) }),
       syncBitnob: () => request('/api/admin/customers/sync-bitnob', { method: 'POST' }),
       cards: (customerId) => request(`/api/admin/customers/${encodeURIComponent(customerId)}/cards`)
     },

@@ -122,6 +122,7 @@ export const bitnobService = {
   listCustomers: () => safeBitnob('GET', '/api/customers'),
   getCustomer: (customerId) => safeBitnob('GET', `/api/customers/${encodeURIComponent(customerId)}`),
   updateCustomer: (customerId, data) => safeBitnob('PUT', `/api/customers/${encodeURIComponent(customerId)}`, data),
+  deleteCustomer: (customerId) => safeBitnob('DELETE', `/api/customers/${encodeURIComponent(customerId)}`),
   createCard: (data) => safeBitnob('POST', '/api/cards', data),
   listCards: () => safeBitnob('GET', '/api/cards'),
   getCard: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}`),
@@ -180,8 +181,9 @@ export async function createVirtualCardForUser(user, payload) {
     WHERE user_id = ? AND status != 'terminated'
   `).get(user.email);
 
-  if (activeCards.total >= Number(settings.max_cards_per_user || 3)) {
-    throw new Error('You have reached the maximum number of active cards.');
+  const maxCards = Math.min(Number(settings.max_cards_per_user || 3), 3);
+  if (activeCards.total >= maxCards) {
+    throw new Error(`You have reached the maximum of ${maxCards} active virtual cards.`);
   }
 
   const fundingAmount = Number(payload.fundingAmount || 0);

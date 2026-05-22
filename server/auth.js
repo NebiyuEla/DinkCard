@@ -4,6 +4,12 @@ import { config } from './config.js';
 import { sanitizeUser } from './utils.js';
 
 const COOKIE_NAME = 'dinkcard_session';
+const cookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  path: '/'
+};
 
 export function hashPassword(password) {
   return bcrypt.hash(password, 12);
@@ -24,15 +30,13 @@ export function signAuthToken(user) {
 export function setSessionCookie(res, user) {
   const token = signAuthToken(user);
   res.cookie(COOKIE_NAME, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    ...cookieOptions,
     maxAge: 7 * 24 * 60 * 60 * 1000
   });
 }
 
 export function clearSessionCookie(res) {
-  res.clearCookie(COOKIE_NAME);
+  res.clearCookie(COOKIE_NAME, cookieOptions);
 }
 
 export function readSession(req) {

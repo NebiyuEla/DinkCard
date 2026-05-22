@@ -29,7 +29,7 @@ export default function CreateCard() {
   const [acceptedNotice, setAcceptedNotice] = useState(false);
 
   const balance = wallet?.available_balance || 0;
-  const maxCards = settings?.max_cards_per_user || 5;
+  const maxCards = Math.min(settings?.max_cards_per_user || 3, 3);
   const activeCardCount = cards?.filter(c => c.status !== 'terminated').length || 0;
   const kycApproved = kyc?.status === 'approved';
   const amount = parseFloat(fundingAmount) || 0;

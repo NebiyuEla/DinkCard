@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { BadgeCheck, CreditCard, Eye, PauseCircle, Plus, RefreshCw, Search, Send, WalletCards } from 'lucide-react';
+import { BadgeCheck, CreditCard, Eye, PauseCircle, Plus, RefreshCw, Search, Send, Trash2, WalletCards } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
@@ -55,10 +55,12 @@ export default function AdminCards() {
   const [showCustomer, setShowCustomer] = useState(false);
   const [showCreateCard, setShowCreateCard] = useState(false);
   const [actionCard, setActionCard] = useState(null);
+  const [deleteCustomer, setDeleteCustomer] = useState(null);
   const [action, setAction] = useState('');
   const [customerForm, setCustomerForm] = useState(EMPTY_CUSTOMER);
   const [cardForm, setCardForm] = useState({ customerId: '', nickname: 'Virtual Card', name: '', amount: '5', reason: '' });
   const [actionForm, setActionForm] = useState({ amount: '', reason: '' });
+  const [deleteReason, setDeleteReason] = useState('');
   const [secureDetails, setSecureDetails] = useState(null);
 
   const customersQuery = useQuery({ queryKey: ['bitnob-customers'], queryFn: apiClient.admin.customers.list, refetchInterval: REFRESH.admin });
@@ -116,6 +118,21 @@ export default function AdminCards() {
     mutationFn: apiClient.admin.bitnob.whoami,
     onSuccess: (result) => toast.success(result.message || 'Connected to Bitnob successfully'),
     onError: (error) => toast.error(error.message || 'Bitnob authentication failed')
+  });
+
+  const deleteCustomerMutation = useMutation({
+    mutationFn: () => {
+      if (!deleteCustomer) throw new Error('Select a customer first.');
+      return apiClient.admin.customers.delete(deleteCustomer.id, { reason: deleteReason });
+    },
+    onSuccess: () => {
+      toast.success('Customer deleted from Bitnob and DinkCard');
+      setDeleteCustomer(null);
+      setDeleteReason('');
+      queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+    },
+    onError: (error) => toast.error(error.message || 'Customer deletion failed')
   });
 
   const createCard = useMutation({
@@ -232,12 +249,15 @@ export default function AdminCards() {
                   <tr key={customer.id}>
                     <td className="px-3 py-2 font-medium">{getName(customer)}</td>
                     <td className="px-3 py-2 text-muted-foreground">{customer.email}</td>
-                    <td className="px-3 py-2">{customer.country}</td>
+                    <td className="px-3 py-2"><div>{customer.country}</div><div className="text-[10px] text-muted-foreground">{customer.phone_number || customer.phone || 'No phone'}</div></td>
                     <td className="px-3 py-2 font-mono">{customer.bitnob_customer_id}</td>
                     <td className="px-3 py-2"><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase">{customer.environment || environment}</span></td>
                     <td className="px-3 py-2"><StatusBadge status={customer.status || 'active'} className="text-[10px]" /></td>
                     <td className="px-3 py-2 text-right">
-                      <Button size="sm" variant="outline" onClick={() => { setCardForm((current) => ({ ...current, customerId: customer.id, name: getName(customer) })); setShowCreateCard(true); }}>Create card</Button>
+                      <div className="flex justify-end gap-1">
+                        <Button size="sm" variant="outline" onClick={() => { setCardForm((current) => ({ ...current, customerId: customer.id, name: getName(customer) })); setShowCreateCard(true); }}>Card</Button>
+                        <Button size="sm" variant="destructive" onClick={() => { setDeleteCustomer(customer); setDeleteReason(''); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -318,6 +338,32 @@ export default function AdminCards() {
             <div><Label className="text-xs">Reason</Label><Textarea value={cardForm.reason} onChange={(event) => setCardForm((current) => ({ ...current, reason: event.target.value }))} rows={2} /></div>
           </div>
           <DialogFooter><Button onClick={() => createCard.mutate(cardForm)} disabled={!cardForm.customerId || !cardForm.reason || createCard.isPending}>{createCard.isPending ? 'Creating...' : 'Create Card'}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteCustomer)} onOpenChange={(open) => !open && setDeleteCustomer(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Bitnob Customer</DialogTitle>
+            <DialogDescription>This deletes the customer from Bitnob and removes the linked DinkCard customer record. Active cards must be handled first.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-lg border border-border bg-secondary/20 p-3 text-sm">
+              <p className="font-medium">{getName(deleteCustomer)}</p>
+              <p className="text-xs text-muted-foreground">{deleteCustomer?.email}</p>
+              <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{deleteCustomer?.bitnob_customer_id}</p>
+            </div>
+            <div>
+              <Label className="text-xs">Deletion reason</Label>
+              <Textarea value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)} rows={3} placeholder="Required for audit log..." />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteCustomer(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteCustomerMutation.mutate()} disabled={!deleteReason.trim() || deleteCustomerMutation.isPending}>
+              {deleteCustomerMutation.isPending ? 'Deleting...' : 'Delete Customer'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

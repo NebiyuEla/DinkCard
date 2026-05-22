@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, BadgeCheck, CreditCard, DollarSign, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CreditCard, DollarSign, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 
 function getActionCopy(action, user) {
@@ -84,47 +85,29 @@ function UserActions({ user, onAction }) {
   const isAdmin = user.role === 'admin';
 
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button
-        type="button"
-        size="sm"
-        variant={isActive ? 'outline' : 'default'}
-        onClick={() => onAction(user, isActive ? 'suspend' : 'activate')}
-      >
-        {isActive ? <ShieldOff className="w-3.5 h-3.5" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-        {isActive ? 'Suspend' : 'Restore'}
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        onClick={() => onAction(user, isAdmin ? 'remove_admin' : 'make_admin')}
-      >
-        {isAdmin ? <UserMinus className="w-3.5 h-3.5" /> : <UserCog className="w-3.5 h-3.5" />}
-        {isAdmin ? 'Demote' : 'Make Admin'}
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'add_money')}>
-        <DollarSign className="w-3.5 h-3.5" />
-        Add Money
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'pass_kyc')}>
-        <BadgeCheck className="w-3.5 h-3.5" />
-        Pass KYC
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'manual_card')}>
-        <CreditCard className="w-3.5 h-3.5" />
-        Bitnob Card
-      </Button>
-      <Button
-        type="button"
-        size="sm"
-        variant="destructive"
-        onClick={() => onAction(user, 'delete')}
-      >
-        <Trash2 className="w-3.5 h-3.5" />
-        Delete
-      </Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" size="sm" variant="outline" className="h-9 min-w-[104px] justify-between">
+          Actions <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onAction(user, 'add_money')}><DollarSign className="h-4 w-4" /> Add money</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(user, 'pass_kyc')}><BadgeCheck className="h-4 w-4" /> Pass KYC</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(user, 'manual_card')}><CreditCard className="h-4 w-4" /> Create Bitnob card</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => onAction(user, isAdmin ? 'remove_admin' : 'make_admin')}>
+          {isAdmin ? <UserMinus className="h-4 w-4" /> : <UserCog className="h-4 w-4" />} {isAdmin ? 'Remove admin' : 'Make admin'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(user, isActive ? 'suspend' : 'activate')}>
+          {isActive ? <ShieldOff className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />} {isActive ? 'Suspend user' : 'Restore user'}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => onAction(user, 'delete')}>
+          <Trash2 className="h-4 w-4" /> Delete user
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

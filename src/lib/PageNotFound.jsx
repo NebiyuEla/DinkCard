@@ -49,7 +49,7 @@ export default function PageNotFound({}) {
                                 <div className="text-left space-y-1">
                                     <p className="text-sm font-medium text-slate-700">Admin Note</p>
                                     <p className="text-sm text-slate-600 leading-relaxed">
-                                        This could mean that the AI hasn't implemented this page yet. Ask it to implement it in the chat.
+                                        This route is not available. Check the navigation link or deployment route configuration.
                                     </p>
                                 </div>
                             </div>

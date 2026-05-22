@@ -432,8 +432,8 @@ function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, 
     first_name: payload.first_name || customer.first_name || customer.firstName || '',
     last_name: payload.last_name || customer.last_name || customer.lastName || '',
     email: payload.email || customer.email || '',
-    phone_number: payload.phone_number || customer.phone_number || customer.phoneNumber || '',
-    dial_code: payload.dial_code || customer.dial_code || customer.dialCode || '+251',
+    phone_number: payload.phone_number || payload.phone || customer.phone_number || customer.phoneNumber || customer.phone || '',
+    dial_code: payload.dial_code || payload.country_code || customer.dial_code || customer.dialCode || customer.country_code || '+251',
     date_of_birth: payload.date_of_birth || customer.date_of_birth || customer.dateOfBirth || '',
     id_type: payload.id_type || customer.id_type || customer.idType || '',
     id_number: payload.id_number || customer.id_number || customer.idNumber || '',
@@ -931,6 +931,18 @@ export function createApp() {
     res.json(sanitizeUser(user));
   });
 
+  app.post('/api/notifications/:id/read', authMiddleware(db), (req, res) => {
+    const notification = db.prepare('SELECT * FROM notifications WHERE id = ? AND user_id = ?').get(req.params.id, req.user.email);
+    if (!notification) return res.status(404).json({ message: 'Notification not found' });
+    db.prepare('UPDATE notifications SET read = 1 WHERE id = ?').run(notification.id);
+    res.json(mapRow(db.prepare('SELECT * FROM notifications WHERE id = ?').get(notification.id)));
+  });
+
+  app.post('/api/notifications/read-all', authMiddleware(db), (req, res) => {
+    const result = db.prepare('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0').run(req.user.email);
+    res.json({ ok: true, updated: result.changes || 0 });
+  });
+
   app.post('/api/uploads', authMiddleware(db), uploadLimiter, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'File is required.' });
 
@@ -1106,6 +1118,39 @@ export function createApp() {
     }
   });
 
+  app.delete('/api/admin/customers/:id', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireSuperadmin(req, res)) return;
+      const reason = String(req.body?.reason || '').trim();
+      if (!reason) return res.status(400).json({ message: 'A deletion reason is required.' });
+      const existing = db.prepare('SELECT * FROM bitnob_customers WHERE (id = ? OR bitnob_customer_id = ?) AND environment = ?').get(req.params.id, req.params.id, config.bitnob.env);
+      if (!existing) return res.status(404).json({ message: 'Customer not found' });
+
+      const linkedCards = db.prepare(`
+        SELECT COUNT(*) AS total FROM virtual_cards
+        WHERE environment = ? AND bitnob_customer_id = ? AND status != 'terminated'
+      `).get(config.bitnob.env, existing.bitnob_customer_id);
+
+      if (linkedCards.total > 0 && req.body?.force !== true) {
+        return res.status(400).json({ message: 'This customer has active cards. Terminate or freeze cards first, or use a forced owner deletion.' });
+      }
+
+      let provider = null;
+      try {
+        provider = await bitnobService.deleteCustomer(existing.bitnob_customer_id);
+      } catch (error) {
+        writeAudit({ actor: req.user.email, userId: existing.user_id || existing.email, action: 'bitnob_customer_delete_failed', entityType: 'bitnob_customer', entityId: existing.id, oldValue: mapRow(existing), environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, reason, req });
+        return res.status(400).json({ message: error.message || 'Bitnob customer deletion failed.' });
+      }
+
+      db.prepare('DELETE FROM bitnob_customers WHERE id = ?').run(existing.id);
+      writeAudit({ actor: req.user.email, userId: existing.user_id || existing.email, action: 'bitnob_customer_deleted', entityType: 'bitnob_customer', entityId: existing.id, oldValue: mapRow(existing), environment: config.bitnob.env, provider: 'bitnob', providerStatus: provider?.status || provider?.message || 'success', providerResponse: provider, reason, req });
+      res.json({ ok: true, provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Customer deletion failed.' });
+    }
+  });
+
   app.get('/api/admin/customers/:customerId/cards', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
@@ -1138,6 +1183,14 @@ export function createApp() {
       if (!requireAdmin(req, res)) return;
       const customer = db.prepare('SELECT * FROM bitnob_customers WHERE (id = ? OR bitnob_customer_id = ?) AND environment = ?').get(req.body.customerId, req.body.customerId, config.bitnob.env);
       if (!customer) return res.status(404).json({ message: 'Create or select a customer first.' });
+      const cardOwner = customer.user_id || customer.email;
+      const existingCards = db.prepare(`
+        SELECT COUNT(*) AS total FROM virtual_cards
+        WHERE environment = ? AND user_id = ? AND status != 'terminated'
+      `).get(config.bitnob.env, cardOwner);
+      if (existingCards.total >= 3) {
+        return res.status(400).json({ message: 'This account already has the maximum of 3 active virtual cards.' });
+      }
       const fundingAmount = Number(req.body.amount || req.body.fundingAmount || 0);
       if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) return res.status(400).json({ message: 'Enter a valid funding amount.' });
 

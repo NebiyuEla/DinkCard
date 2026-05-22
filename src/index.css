@@ -82,6 +82,13 @@
   }
   body {
     @apply bg-background text-foreground font-inter;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
   }
 }
 

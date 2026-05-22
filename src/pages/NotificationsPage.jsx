@@ -7,6 +7,7 @@ import EmptyState from '@/components/ui-custom/EmptyState';
 import { Bell, CheckCheck, CreditCard, DollarSign, ShieldCheck, HeadphonesIcon, AlertTriangle, Settings } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const typeIcons = {
   deposit: DollarSign,
@@ -24,16 +25,34 @@ export default function NotificationsPage() {
   const queryClient = useQueryClient();
 
   const markRead = useMutation({
-    mutationFn: (id) => apiClient.entities.Notification.update(id, { read: true }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    mutationFn: (id) => apiClient.notifications.markRead(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['notifications', user?.email] });
+      const previous = queryClient.getQueryData(['notifications', user?.email]);
+      queryClient.setQueryData(['notifications', user?.email], (current = []) => current.map((item) => item.id === id ? { ...item, read: 1 } : item));
+      return { previous };
+    },
+    onError: (error, _id, context) => {
+      if (context?.previous) queryClient.setQueryData(['notifications', user?.email], context.previous);
+      toast.error(error.message || 'Could not mark notification read');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications', user?.email] })
   });
 
   const markAllRead = useMutation({
-    mutationFn: async () => {
-      const unread = (notifications || []).filter(n => !n.read);
-      await Promise.all(unread.map(n => apiClient.entities.Notification.update(n.id, { read: true })));
+    mutationFn: apiClient.notifications.markAllRead,
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ['notifications', user?.email] });
+      const previous = queryClient.getQueryData(['notifications', user?.email]);
+      queryClient.setQueryData(['notifications', user?.email], (current = []) => current.map((item) => ({ ...item, read: 1 })));
+      return { previous };
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    onSuccess: (result) => toast.success(result.updated ? 'All notifications marked read' : 'No unread notifications'),
+    onError: (error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(['notifications', user?.email], context.previous);
+      toast.error(error.message || 'Could not mark all read');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['notifications', user?.email] })
   });
 
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
@@ -46,8 +65,8 @@ export default function NotificationsPage() {
           <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
         </div>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()}>
-            <CheckCheck className="w-4 h-4 mr-2" /> Mark All Read
+          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
+            <CheckCheck className="w-4 h-4 mr-2" /> {markAllRead.isPending ? 'Marking...' : 'Mark All Read'}
           </Button>
         )}
       </div>

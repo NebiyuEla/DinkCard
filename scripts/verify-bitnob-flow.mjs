@@ -13,7 +13,7 @@ process.env.BITNOB_CLIENT_ID = 'test-client';
 process.env.BITNOB_CLIENT_SECRET = 'test-secret';
 process.env.BITNOB_WEBHOOK_SECRET = 'test-webhook';
 process.env.BITNOB_WEBHOOK_URL = 'https://example.com/api/webhooks/bitnob';
-process.env.CHAPA_SECRET_KEY = 'CHASECK_TEST_dummy';
+process.env.CHAPA_SECRET_KEY = 'CHASECK_TEST_local_verification';
 
 const { db } = await import('../server/db.js');
 const { createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook } = await import('../server/bitnob.js');

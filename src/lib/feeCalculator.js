@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS = {
   monthly_deposit_limit_usd: 10000,
   min_card_funding_usd: 1,
   max_card_funding_usd: 500,
-  max_cards_per_user: 5,
+  max_cards_per_user: 3,
   kyc_level1_deposit_limit: 100,
   kyc_level2_deposit_limit: 1000
 };

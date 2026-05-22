@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { apiClient } from '@/api/client';
+import { queryClientInstance } from '@/lib/query-client';
 
 const AuthContext = createContext(null);
 
@@ -42,6 +43,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     setUser(null);
     setIsAuthenticated(false);
+    queryClientInstance.clear();
     await apiClient.auth.logout('/');
   };
 
