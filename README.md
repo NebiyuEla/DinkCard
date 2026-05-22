@@ -60,7 +60,7 @@ Recommended setup for `dinkcard.et`.
 3. If using Blueprint, Render reads `render.yaml`.
 4. If creating manually:
    - Runtime: `Node`
-   - Build command: `npm ci && npm run build`
+   - Build command: `npm ci --include=dev && npm run build`
    - Start command: `npm run start`
    - Health check path: `/api/health`
    - Add persistent disk mounted at `/var/data`
