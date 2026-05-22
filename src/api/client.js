@@ -1,6 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
-const UPLOAD_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'pdf'];
 
 async function request(path, options = {}) {
   let response;
@@ -37,12 +36,6 @@ async function request(path, options = {}) {
 function validateUploadFile(file) {
   if (!file) throw new Error('Choose a file to upload.');
   if (file.size > UPLOAD_MAX_BYTES) throw new Error('File is too large. Upload a file under 10MB.');
-  const ext = String(file.name || '').split('.').pop()?.toLowerCase();
-  const hasAllowedExt = ext && UPLOAD_EXTENSIONS.includes(ext);
-  const hasAllowedMime = file.type?.startsWith('image/') || file.type === 'application/pdf';
-  if (!hasAllowedExt && !hasAllowedMime) {
-    throw new Error('Upload failed. Please try another file.');
-  }
 }
 
 function buildQuery(filter, sort, limit) {

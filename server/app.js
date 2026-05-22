@@ -75,7 +75,7 @@ function getUploadExtension(file) {
   if (file.mimetype === 'image/heif') return '.heif';
   if (file.mimetype === 'application/pdf') return '.pdf';
   if (file.mimetype?.startsWith('image/')) return '.jpg';
-  return '';
+  return '.upload';
 }
 
 const uploadStorage = multer.diskStorage({
@@ -91,7 +91,7 @@ const upload = multer({
   limits: { fileSize: uploadLimitBytes },
   fileFilter: (req, file, callback) => {
     const originalExt = path.extname(file.originalname || '').toLowerCase();
-    if (allowedUploadTypes.has(file.mimetype) || file.mimetype?.startsWith('image/') || allowedUploadExtensions.has(originalExt)) {
+    if (allowedUploadTypes.has(file.mimetype) || file.mimetype?.startsWith('image/') || allowedUploadExtensions.has(originalExt) || file.mimetype === 'application/octet-stream') {
       return callback(null, true);
     }
     return callback(new Error('Upload failed. Please try another file.'));
@@ -104,25 +104,40 @@ const uploadLimiter = rateLimit({
   message: { message: 'Too many upload attempts. Please wait a few minutes and try again.' }
 });
 
-function isValidUploadSignature(file) {
-  if (!file?.path) return false;
+function readUploadSignature(file) {
+  if (!file?.path) return { valid: false };
   const header = fs.readFileSync(file.path).subarray(0, 4096);
   const ascii = header.toString('ascii');
   const hex = header.toString('hex');
-  const ext = path.extname(file.originalname || file.path).toLowerCase();
 
-  if (hex.startsWith('ffd8ff')) return ['.jpg', '.jpeg'].includes(ext) || file.mimetype === 'image/jpeg';
-  if (hex.startsWith('89504e47')) return ext === '.png' || file.mimetype === 'image/png';
-  if (ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a')) return ext === '.gif' || file.mimetype === 'image/gif';
-  if (ascii.startsWith('%PDF')) return ext === '.pdf' || file.mimetype === 'application/pdf';
-  if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') return ext === '.webp' || file.mimetype === 'image/webp';
+  if (hex.startsWith('ffd8ff')) return { valid: true, ext: '.jpg' };
+  if (hex.startsWith('89504e47')) return { valid: true, ext: '.png' };
+  if (ascii.startsWith('GIF87a') || ascii.startsWith('GIF89a')) return { valid: true, ext: '.gif' };
+  if (ascii.startsWith('%PDF')) return { valid: true, ext: '.pdf' };
+  if (ascii.startsWith('RIFF') && ascii.slice(8, 12) === 'WEBP') return { valid: true, ext: '.webp' };
 
   if (ascii.includes('ftypheic') || ascii.includes('ftypheif') || ascii.includes('ftypmif1') || ascii.includes('ftypmsf1')) {
-    return ['.heic', '.heif'].includes(ext) || ['image/heic', 'image/heif'].includes(file.mimetype);
+    return { valid: true, ext: '.heic' };
   }
 
-  if (file.mimetype?.startsWith('image/') && file.size > 0 && ext !== '.pdf') return true;
-  return false;
+  if (file.mimetype?.startsWith('image/') && file.size > 0) return { valid: true, ext: getUploadExtension(file) || '.jpg' };
+  return { valid: false };
+}
+
+function normalizeUploadedFile(file, signature) {
+  const currentExt = path.extname(file.path).toLowerCase();
+  const nextExt = signature.ext || currentExt;
+
+  if (!nextExt || currentExt === nextExt) return file;
+
+  const nextPath = file.path.replace(/\.[^.\\/]+$/, '') + nextExt;
+
+  if (!path.resolve(nextPath).startsWith(config.uploadDir)) return file;
+
+  fs.renameSync(file.path, nextPath);
+  file.path = nextPath;
+  file.filename = path.basename(nextPath);
+  return file;
 }
 
 function removeUploadedFile(file) {
@@ -529,10 +544,14 @@ export function createApp() {
   app.post('/api/uploads', authMiddleware(db), uploadLimiter, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'File is required.' });
 
-    if (!isValidUploadSignature(req.file)) {
+    const signature = readUploadSignature(req.file);
+
+    if (!signature.valid) {
       removeUploadedFile(req.file);
       return res.status(400).json({ message: 'Upload failed. Please try another file.' });
     }
+
+    normalizeUploadedFile(req.file, signature);
 
     const filename = path.basename(req.file.path);
 

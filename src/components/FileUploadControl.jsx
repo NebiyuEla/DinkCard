@@ -1,27 +1,37 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { cn } from '@/lib/utils';
 
 export const UPLOAD_ACCEPT = 'image/*,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf';
 
 export default function FileUploadControl({ onFile, disabled, className = '', children }) {
+  const inputRef = useRef(null);
+
   const handleChange = async (event) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = '';
     if (file) await onFile(file);
   };
 
+  const openPicker = () => {
+    if (!disabled) inputRef.current?.click();
+  };
+
   return (
-    <label
-      className={cn('relative block cursor-pointer overflow-hidden', disabled && 'pointer-events-none opacity-60', className)}
+    <button
+      type="button"
+      className={cn('relative cursor-pointer overflow-hidden', disabled && 'pointer-events-none opacity-60', className)}
+      onClick={openPicker}
+      disabled={disabled}
     >
       {children}
       <input
+        ref={inputRef}
         type="file"
         accept={UPLOAD_ACCEPT}
-        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        className="sr-only"
         onChange={handleChange}
         disabled={disabled}
       />
-    </label>
+    </button>
   );
 }
