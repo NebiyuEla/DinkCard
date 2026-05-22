@@ -495,6 +495,90 @@ function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, 
   return mapRow(db.prepare('SELECT * FROM bitnob_customers WHERE id = ?').get(id));
 }
 
+function normalizeCountryCode(country) {
+  const value = String(country || '').trim().toUpperCase();
+  const known = {
+    ETHIOPIA: 'ETH',
+    ETH: 'ETH',
+    ET: 'ETH',
+    USA: 'USA',
+    US: 'USA',
+    'UNITED STATES': 'USA',
+    'UNITED STATES OF AMERICA': 'USA'
+  };
+  return known[value] || value || 'ETH';
+}
+
+function kycToBitnobCustomerPayload(kyc, user) {
+  const legalName = String(kyc?.legal_name || user?.full_name || '').trim();
+  const [firstName, ...lastNameParts] = legalName.split(/\s+/).filter(Boolean);
+  const payload = {
+    customer_type: 'individual',
+    first_name: kyc?.first_name || firstName || '',
+    last_name: kyc?.last_name || lastNameParts.join(' ') || firstName || '',
+    date_of_birth: kyc?.date_of_birth || '',
+    id_type: kyc?.id_type || '',
+    id_number: kyc?.id_number || '',
+    email: kyc?.email || user?.email || kyc?.user_id || '',
+    phone_number: kyc?.phone || user?.phone || '',
+    dial_code: '+251',
+    country: normalizeCountryCode(kyc?.country),
+    address: kyc?.address || '',
+    city: kyc?.city || 'Addis Ababa'
+  };
+  const required = ['first_name', 'last_name', 'date_of_birth', 'id_type', 'id_number', 'email', 'country'];
+  const missing = required.filter((field) => !String(payload[field] || '').trim());
+  if (missing.length) {
+    throw new Error(`Cannot create Bitnob customer because KYC is missing: ${missing.join(', ')}.`);
+  }
+  return payload;
+}
+
+async function ensureBitnobCustomerForKyc({ kyc, user, actor, reason, req }) {
+  const environment = config.bitnob.env;
+  const email = kyc?.email || user?.email || kyc?.user_id;
+  const existing = db.prepare(`
+    SELECT * FROM bitnob_customers
+    WHERE environment = ? AND (user_id = ? OR email = ?)
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+  `).get(environment, kyc.user_id, email);
+
+  if (existing?.bitnob_customer_id) return mapRow(existing);
+
+  const payload = kycToBitnobCustomerPayload(kyc, user);
+  writeAudit({
+    actor,
+    userId: kyc.user_id,
+    action: 'kyc_bitnob_customer_create_attempted',
+    entityType: 'bitnob_customer',
+    entityId: kyc.id,
+    environment,
+    provider: 'bitnob',
+    newValue: { email: payload.email },
+    reason,
+    req
+  });
+
+  const provider = await bitnobService.createCustomer(buildBitnobCustomerPayload(payload));
+  const saved = saveBitnobCustomer({ payload: { ...payload, user_id: kyc.user_id }, providerResponse: provider, userId: kyc.user_id });
+  writeAudit({
+    actor,
+    userId: kyc.user_id,
+    action: 'kyc_bitnob_customer_created',
+    entityType: 'bitnob_customer',
+    entityId: saved.id,
+    environment,
+    provider: 'bitnob',
+    providerStatus: provider?.status || provider?.message || 'success',
+    providerResponse: provider,
+    newValue: saved,
+    reason,
+    req
+  });
+  return saved;
+}
+
 function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPayload }) {
   const now = nowIso();
   const providerCardId = card.id || card.card_id || card.cardId;
@@ -1342,7 +1426,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/admin/users/:id/pass-kyc', authMiddleware(db), (req, res) => {
+  app.post('/api/admin/users/:id/pass-kyc', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
 
@@ -1396,6 +1480,27 @@ export function createApp() {
         LIMIT 1
       `).get(target.email));
 
+      let bitnobCustomer = null;
+      let bitnobWarning = null;
+      try {
+        bitnobCustomer = await ensureBitnobCustomerForKyc({ kyc, user: target, actor: req.user.email, reason, req });
+      } catch (error) {
+        bitnobWarning = error.message || 'Bitnob customer creation failed.';
+        writeAudit({
+          actor: req.user.email,
+          userId: target.email,
+          action: 'kyc_bitnob_customer_create_failed',
+          entityType: 'bitnob_customer',
+          entityId: kyc?.id,
+          environment: config.bitnob.env,
+          provider: 'bitnob',
+          providerStatus: 'failed',
+          providerResponse: { message: bitnobWarning },
+          reason,
+          req
+        });
+      }
+
       writeAudit({
         actor: req.user.email,
         userId: target.email,
@@ -1406,7 +1511,7 @@ export function createApp() {
         reason
       });
 
-      res.json(kyc);
+      res.json({ ...kyc, bitnob_customer: bitnobCustomer, bitnob_warning: bitnobWarning });
     } catch (error) {
       console.error('Manual KYC approval failed:', error);
       res.status(400).json({ message: error.message || 'Manual KYC approval failed.' });
@@ -1739,13 +1844,43 @@ export function createApp() {
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/kyc/:id/approve', authMiddleware(db), (req, res) => {
+  app.post('/api/admin/kyc/:id/approve', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
 
       const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
 
       if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+      const target = db.prepare('SELECT * FROM users WHERE email = ?').get(kyc.user_id);
+      if (!target) return res.status(404).json({ message: 'KYC user account not found' });
+
+      let bitnobCustomer;
+      try {
+        bitnobCustomer = await ensureBitnobCustomerForKyc({
+          kyc,
+          user: target,
+          actor: req.user.email,
+          reason: req.body?.reason || 'KYC approval',
+          req
+        });
+      } catch (error) {
+        writeAudit({
+          actor: req.user.email,
+          userId: kyc.user_id,
+          action: 'kyc_bitnob_customer_create_failed',
+          entityType: 'bitnob_customer',
+          entityId: kyc.id,
+          environment: config.bitnob.env,
+          provider: 'bitnob',
+          providerStatus: 'failed',
+          providerResponse: { message: error.message },
+          reason: req.body?.reason || 'KYC approval',
+          req
+        });
+        return res.status(400).json({
+          message: error.message || 'Bitnob customer creation failed. Fix the KYC fields or provider settings, then approve again.'
+        });
+      }
 
       const now = nowIso();
 
@@ -1774,10 +1909,12 @@ export function createApp() {
         entityType: 'kyc_submission',
         entityId: kyc.id,
         oldValue: kyc,
-        newValue: { status: 'approved' }
+        newValue: { status: 'approved', bitnob_customer_id: bitnobCustomer?.bitnob_customer_id },
+        environment: config.bitnob.env,
+        provider: 'bitnob'
       });
 
-      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+      res.json({ ...mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)), bitnob_customer: bitnobCustomer });
     } catch (error) {
       console.error('KYC approval failed:', error);
       res.status(400).json({ message: error.message || 'KYC approval failed.' });

@@ -47,7 +47,7 @@ export default function AdminKYC() {
       queryClient.setQueryData(['admin-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
       queryClient.setQueryData(['sa-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
       invalidateOperationalData(queryClient);
-      toast.success('KYC approved');
+      toast.success(updatedKyc.bitnob_customer?.bitnob_customer_id ? 'KYC approved and Bitnob customer created' : 'KYC approved');
       setSelected(null);
     },
     onError: (error) => {

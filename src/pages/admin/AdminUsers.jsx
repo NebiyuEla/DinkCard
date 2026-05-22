@@ -165,9 +165,15 @@ export default function AdminUsers() {
       if (action === 'delete') return apiClient.admin.users.delete(user.id, actionReason);
       throw new Error('Unsupported action');
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       invalidateOperationalData(queryClient);
-      toast.success('User action completed');
+      if (result?.bitnob_warning) {
+        toast.warning(`User action completed, but Bitnob was not created: ${result.bitnob_warning}`);
+      } else if (result?.bitnob_customer?.bitnob_customer_id) {
+        toast.success('User action completed and Bitnob customer is connected');
+      } else {
+        toast.success('User action completed');
+      }
       setPendingAction(null);
       setReason('');
       setManualAmount('');
