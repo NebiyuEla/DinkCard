@@ -53,7 +53,25 @@ export async function bitnobRequest(method, requestPath, payload) {
     data = { message: text };
   }
   if (!response.ok || data?.success === false) {
-    const providerDetail = data?.detail || data?.error?.message || data?.message;
+    const validationDetails = [
+      data?.errors,
+      data?.error?.errors,
+      data?.details,
+      data?.detail?.errors,
+      data?.extensions?.validation,
+      data?.extensions?.metadata?.errors
+    ].filter(Boolean);
+    const formattedValidation = validationDetails
+      .flatMap((value) => {
+        if (Array.isArray(value)) return value;
+        if (value && typeof value === 'object') {
+          return Object.entries(value).map(([field, detail]) => `${field}: ${Array.isArray(detail) ? detail.join(', ') : detail}`);
+        }
+        return [String(value)];
+      })
+      .filter(Boolean)
+      .join('; ');
+    const providerDetail = formattedValidation || data?.detail || data?.error?.message || data?.message;
     const errorCode = data?.extensions?.metadata?.error_code || data?.error?.code || data?.code;
     const message = providerDetail || `Card provider request failed with status ${response.status}`;
     if (data?.error?.code === 'ORG_NOT_ACTIVE') {
@@ -64,7 +82,10 @@ export async function bitnobRequest(method, requestPath, payload) {
       const available = data?.extensions?.metadata?.available;
       throw new Error(`Insufficient company wallet balance.${required ? ` Required: ${required} USDC.` : ''}${available ? ` Available: ${available} USDC.` : ''}`);
     }
-    throw new Error(message);
+    const error = new Error(message);
+    error.providerResponse = data;
+    error.providerStatus = response.status;
+    throw error;
   }
   return data;
 }

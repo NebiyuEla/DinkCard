@@ -389,22 +389,31 @@ function findAssetBalance(payload, asset = 'USDC') {
 }
 
 function buildBitnobCustomerPayload(payload = {}) {
-  return {
+  const { phone, countryCode } = normalizeBitnobPhone(payload.phone || payload.phone_number, payload.dial_code || payload.country_code);
+  return compactPayload({
     customer_type: payload.customer_type || 'individual',
     first_name: payload.first_name,
     last_name: payload.last_name,
-    date_of_birth: payload.date_of_birth,
-    id_type: payload.id_type,
-    id_number: payload.id_number,
     email: payload.email,
-    phone_number: payload.phone_number || '',
-    dial_code: payload.dial_code || '+251',
-    country: payload.country || 'ETH',
-    line1: payload.address || payload.line1 || '',
-    city: payload.city || '',
-    state: payload.state || payload.city || '',
-    postal_code: payload.postal_code || '1000'
-  };
+    phone,
+    country_code: countryCode
+  });
+}
+
+function compactPayload(payload) {
+  return Object.fromEntries(
+    Object.entries(payload || {}).filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== '')
+  );
+}
+
+function normalizeBitnobPhone(phoneValue, dialCodeValue = '+251') {
+  const rawPhone = String(phoneValue || '').trim().replace(/\s+/g, '');
+  const rawDial = String(dialCodeValue || '+251').trim();
+  const countryCode = rawDial.startsWith('+') ? rawDial : `+${rawDial.replace(/\D/g, '') || '251'}`;
+  if (!rawPhone) return { phone: undefined, countryCode };
+  if (rawPhone.startsWith('+')) return { phone: rawPhone, countryCode };
+  const digits = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
+  return { phone: digits ? `${countryCode}${digits}` : undefined, countryCode };
 }
 
 function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, userId }) {
@@ -509,6 +518,15 @@ function normalizeCountryCode(country) {
   return known[value] || value || 'ETH';
 }
 
+function dialCodeForCountry(country) {
+  const value = String(country || '').trim().toUpperCase();
+  if (['ETHIOPIA', 'ETH', 'ET'].includes(value)) return '+251';
+  if (['NIGERIA', 'NGA', 'NG'].includes(value)) return '+234';
+  if (['GHANA', 'GHA', 'GH'].includes(value)) return '+233';
+  if (['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(value)) return '+1';
+  return '+251';
+}
+
 function kycToBitnobCustomerPayload(kyc, user) {
   const legalName = String(kyc?.legal_name || user?.full_name || '').trim();
   const [firstName, ...lastNameParts] = legalName.split(/\s+/).filter(Boolean);
@@ -521,7 +539,7 @@ function kycToBitnobCustomerPayload(kyc, user) {
     id_number: kyc?.id_number || '',
     email: kyc?.email || user?.email || kyc?.user_id || '',
     phone_number: kyc?.phone || user?.phone || '',
-    dial_code: '+251',
+    dial_code: dialCodeForCountry(kyc?.country),
     country: normalizeCountryCode(kyc?.country),
     address: kyc?.address || '',
     city: kyc?.city || 'Addis Ababa'
@@ -1030,7 +1048,7 @@ export function createApp() {
     try {
       if (!requireAdmin(req, res)) return;
       const payload = req.body || {};
-      const required = ['customer_type', 'first_name', 'last_name', 'date_of_birth', 'id_type', 'id_number', 'email', 'country'];
+      const required = ['customer_type', 'email'];
       const missing = required.filter((field) => !String(payload[field] || '').trim());
       if (missing.length) return res.status(400).json({ message: `Missing required fields: ${missing.join(', ')}` });
 
@@ -1040,7 +1058,7 @@ export function createApp() {
       writeAudit({ actor: req.user.email, userId: saved.user_id || saved.email, action: 'customer_created', entityType: 'bitnob_customer', entityId: saved.id, environment: config.bitnob.env, provider: 'bitnob', providerStatus: provider?.status || provider?.message || 'success', providerResponse: provider, newValue: saved, reason: req.body.reason || null, req });
       res.status(201).json(saved);
     } catch (error) {
-      writeAudit({ actor: req.user?.email, userId: req.body?.email, action: 'customer_create_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: 'failed', providerResponse: { message: error.message }, reason: req.body?.reason || null, req });
+      writeAudit({ actor: req.user?.email, userId: req.body?.email, action: 'customer_create_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, reason: req.body?.reason || null, req });
       res.status(400).json({ message: error.message || 'Customer creation failed.' });
     }
   }
@@ -1058,7 +1076,7 @@ export function createApp() {
       writeAudit({ actor: req.user.email, userId: req.user.email, action: 'bitnob_sync_completed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: 'success', providerResponse: { imported: saved.length }, req });
       res.json({ imported: saved.length, customers: saved });
     } catch (error) {
-      writeAudit({ actor: req.user?.email, userId: req.user?.email, action: 'bitnob_sync_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: 'failed', providerResponse: { message: error.message }, req });
+      writeAudit({ actor: req.user?.email, userId: req.user?.email, action: 'bitnob_sync_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, req });
       res.status(400).json({ message: error.message || 'Bitnob customer sync failed.' });
     }
   });
@@ -1494,8 +1512,8 @@ export function createApp() {
           entityId: kyc?.id,
           environment: config.bitnob.env,
           provider: 'bitnob',
-          providerStatus: 'failed',
-          providerResponse: { message: bitnobWarning },
+          providerStatus: error.providerStatus || 'failed',
+          providerResponse: error.providerResponse || { message: bitnobWarning },
           reason,
           req
         });
@@ -1872,8 +1890,8 @@ export function createApp() {
           entityId: kyc.id,
           environment: config.bitnob.env,
           provider: 'bitnob',
-          providerStatus: 'failed',
-          providerResponse: { message: error.message },
+          providerStatus: error.providerStatus || 'failed',
+          providerResponse: error.providerResponse || { message: error.message },
           reason: req.body?.reason || 'KYC approval',
           req
         });
