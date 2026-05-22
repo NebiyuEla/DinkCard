@@ -838,7 +838,7 @@ export function createApp() {
     }
   });
 
-  app.post('/api/admin/users/:id/manual-card', authMiddleware(db), (req, res) => {
+  app.post('/api/admin/users/:id/manual-card', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
 
@@ -846,55 +846,29 @@ export function createApp() {
       if (!target) return res.status(404).json({ message: 'User not found' });
 
       const reason = String(req.body.reason || '').trim();
+      const fundingAmount = Number(req.body.fundingAmount ?? req.body.balance ?? 0);
       const nickname = String(req.body.nickname || 'Virtual Card').trim() || 'Virtual Card';
-      const balance = Number(req.body.balance || 0);
-      const lastFour = String(req.body.lastFour || '').replace(/\D/g, '').slice(-4);
 
       if (!reason) return res.status(400).json({ message: 'A reason is required for manual card creation.' });
-      if (!Number.isFinite(balance) || balance < 0) return res.status(400).json({ message: 'Enter a valid card balance.' });
-      if (balance > 10000 && !isSuperadmin(req.user)) {
-        return res.status(403).json({ message: 'Only the owner can create manual cards above $10,000.' });
+      if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) return res.status(400).json({ message: 'Enter a valid card funding amount.' });
+      if (fundingAmount > 10000 && !isSuperadmin(req.user)) {
+        return res.status(403).json({ message: 'Only the owner can create cards above $10,000.' });
       }
 
       ensureWallet(target.email);
 
-      const now = nowIso();
-      const cardId = generateId('card');
-
-      db.prepare(`
-        INSERT INTO virtual_cards (
-          id, user_id, provider, provider_card_id, customer_reference, card_nickname, card_type, brand,
-          currency, last_four, balance, status, billing_address, masked_pan, meta, created_at, updated_at
-        ) VALUES (?, ?, 'manual', ?, ?, ?, 'general', 'visa', 'USD', ?, ?, 'active', ?, ?, ?, ?, ?)
-      `).run(
-        cardId,
-        target.email,
-        `manual_${cardId}`,
-        `manual_${target.id}`,
+      const card = mapRow(await createVirtualCardForUser(sanitizeUser(target), {
         nickname,
-        lastFour || null,
-        balance,
-        JSON.stringify({ country: 'Ethiopia', source: 'manual_admin' }),
-        lastFour ? `**** **** **** ${lastFour}` : null,
-        JSON.stringify({ createdBy: req.user.email, reason }),
-        now,
-        now
-      );
-
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
-        VALUES (?, ?, 'Virtual Card Added', ?, 'card', 0, ?)
-      `).run(generateId('ntf'), target.email, `${nickname} was added to your account by an administrator.`, now);
-
-      const card = mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId));
+        fundingAmount
+      }));
 
       writeAudit({
         actor: req.user.email,
         userId: target.email,
-        action: 'manual_virtual_card_created',
+        action: 'admin_bitnob_card_created',
         entityType: 'virtual_card',
-        entityId: cardId,
-        newValue: card,
+        entityId: card?.id,
+        newValue: { cardId: card?.id, providerCardId: card?.provider_card_id, fundingAmount },
         reason
       });
 

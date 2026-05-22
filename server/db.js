@@ -5,19 +5,10 @@ import bcrypt from 'bcryptjs';
 import { config } from './config.js';
 import { generateId, nowIso } from './utils.js';
 
-/**
- * Render fix:
- * Do NOT use /var/data unless you added a persistent disk.
- * This keeps the app running without adding any Render disk.
- */
-const DATA_DIR = path.join(process.cwd(), 'data');
-const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
-const DATABASE_PATH = path.join(DATA_DIR, 'dinkcard.sqlite');
+fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
+fs.mkdirSync(config.uploadDir, { recursive: true });
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-export const db = new DatabaseSync(DATABASE_PATH);
+export const db = new DatabaseSync(config.databasePath);
 
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');

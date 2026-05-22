@@ -186,6 +186,8 @@ export async function createVirtualCardForUser(user, payload) {
       now,
       now
     );
+    const created = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ?').get(card.id);
+    return created;
   } catch (error) {
     creditWallet(
       user.email,

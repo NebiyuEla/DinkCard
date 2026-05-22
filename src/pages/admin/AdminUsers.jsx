@@ -58,9 +58,9 @@ function getActionCopy(action, user) {
       requiresReason: true
     },
     manual_card: {
-      title: 'Create manual card',
-      description: 'This creates an admin-managed virtual card record without calling the provider.',
-      confirm: 'Create Card',
+      title: 'Create Bitnob card',
+      description: 'This requests a real provider-backed virtual card for the selected user and deducts their service balance.',
+      confirm: 'Create Bitnob Card',
       variant: 'default',
       requiresReason: true
     },
@@ -113,7 +113,7 @@ function UserActions({ user, onAction }) {
       </Button>
       <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'manual_card')}>
         <CreditCard className="w-3.5 h-3.5" />
-        Manual Card
+        Bitnob Card
       </Button>
       <Button
         type="button"
@@ -157,7 +157,7 @@ export default function AdminUsers() {
       if (action === 'manual_card') {
         return apiClient.admin.users.createManualCard(user.id, {
           nickname: manualCard.nickname || 'Virtual Card',
-          balance: Number(manualCard.balance || 0),
+          fundingAmount: Number(manualCard.balance || 0),
           lastFour: manualCard.lastFour,
           reason: actionReason
         });
@@ -289,7 +289,7 @@ export default function AdminUsers() {
                     />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label className="text-sm">Initial balance</Label>
+                    <Label className="text-sm">Funding amount</Label>
                     <Input
                       type="number"
                       min="0"
