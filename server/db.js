@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
   reference TEXT UNIQUE NOT NULL,
   description TEXT,
   metadata TEXT,
+  environment TEXT NOT NULL DEFAULT 'sandbox',
   created_at TEXT NOT NULL
 );
 
@@ -103,6 +104,7 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   status TEXT NOT NULL DEFAULT 'pending',
   billing_address TEXT,
   masked_pan TEXT,
+  environment TEXT NOT NULL DEFAULT 'sandbox',
   meta TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -111,7 +113,7 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
 CREATE TABLE IF NOT EXISTS bitnob_customers (
   id TEXT PRIMARY KEY,
   user_id TEXT,
-  bitnob_customer_id TEXT UNIQUE NOT NULL,
+  bitnob_customer_id TEXT NOT NULL,
   customer_type TEXT NOT NULL DEFAULT 'individual',
   first_name TEXT,
   last_name TEXT,
@@ -125,6 +127,8 @@ CREATE TABLE IF NOT EXISTS bitnob_customers (
   address TEXT,
   city TEXT,
   status TEXT NOT NULL DEFAULT 'active',
+  environment TEXT NOT NULL DEFAULT 'sandbox',
+  provider TEXT NOT NULL DEFAULT 'bitnob',
   provider_payload TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -243,6 +247,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   old_value TEXT,
   new_value TEXT,
   reason TEXT,
+  environment TEXT,
+  provider TEXT,
+  provider_status TEXT,
+  provider_response TEXT,
+  ip_address TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -306,6 +315,69 @@ ensureColumn('kyc_submissions', 'reviewed_by', 'TEXT');
 ensureColumn('kyc_submissions', 'reviewed_at', 'TEXT');
 
 ensureColumn('virtual_cards', 'bitnob_customer_id', 'TEXT');
+ensureColumn('virtual_cards', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
+ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
+ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
+ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
+ensureColumn('audit_logs', 'environment', 'TEXT');
+ensureColumn('audit_logs', 'provider', 'TEXT');
+ensureColumn('audit_logs', 'provider_status', 'TEXT');
+ensureColumn('audit_logs', 'provider_response', 'TEXT');
+ensureColumn('audit_logs', 'ip_address', 'TEXT');
+
+function migrateBitnobCustomersEnvironmentUniqueness() {
+  const hasLegacyUniqueIndex = db
+    .prepare("PRAGMA index_list('bitnob_customers')")
+    .all()
+    .some((row) => row.origin === 'u');
+
+  if (!hasLegacyUniqueIndex) return;
+
+  db.exec(`
+    ALTER TABLE bitnob_customers RENAME TO bitnob_customers_legacy_unique;
+
+    CREATE TABLE bitnob_customers (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      bitnob_customer_id TEXT NOT NULL,
+      customer_type TEXT NOT NULL DEFAULT 'individual',
+      first_name TEXT,
+      last_name TEXT,
+      email TEXT,
+      phone_number TEXT,
+      dial_code TEXT,
+      date_of_birth TEXT,
+      id_type TEXT,
+      id_number TEXT,
+      country TEXT,
+      address TEXT,
+      city TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      environment TEXT NOT NULL DEFAULT 'sandbox',
+      provider TEXT NOT NULL DEFAULT 'bitnob',
+      provider_payload TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO bitnob_customers (
+      id, user_id, bitnob_customer_id, customer_type, first_name, last_name, email, phone_number, dial_code,
+      date_of_birth, id_type, id_number, country, address, city, status, environment, provider, provider_payload, created_at, updated_at
+    )
+    SELECT
+      id, user_id, bitnob_customer_id, customer_type, first_name, last_name, email, phone_number, dial_code,
+      date_of_birth, id_type, id_number, country, address, city, status,
+      COALESCE(NULLIF(environment, ''), 'sandbox'),
+      COALESCE(NULLIF(provider, ''), 'bitnob'),
+      provider_payload, created_at, updated_at
+    FROM bitnob_customers_legacy_unique;
+
+    DROP TABLE bitnob_customers_legacy_unique;
+  `);
+}
+
+migrateBitnobCustomersEnvironmentUniqueness();
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bitnob_customers_provider_env_id ON bitnob_customers(provider, environment, bitnob_customer_id);');
 
 ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');

@@ -54,6 +54,7 @@ export const config = {
     returnUrl: must('CHAPA_RETURN_URL', 'http://localhost:5173/add-money')
   },
   bitnob: {
+    env: must('BITNOB_ENV', 'sandbox'),
     clientId: must('BITNOB_CLIENT_ID'),
     clientSecret: must('BITNOB_CLIENT_SECRET'),
     baseUrl: must('BITNOB_BASE_URL', 'https://api.bitnob.com'),

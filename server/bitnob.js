@@ -62,7 +62,7 @@ export async function bitnobRequest(method, requestPath, payload) {
     if (errorCode === 'COMPANY_INSUFFICIENT_BALANCE') {
       const required = data?.extensions?.metadata?.required;
       const available = data?.extensions?.metadata?.available;
-      throw new Error(`Card provider sandbox balance is too low${required ? `: required ${required}` : ''}${available ? `, available ${available}` : ''}. Add test card-issuing balance in Bitnob, then try again.`);
+      throw new Error(`Insufficient company wallet balance.${required ? ` Required: ${required} USDC.` : ''}${available ? ` Available: ${available} USDC.` : ''}`);
     }
     throw new Error(message);
   }
@@ -95,9 +95,12 @@ async function safeBitnob(method, requestPath, payload) {
 
 export const bitnobService = {
   request: bitnobRequest,
+  environment: config.bitnob.env,
+  whoami: () => safeBitnob('GET', '/api/whoami'),
   createCustomer: (data) => safeBitnob('POST', '/api/customers', data),
   listCustomers: () => safeBitnob('GET', '/api/customers'),
   getCustomer: (customerId) => safeBitnob('GET', `/api/customers/${encodeURIComponent(customerId)}`),
+  updateCustomer: (customerId, data) => safeBitnob('PUT', `/api/customers/${encodeURIComponent(customerId)}`, data),
   createCard: (data) => safeBitnob('POST', '/api/cards', data),
   listCards: () => safeBitnob('GET', '/api/cards'),
   getCard: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}`),
@@ -117,7 +120,11 @@ export const bitnobService = {
   unfreezeCard: (cardId) => safeBitnob('POST', `/api/cards/${encodeURIComponent(cardId)}/status`, { status: 'active' }),
   getCardTransactions: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}/transactions`),
   listCardTransactions: () => safeBitnob('GET', '/api/cards/transactions'),
-  getBalances: () => safeBitnob('GET', '/api/balances')
+  getAllCardTransactions: () => safeBitnob('GET', '/api/cards/transactions'),
+  getBalances: () => safeBitnob('GET', '/api/balances'),
+  generateAddress: (data) => safeBitnob('POST', '/api/addresses', data),
+  listAddresses: () => safeBitnob('GET', '/api/addresses'),
+  getSupportedChains: () => safeBitnob('GET', '/api/addresses/supported-chains')
 };
 
 function parseDialCode(phone) {

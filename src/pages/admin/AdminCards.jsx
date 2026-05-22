@@ -64,6 +64,7 @@ export default function AdminCards() {
   const customersQuery = useQuery({ queryKey: ['bitnob-customers'], queryFn: apiClient.admin.customers.list, refetchInterval: REFRESH.admin });
   const cardsQuery = useQuery({ queryKey: ['admin-cards'], queryFn: apiClient.admin.cards.list, refetchInterval: REFRESH.admin });
   const balancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
+  const providerStatusQuery = useQuery({ queryKey: ['provider-status'], queryFn: apiClient.admin.providerStatus, refetchInterval: REFRESH.fees, retry: false });
   const txQuery = useQuery({ queryKey: ['bitnob-transactions'], queryFn: apiClient.admin.cards.allTransactions, refetchInterval: REFRESH.admin, retry: false });
   const auditQuery = useQuery({ queryKey: ['audit-logs'], queryFn: apiClient.admin.auditLogs, refetchInterval: REFRESH.admin });
 
@@ -99,6 +100,22 @@ export default function AdminCards() {
       queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
     },
     onError: (error) => toast.error(error.message || 'Customer creation failed')
+  });
+
+  const syncCustomers = useMutation({
+    mutationFn: apiClient.admin.customers.syncBitnob,
+    onSuccess: (result) => {
+      toast.success(`Synced ${result.imported || 0} Bitnob customers`);
+      queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+    },
+    onError: (error) => toast.error(error.message || 'Bitnob sync failed')
+  });
+
+  const testConnection = useMutation({
+    mutationFn: apiClient.admin.bitnob.whoami,
+    onSuccess: (result) => toast.success(result.message || 'Connected to Bitnob successfully'),
+    onError: (error) => toast.error(error.message || 'Bitnob authentication failed')
   });
 
   const createCard = useMutation({
@@ -145,17 +162,24 @@ export default function AdminCards() {
   };
 
   const lowBalance = Number(balancesQuery.data?.usdc || 0) < 7;
+  const environment = providerStatusQuery.data?.environment || balancesQuery.data?.environment || 'sandbox';
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-lg font-bold">Bitnob Card Operations</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold">Bitnob Card Operations</h2>
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${environment === 'live' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-yellow-500/15 text-yellow-700'}`}>{environment}</span>
+          </div>
           <p className="text-xs text-muted-foreground">Provider-backed customers, cards, funding, transactions, and audit logs.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => balancesQuery.refetch()}>
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => syncCustomers.mutate()} disabled={syncCustomers.isPending}>
+            <RefreshCw className="h-3.5 w-3.5" /> {syncCustomers.isPending ? 'Syncing...' : 'Sync Bitnob'}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setShowCustomer(true)}>
             <Plus className="h-3.5 w-3.5" /> Create Customer
@@ -172,7 +196,7 @@ export default function AdminCards() {
         <Stat label="Active Cards" value={stats.active} icon={CreditCard} />
         <Stat label="Frozen" value={stats.frozen} icon={PauseCircle} tone="text-yellow-500" />
         <Stat label="Card Balance" value={money(stats.totalBalance)} icon={WalletCards} />
-        <Stat label="Transactions" value={transactions.length} icon={Send} />
+        <Stat label="Environment" value={environment} icon={Send} tone={environment === 'live' ? 'text-emerald-500' : 'text-yellow-500'} />
       </div>
 
       {lowBalance && (
@@ -201,7 +225,7 @@ export default function AdminCards() {
           <div className="overflow-hidden rounded-lg border border-border bg-card">
             <table className="w-full text-xs">
               <thead className="bg-secondary/40 text-muted-foreground">
-                <tr><th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2 text-left">Email</th><th className="px-3 py-2 text-left">Country</th><th className="px-3 py-2 text-left">Customer ID</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Actions</th></tr>
+                <tr><th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2 text-left">Email</th><th className="px-3 py-2 text-left">Country</th><th className="px-3 py-2 text-left">Customer ID</th><th className="px-3 py-2 text-left">Env</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredCustomers.map((customer) => (
@@ -210,13 +234,14 @@ export default function AdminCards() {
                     <td className="px-3 py-2 text-muted-foreground">{customer.email}</td>
                     <td className="px-3 py-2">{customer.country}</td>
                     <td className="px-3 py-2 font-mono">{customer.bitnob_customer_id}</td>
+                    <td className="px-3 py-2"><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase">{customer.environment || environment}</span></td>
                     <td className="px-3 py-2"><StatusBadge status={customer.status || 'active'} className="text-[10px]" /></td>
                     <td className="px-3 py-2 text-right">
                       <Button size="sm" variant="outline" onClick={() => { setCardForm((current) => ({ ...current, customerId: customer.id, name: getName(customer) })); setShowCreateCard(true); }}>Create card</Button>
                     </td>
                   </tr>
                 ))}
-                {!filteredCustomers.length && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No customers yet.</td></tr>}
+                {!filteredCustomers.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No customers yet. Create one or sync from Bitnob.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -245,8 +270,20 @@ export default function AdminCards() {
         </TabsContent>
 
         <TabsContent value="settings">
-          <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-            Bitnob credentials, base URL, webhook URL, and sandbox/production mode are controlled by backend environment variables. Secrets are never exposed in the frontend.
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Provider Settings</p>
+                <p className="text-xs text-muted-foreground">Bitnob mode and keys are controlled by backend environment variables. Secrets are never exposed.</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => testConnection.mutate()} disabled={testConnection.isPending}>{testConnection.isPending ? 'Testing...' : 'Test Bitnob Connection'}</Button>
+            </div>
+            <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
+              <InfoRow label="Environment" value={providerStatusQuery.data?.environment || environment} />
+              <InfoRow label="Base URL" value={providerStatusQuery.data?.baseUrl || 'Not loaded'} />
+              <InfoRow label="Client ID" value={providerStatusQuery.data?.clientId || 'Hidden'} />
+              <InfoRow label="Webhook URL" value={providerStatusQuery.data?.webhookUrl || 'Not configured'} />
+            </div>
           </div>
         </TabsContent>
       </Tabs>
@@ -305,13 +342,14 @@ function CompactCards({ cards, onAction }) {
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <table className="w-full text-xs">
         <thead className="bg-secondary/40 text-muted-foreground">
-          <tr><th className="px-3 py-2 text-left">Holder</th><th className="px-3 py-2 text-left">Card</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Actions</th></tr>
+          <tr><th className="px-3 py-2 text-left">Holder</th><th className="px-3 py-2 text-left">Card</th><th className="px-3 py-2 text-left">Env</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Actions</th></tr>
         </thead>
         <tbody className="divide-y divide-border">
           {cards.map((card) => (
             <tr key={card.id}>
               <td className="px-3 py-2"><p className="font-medium">{card.first_name ? `${card.first_name} ${card.last_name || ''}` : card.user_id}</p><p className="text-muted-foreground">{card.customer_email || card.bitnob_customer_id}</p></td>
               <td className="px-3 py-2 font-mono">{card.masked_pan || `**** ${card.last_four || '----'}`}</td>
+              <td className="px-3 py-2"><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase">{card.environment || 'sandbox'}</span></td>
               <td className="px-3 py-2"><StatusBadge status={card.status} className="text-[10px]" /></td>
               <td className="px-3 py-2 text-right font-mono">{money(card.balance)}</td>
               <td className="px-3 py-2">
@@ -323,9 +361,18 @@ function CompactCards({ cards, onAction }) {
               </td>
             </tr>
           ))}
-          {!cards.length && <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">No cards yet.</td></tr>}
+          {!cards.length && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No cards yet.</td></tr>}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  return (
+    <div className="rounded-md border border-border bg-secondary/20 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-1 break-all font-mono text-xs text-foreground">{value || 'Not configured'}</p>
     </div>
   );
 }

@@ -139,7 +139,7 @@ export const apiClient = {
       terminate: (id, reason) => request(`/api/admin/cards/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
       list: () => request('/api/admin/cards'),
       get: (id) => request(`/api/admin/cards/${encodeURIComponent(id)}`),
-      create: (payload) => request('/api/admin/cards/create', { method: 'POST', body: JSON.stringify(payload) }),
+      create: (payload) => request('/api/admin/cards', { method: 'POST', body: JSON.stringify(payload) }),
       fund: (id, payload) => request(`/api/admin/cards/${encodeURIComponent(id)}/fund`, { method: 'POST', body: JSON.stringify(payload) }),
       withdraw: (id, payload) => request(`/api/admin/cards/${encodeURIComponent(id)}/withdraw`, { method: 'POST', body: JSON.stringify(payload) }),
       freeze: (id, payload = {}) => request(`/api/admin/cards/${encodeURIComponent(id)}/freeze`, { method: 'POST', body: JSON.stringify(payload) }),
@@ -151,10 +151,17 @@ export const apiClient = {
     customers: {
       list: () => request('/api/admin/customers'),
       get: (id) => request(`/api/admin/customers/${encodeURIComponent(id)}`),
-      create: (payload) => request('/api/admin/customers/create', { method: 'POST', body: JSON.stringify(payload) }),
+      create: (payload) => request('/api/admin/customers', { method: 'POST', body: JSON.stringify(payload) }),
+      update: (id, payload) => request(`/api/admin/customers/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(payload) }),
+      syncBitnob: () => request('/api/admin/customers/sync-bitnob', { method: 'POST' }),
       cards: (customerId) => request(`/api/admin/customers/${encodeURIComponent(customerId)}/cards`)
     },
-    balances: () => request('/api/admin/balances'),
+    bitnob: {
+      whoami: () => request('/api/admin/bitnob/whoami'),
+      balances: () => request('/api/admin/bitnob/balances')
+    },
+    providerStatus: () => request('/api/admin/settings/provider-status'),
+    balances: () => request('/api/admin/bitnob/balances'),
     auditLogs: () => request('/api/admin/audit-logs')
   }
 };
