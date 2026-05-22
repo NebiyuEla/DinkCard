@@ -136,8 +136,26 @@ export const apiClient = {
     cards: {
       suspend: (id, reason) => request(`/api/admin/cards/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
       activate: (id, reason) => request(`/api/admin/cards/${id}/activate`, { method: 'POST', body: JSON.stringify({ reason }) }),
-      terminate: (id, reason) => request(`/api/admin/cards/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
-    }
+      terminate: (id, reason) => request(`/api/admin/cards/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
+      list: () => request('/api/admin/cards'),
+      get: (id) => request(`/api/admin/cards/${encodeURIComponent(id)}`),
+      create: (payload) => request('/api/admin/cards/create', { method: 'POST', body: JSON.stringify(payload) }),
+      fund: (id, payload) => request(`/api/admin/cards/${encodeURIComponent(id)}/fund`, { method: 'POST', body: JSON.stringify(payload) }),
+      withdraw: (id, payload) => request(`/api/admin/cards/${encodeURIComponent(id)}/withdraw`, { method: 'POST', body: JSON.stringify(payload) }),
+      freeze: (id, payload = {}) => request(`/api/admin/cards/${encodeURIComponent(id)}/freeze`, { method: 'POST', body: JSON.stringify(payload) }),
+      unfreeze: (id, payload = {}) => request(`/api/admin/cards/${encodeURIComponent(id)}/unfreeze`, { method: 'POST', body: JSON.stringify(payload) }),
+      secure: (id) => request(`/api/admin/cards/${encodeURIComponent(id)}/secure`),
+      transactions: (id) => request(`/api/admin/cards/${encodeURIComponent(id)}/transactions`),
+      allTransactions: () => request('/api/admin/cards/transactions')
+    },
+    customers: {
+      list: () => request('/api/admin/customers'),
+      get: (id) => request(`/api/admin/customers/${encodeURIComponent(id)}`),
+      create: (payload) => request('/api/admin/customers/create', { method: 'POST', body: JSON.stringify(payload) }),
+      cards: (customerId) => request(`/api/admin/customers/${encodeURIComponent(customerId)}/cards`)
+    },
+    balances: () => request('/api/admin/balances'),
+    auditLogs: () => request('/api/admin/audit-logs')
   }
 };
 

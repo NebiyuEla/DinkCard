@@ -35,7 +35,7 @@ function signBitnob(body = '') {
   };
 }
 
-async function bitnobRequest(method, requestPath, payload) {
+export async function bitnobRequest(method, requestPath, payload) {
   if (!config.bitnob.clientId || !config.bitnob.clientSecret) {
     throw new Error('Missing card provider credentials. Set BITNOB_CLIENT_ID and BITNOB_CLIENT_SECRET.');
   }
@@ -68,6 +68,57 @@ async function bitnobRequest(method, requestPath, payload) {
   }
   return data;
 }
+
+export function toBitnobBaseUnits(amountUsd) {
+  return toBitnobAmount(amountUsd);
+}
+
+export function fromBitnobBaseUnits(baseUnits) {
+  return fromBitnobAmount(baseUnits);
+}
+
+function friendlyBitnobError(error) {
+  const message = String(error?.message || error || 'Card provider request failed');
+  if (/authentication|signature|unauthorized|forbidden/i.test(message)) {
+    return new Error('Provider authentication failed. Check server environment keys.');
+  }
+  return error;
+}
+
+async function safeBitnob(method, requestPath, payload) {
+  try {
+    return await bitnobRequest(method, requestPath, payload);
+  } catch (error) {
+    throw friendlyBitnobError(error);
+  }
+}
+
+export const bitnobService = {
+  request: bitnobRequest,
+  createCustomer: (data) => safeBitnob('POST', '/api/customers', data),
+  listCustomers: () => safeBitnob('GET', '/api/customers'),
+  getCustomer: (customerId) => safeBitnob('GET', `/api/customers/${encodeURIComponent(customerId)}`),
+  createCard: (data) => safeBitnob('POST', '/api/cards', data),
+  listCards: () => safeBitnob('GET', '/api/cards'),
+  getCard: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}`),
+  getCustomerCards: (customerId) => safeBitnob('GET', `/api/customers/${encodeURIComponent(customerId)}/cards`),
+  getSecureCardDetails: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}/secure`),
+  fundCard: (cardId, amount, reference) => safeBitnob('POST', `/api/cards/${encodeURIComponent(cardId)}/balance`, {
+    type: 'fund',
+    amount: toBitnobAmount(amount),
+    reference
+  }),
+  withdrawCard: (cardId, amount, reference) => safeBitnob('POST', `/api/cards/${encodeURIComponent(cardId)}/balance`, {
+    type: 'withdraw',
+    amount: toBitnobAmount(amount),
+    reference
+  }),
+  freezeCard: (cardId) => safeBitnob('POST', `/api/cards/${encodeURIComponent(cardId)}/status`, { status: 'frozen' }),
+  unfreezeCard: (cardId) => safeBitnob('POST', `/api/cards/${encodeURIComponent(cardId)}/status`, { status: 'active' }),
+  getCardTransactions: (cardId) => safeBitnob('GET', `/api/cards/${encodeURIComponent(cardId)}/transactions`),
+  listCardTransactions: () => safeBitnob('GET', '/api/cards/transactions'),
+  getBalances: () => safeBitnob('GET', '/api/balances')
+};
 
 function parseDialCode(phone) {
   if (!phone) return { dialCode: '+251', localNumber: '' };
@@ -164,12 +215,13 @@ export async function createVirtualCardForUser(user, payload) {
 
     db.prepare(`
       INSERT INTO virtual_cards (
-        id, user_id, provider, provider_card_id, customer_reference, card_nickname, card_type, brand, currency,
+        id, user_id, provider, bitnob_customer_id, provider_card_id, customer_reference, card_nickname, card_type, brand, currency,
         last_four, expiry_month, expiry_year, balance, status, billing_address, masked_pan, meta, created_at, updated_at
-      ) VALUES (?, ?, 'bitnob', ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, 'bitnob', ?, ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       generateId('crd'),
       user.email,
+      card.customer_id || '',
       card.id,
       card.customer_id || '',
       cardNickname,

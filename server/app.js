@@ -9,10 +9,21 @@ import multer from 'multer';
 import { config } from './config.js';
 import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
-import { sanitizeUser, parseJson, generateId, nowIso } from './utils.js';
+import { sanitizeUser, parseJson, generateId, money, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
-import { approveDeposit, creditWallet, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
-import { changeCardStatus, createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook, revealCardDetails, terminateCard, verifyBitnobWebhook } from './bitnob.js';
+import { approveDeposit, creditWallet, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
+import {
+  bitnobService,
+  changeCardStatus,
+  createVirtualCardForUser,
+  fundVirtualCard,
+  handleBitnobWebhook,
+  revealCardDetails,
+  terminateCard,
+  toBitnobBaseUnits,
+  fromBitnobBaseUnits,
+  verifyBitnobWebhook
+} from './bitnob.js';
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
 const distDir = path.join(config.rootDir, 'dist');
@@ -306,6 +317,130 @@ function ensureWallet(userEmail) {
   `).run(walletId, userEmail, now, now);
 
   return db.prepare('SELECT * FROM wallets WHERE id = ?').get(walletId);
+}
+
+function extractProviderData(payload) {
+  return payload?.data?.card || payload?.data?.customer || payload?.data || payload?.card || payload?.customer || payload || {};
+}
+
+function normalizeProviderList(payload) {
+  const data = payload?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.cards)) return data.cards;
+  if (Array.isArray(data?.customers)) return data.customers;
+  if (Array.isArray(data?.transactions)) return data.transactions;
+  if (Array.isArray(payload?.cards)) return payload.cards;
+  if (Array.isArray(payload?.customers)) return payload.customers;
+  if (Array.isArray(payload?.transactions)) return payload.transactions;
+  return [];
+}
+
+function findAssetBalance(payload, asset = 'USDC') {
+  const target = String(asset).toUpperCase();
+  const found = [];
+
+  function visit(value) {
+    if (!value || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+
+    const symbol = String(value.asset || value.currency || value.symbol || value.code || value.name || '').toUpperCase();
+    if (symbol === target) {
+      const amount = value.available ?? value.available_balance ?? value.balance ?? value.amount ?? value.value;
+      const numeric = Number(amount);
+      if (Number.isFinite(numeric)) found.push(Math.abs(numeric) >= 100000 ? fromBitnobBaseUnits(numeric) : numeric);
+    }
+
+    Object.values(value).forEach(visit);
+  }
+
+  visit(payload);
+  return found.length ? Math.max(...found) : 0;
+}
+
+function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPayload }) {
+  const now = nowIso();
+  const providerCardId = card.id || card.card_id || card.cardId;
+  if (!providerCardId) throw new Error('Card provider did not return a card ID.');
+
+  const customerId = card.customer_id || card.customerId || customer?.bitnob_customer_id || customer?.id || '';
+  const maskedPan = card.masked_pan || card.maskedPan || card.masked || '';
+  const lastFour = card.last_four_digit || card.last_four || card.last4 || maskedPan.replace(/\D/g, '').slice(-4) || '';
+  const balance = card.display_amount !== undefined
+    ? Number(card.display_amount)
+    : card.balance_amount !== undefined
+      ? fromBitnobBaseUnits(card.balance_amount)
+      : Number(card.balance || 0);
+
+  const existing = db.prepare('SELECT id FROM virtual_cards WHERE provider_card_id = ?').get(providerCardId);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE virtual_cards
+      SET bitnob_customer_id = ?,
+          customer_reference = ?,
+          card_nickname = ?,
+          card_type = ?,
+          brand = ?,
+          last_four = ?,
+          expiry_month = ?,
+          expiry_year = ?,
+          balance = ?,
+          status = ?,
+          billing_address = ?,
+          masked_pan = ?,
+          meta = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      customerId,
+      customerId,
+      nickname || card.name || 'Virtual Card',
+      card.card_type || 'virtual',
+      card.card_brand || card.brand || 'visa',
+      lastFour,
+      card.expiry_month || '',
+      card.expiry_year || '',
+      money(balance),
+      card.status || 'pending',
+      JSON.stringify(card.billing_address || {}),
+      maskedPan,
+      JSON.stringify(providerPayload || card),
+      now,
+      existing.id
+    );
+    return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(existing.id));
+  }
+
+  const id = generateId('crd');
+  db.prepare(`
+    INSERT INTO virtual_cards (
+      id, user_id, provider, bitnob_customer_id, provider_card_id, customer_reference, card_nickname, card_type, brand, currency,
+      last_four, expiry_month, expiry_year, balance, status, billing_address, masked_pan, meta, created_at, updated_at
+    ) VALUES (?, ?, 'bitnob', ?, ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id,
+    customer?.user_id || fallbackUserId || customer?.email || '',
+    customerId,
+    providerCardId,
+    customerId,
+    nickname || card.name || 'Virtual Card',
+    card.card_type || 'virtual',
+    card.card_brand || card.brand || 'visa',
+    lastFour,
+    card.expiry_month || '',
+    card.expiry_year || '',
+    money(balance),
+    card.status || 'pending',
+    JSON.stringify(card.billing_address || {}),
+    maskedPan,
+    JSON.stringify(providerPayload || card),
+    now,
+    now
+  );
+  return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(id));
 }
 
 function addOrigin(allowedOrigins, origin) {
@@ -614,6 +749,313 @@ export function createApp() {
       res.json(row);
     } catch (error) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/admin/balances', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const provider = await bitnobService.getBalances();
+      res.json({ provider, usdc: findAssetBalance(provider, 'USDC'), usdt: findAssetBalance(provider, 'USDT'), btc: findAssetBalance(provider, 'BTC') });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to fetch company wallet balance.' });
+    }
+  });
+
+  app.get('/api/admin/customers', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const rows = db.prepare('SELECT * FROM bitnob_customers ORDER BY created_at DESC LIMIT 500').all().map(mapRow);
+      res.json(rows);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list customers.' });
+    }
+  });
+
+  app.post('/api/admin/customers/create', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const payload = req.body || {};
+      const required = ['customer_type', 'first_name', 'last_name', 'date_of_birth', 'id_type', 'id_number', 'email', 'country'];
+      const missing = required.filter((field) => !String(payload[field] || '').trim());
+      if (missing.length) return res.status(400).json({ message: `Missing required fields: ${missing.join(', ')}` });
+
+      const provider = await bitnobService.createCustomer({
+        customer_type: payload.customer_type || 'individual',
+        first_name: payload.first_name,
+        last_name: payload.last_name,
+        date_of_birth: payload.date_of_birth,
+        id_type: payload.id_type,
+        id_number: payload.id_number,
+        email: payload.email,
+        phone_number: payload.phone_number || '',
+        dial_code: payload.dial_code || '+251',
+        country: payload.country || 'ETH',
+        line1: payload.address || payload.line1 || '',
+        city: payload.city || '',
+        state: payload.state || payload.city || '',
+        postal_code: payload.postal_code || '1000'
+      });
+
+      const customer = extractProviderData(provider);
+      const bitnobCustomerId = customer.id || customer.customer_id || customer.customerId;
+      if (!bitnobCustomerId) throw new Error('Provider did not return a customer ID.');
+      const now = nowIso();
+      const existing = db.prepare('SELECT id FROM bitnob_customers WHERE bitnob_customer_id = ?').get(bitnobCustomerId);
+
+      if (existing) {
+        db.prepare(`
+          UPDATE bitnob_customers
+          SET user_id = ?, customer_type = ?, first_name = ?, last_name = ?, email = ?, phone_number = ?, dial_code = ?,
+              date_of_birth = ?, id_type = ?, id_number = ?, country = ?, address = ?, city = ?, status = ?, provider_payload = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          payload.user_id || payload.email,
+          payload.customer_type || 'individual',
+          payload.first_name,
+          payload.last_name,
+          payload.email,
+          payload.phone_number || '',
+          payload.dial_code || '+251',
+          payload.date_of_birth,
+          payload.id_type,
+          payload.id_number,
+          payload.country || 'ETH',
+          payload.address || payload.line1 || '',
+          payload.city || '',
+          customer.status || 'active',
+          JSON.stringify(provider),
+          now,
+          existing.id
+        );
+      } else {
+        db.prepare(`
+          INSERT INTO bitnob_customers (
+            id, user_id, bitnob_customer_id, customer_type, first_name, last_name, email, phone_number, dial_code,
+            date_of_birth, id_type, id_number, country, address, city, status, provider_payload, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          generateId('cus'),
+          payload.user_id || payload.email,
+          bitnobCustomerId,
+          payload.customer_type || 'individual',
+          payload.first_name,
+          payload.last_name,
+          payload.email,
+          payload.phone_number || '',
+          payload.dial_code || '+251',
+          payload.date_of_birth,
+          payload.id_type,
+          payload.id_number,
+          payload.country || 'ETH',
+          payload.address || payload.line1 || '',
+          payload.city || '',
+          customer.status || 'active',
+          JSON.stringify(provider),
+          now,
+          now
+        );
+      }
+
+      const saved = mapRow(db.prepare('SELECT * FROM bitnob_customers WHERE bitnob_customer_id = ?').get(bitnobCustomerId));
+      writeAudit({ actor: req.user.email, userId: saved.user_id || saved.email, action: 'customer_created', entityType: 'bitnob_customer', entityId: saved.id, newValue: saved, reason: req.body.reason || null });
+      res.status(201).json(saved);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Customer creation failed.' });
+    }
+  });
+
+  app.get('/api/admin/customers/:id', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const customer = db.prepare('SELECT * FROM bitnob_customers WHERE id = ? OR bitnob_customer_id = ?').get(req.params.id, req.params.id);
+      if (!customer) return res.status(404).json({ message: 'Customer not found' });
+      res.json(mapRow(customer));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to get customer.' });
+    }
+  });
+
+  app.get('/api/admin/customers/:customerId/cards', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const provider = await bitnobService.getCustomerCards(req.params.customerId);
+      res.json({ provider, cards: normalizeProviderList(provider) });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to get customer cards.' });
+    }
+  });
+
+  app.get('/api/admin/cards', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const rows = db.prepare(`
+        SELECT vc.*, bc.first_name, bc.last_name, bc.email AS customer_email
+        FROM virtual_cards vc
+        LEFT JOIN bitnob_customers bc ON bc.bitnob_customer_id = vc.bitnob_customer_id OR bc.bitnob_customer_id = vc.customer_reference
+        ORDER BY vc.created_at DESC
+        LIMIT 500
+      `).all().map(mapRow);
+      res.json(rows);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list cards.' });
+    }
+  });
+
+  app.post('/api/admin/cards/create', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const customer = db.prepare('SELECT * FROM bitnob_customers WHERE id = ? OR bitnob_customer_id = ?').get(req.body.customerId, req.body.customerId);
+      if (!customer) return res.status(404).json({ message: 'Create or select a customer first.' });
+      const fundingAmount = Number(req.body.amount || req.body.fundingAmount || 0);
+      if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) return res.status(400).json({ message: 'Enter a valid funding amount.' });
+
+      const balances = await bitnobService.getBalances();
+      const availableUsdc = findAssetBalance(balances, 'USDC');
+      const settings = getFeeSettings();
+      const requiredUsdc = money(fundingAmount + Number(settings.card_creation_fee_usd || 0));
+      if (availableUsdc < requiredUsdc) {
+        return res.status(400).json({ message: `Insufficient company wallet balance. Required: ${requiredUsdc.toFixed(2)} USDC. Available: ${availableUsdc.toFixed(2)} USDC.` });
+      }
+
+      writeAudit({ actor: req.user.email, userId: customer.user_id || customer.email, action: 'card_creation_attempted', entityType: 'bitnob_customer', entityId: customer.id, newValue: { fundingAmount, requiredUsdc, availableUsdc }, reason: req.body.reason || null });
+      const provider = await bitnobService.createCard({
+        card_type: 'virtual',
+        currency: 'USD',
+        name: req.body.name || `${customer.first_name || ''} ${customer.last_name || ''}`.trim() || 'Virtual Card',
+        amount: toBitnobBaseUnits(fundingAmount),
+        customer_id: customer.bitnob_customer_id,
+        webhook_url: config.bitnob.webhookUrl,
+        card_limits: req.body.card_limits || req.body.cardLimits || undefined
+      });
+      const card = providerCardToDb({ card: extractProviderData(provider), customer, fallbackUserId: customer.user_id || customer.email, nickname: req.body.nickname || 'Virtual Card', providerPayload: provider });
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_created', entityType: 'virtual_card', entityId: card.id, newValue: { cardId: card.id, providerCardId: card.provider_card_id }, reason: req.body.reason || null });
+      res.status(201).json(card);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Card creation failed.' });
+    }
+  });
+
+  app.get('/api/admin/cards/transactions', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const provider = await bitnobService.listCardTransactions();
+      res.json({ provider, transactions: normalizeProviderList(provider) });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list transactions.' });
+    }
+  });
+
+  app.get('/api/admin/cards/:cardId', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      let provider = null;
+      if (card.provider_card_id) {
+        try {
+          provider = await bitnobService.getCard(card.provider_card_id);
+        } catch {}
+      }
+      res.json({ card: mapRow(card), provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to get card.' });
+    }
+  });
+
+  app.get('/api/admin/cards/:cardId/secure', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      const providerCardId = card.provider_card_id || req.params.cardId;
+      const secure = await bitnobService.getSecureCardDetails(providerCardId);
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'secure_details_viewed', entityType: 'virtual_card', entityId: card.id, newValue: { providerCardId }, reason: req.query.reason || 'Admin viewed secure card details' });
+      res.json(secure);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to view secure card details.' });
+    }
+  });
+
+  app.post('/api/admin/cards/:cardId/fund', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      const amount = Number(req.body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ message: 'Enter a valid funding amount.' });
+      const reference = `admin_fund_${generateId('ref')}`;
+      const provider = await bitnobService.fundCard(card.provider_card_id, amount, reference);
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_funded', entityType: 'virtual_card', entityId: card.id, newValue: { amount, reference, providerStatus: provider?.status || provider?.message }, reason: req.body.reason || null });
+      res.json({ ok: true, reference, provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Card funding failed.' });
+    }
+  });
+
+  app.post('/api/admin/cards/:cardId/withdraw', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      const amount = Number(req.body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ message: 'Enter a valid withdrawal amount.' });
+      const reference = `admin_withdraw_${generateId('ref')}`;
+      const provider = await bitnobService.withdrawCard(card.provider_card_id, amount, reference);
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_withdrawn', entityType: 'virtual_card', entityId: card.id, newValue: { amount, reference, providerStatus: provider?.status || provider?.message }, reason: req.body.reason || null });
+      res.json({ ok: true, reference, provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Card withdrawal failed.' });
+    }
+  });
+
+  app.post('/api/admin/cards/:cardId/freeze', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      const provider = await bitnobService.freezeCard(card.provider_card_id);
+      db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run('frozen', nowIso(), card.id);
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_frozen', entityType: 'virtual_card', entityId: card.id, newValue: { providerStatus: provider?.status || provider?.message }, reason: req.body.reason || null });
+      res.json({ ok: true, provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Card freeze failed.' });
+    }
+  });
+
+  app.post('/api/admin/cards/:cardId/unfreeze', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      if (!card) return res.status(404).json({ message: 'Card not found' });
+      const provider = await bitnobService.unfreezeCard(card.provider_card_id);
+      db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run('active', nowIso(), card.id);
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_unfrozen', entityType: 'virtual_card', entityId: card.id, newValue: { providerStatus: provider?.status || provider?.message }, reason: req.body.reason || null });
+      res.json({ ok: true, provider });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Card unfreeze failed.' });
+    }
+  });
+
+  app.get('/api/admin/cards/:cardId/transactions', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? OR provider_card_id = ?').get(req.params.cardId, req.params.cardId);
+      const providerCardId = card?.provider_card_id || req.params.cardId;
+      const provider = await bitnobService.getCardTransactions(providerCardId);
+      res.json({ provider, transactions: normalizeProviderList(provider) });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list card transactions.' });
+    }
+  });
+
+  app.get('/api/admin/audit-logs', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const rows = db.prepare('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 300').all().map(mapRow);
+      res.json(rows);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list audit logs.' });
     }
   });
 

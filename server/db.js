@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   provider TEXT NOT NULL DEFAULT 'bitnob',
+  bitnob_customer_id TEXT,
   provider_card_id TEXT UNIQUE,
   customer_reference TEXT,
   card_nickname TEXT NOT NULL,
@@ -103,6 +104,28 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   billing_address TEXT,
   masked_pan TEXT,
   meta TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS bitnob_customers (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  bitnob_customer_id TEXT UNIQUE NOT NULL,
+  customer_type TEXT NOT NULL DEFAULT 'individual',
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  phone_number TEXT,
+  dial_code TEXT,
+  date_of_birth TEXT,
+  id_type TEXT,
+  id_number TEXT,
+  country TEXT,
+  address TEXT,
+  city TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  provider_payload TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -281,6 +304,8 @@ ensureColumn('kyc_submissions', 'resubmission_scope', 'TEXT');
 ensureColumn('kyc_submissions', 'resubmission_fields', 'TEXT');
 ensureColumn('kyc_submissions', 'reviewed_by', 'TEXT');
 ensureColumn('kyc_submissions', 'reviewed_at', 'TEXT');
+
+ensureColumn('virtual_cards', 'bitnob_customer_id', 'TEXT');
 
 ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');
