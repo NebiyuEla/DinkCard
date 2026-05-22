@@ -14,13 +14,10 @@ import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
 import { changeCardStatus, createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook, revealCardDetails, terminateCard, verifyBitnobWebhook } from './bitnob.js';
 
-const uploadsDir =
-  process.env.UPLOADS_DIR ||
-  path.join(process.cwd(), "uploads");
-
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
+fs.mkdirSync(config.uploadDir, { recursive: true });
+const distDir = path.join(config.rootDir, 'dist');
+const indexHtml = path.join(distDir, 'index.html');
+const uploadLimitBytes = Number(process.env.UPLOAD_MAX_BYTES || 10 * 1024 * 1024);
 const allowedUploadTypes = new Set([
   'image/jpeg',
   'image/png',
@@ -82,7 +79,7 @@ function getUploadExtension(file) {
 }
 
 const uploadStorage = multer.diskStorage({
-  destination: UPLOAD_DIR,
+  destination: config.uploadDir,
   filename: (req, file, callback) => {
     const ownerId = String(req.user?.id || 'user').replace(/[^a-zA-Z0-9_-]/g, '');
     callback(null, `${ownerId}_${generateId('upl')}${getUploadExtension(file)}`);
@@ -132,7 +129,7 @@ function removeUploadedFile(file) {
   if (!file?.path) return;
   try {
     const resolved = path.resolve(file.path);
-    if (resolved.startsWith(UPLOAD_DIR)) fs.unlinkSync(resolved);
+    if (resolved.startsWith(config.uploadDir)) fs.unlinkSync(resolved);
   } catch {}
 }
 
@@ -220,9 +217,9 @@ function removeUploadUrl(url) {
 
     if (!/^[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp|gif|heic|heif|pdf)$/i.test(filename)) return;
 
-    const filePath = path.resolve(UPLOAD_DIR, filename);
+    const filePath = path.resolve(config.uploadDir, filename);
 
-    if (filePath.startsWith(UPLOAD_DIR) && fs.existsSync(filePath)) {
+    if (filePath.startsWith(config.uploadDir) && fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
   } catch {}
@@ -340,9 +337,9 @@ export function createApp() {
     if (!filename) return res.status(404).json({ message: 'File not found' });
     if (!canAccessUpload(req, filename)) return res.status(403).json({ message: 'Forbidden' });
 
-    const filePath = path.resolve(UPLOAD_DIR, filename);
+    const filePath = path.resolve(config.uploadDir, filename);
 
-    if (!filePath.startsWith(UPLOAD_DIR) || !fs.existsSync(filePath)) {
+    if (!filePath.startsWith(config.uploadDir) || !fs.existsSync(filePath)) {
       return res.status(404).json({ message: 'File not found' });
     }
 
