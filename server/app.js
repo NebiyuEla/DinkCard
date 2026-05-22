@@ -143,6 +143,18 @@ function uploadUrlFor(filename) {
   return `/uploads/${filename}`;
 }
 
+function serveIndex(req, res) {
+  if (!fs.existsSync(indexHtml)) {
+    return res.status(200).send('DinkCard API is running. Open the frontend on http://localhost:5173');
+  }
+
+  const html = fs.readFileSync(indexHtml, 'utf8')
+    .replace('<script type="module" crossorigin ', '<script defer ')
+    .replace('<link rel="stylesheet" crossorigin ', '<link rel="stylesheet" ');
+
+  return res.type('html').send(html);
+}
+
 function canAccessUpload(req, filename) {
   if (hasAnyAdminRole(req.user)) return true;
   if (filename.startsWith(`${req.user.id}_`)) return true;
@@ -359,11 +371,7 @@ export function createApp() {
   });
 
   app.get('/', (req, res) => {
-    if (fs.existsSync(indexHtml)) {
-      return res.sendFile(indexHtml);
-    }
-
-    res.status(200).send('DinkCard API is running. Open the frontend on http://localhost:5173');
+    return serveIndex(req, res);
   });
 
   app.post('/api/auth/register', authLimiter, async (req, res) => {
@@ -1045,7 +1053,7 @@ export function createApp() {
       const looksLikeAsset = path.extname(req.path) !== '';
 
       if (req.method === 'GET' && !looksLikeAsset && !req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
-        return res.sendFile(indexHtml);
+        return serveIndex(req, res);
       }
 
       return next();
