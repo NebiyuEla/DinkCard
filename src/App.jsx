@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClientInstance } from '@/lib/query-client';
+import React from 'react';
 import { BrowserRouter as Router, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
@@ -30,6 +31,45 @@ import AdminAuditLogs from './pages/admin/AdminAuditLogs';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import SAOverview from './pages/superadmin/SAOverview';
+
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('DinkCard render error:', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
+          <div className="w-full max-w-md border border-border bg-card p-6 shadow-sm">
+            <h1 className="text-xl font-semibold mb-2">DinkCard could not load</h1>
+            <p className="text-sm text-muted-foreground mb-4">
+              Refresh the page. If this continues, send support the browser console error.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="h-10 px-4 bg-primary text-primary-foreground text-sm font-medium"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function LoadingScreen() {
   return (
@@ -128,14 +168,16 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <AppRoutes />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <QueryClientProvider client={queryClientInstance}>
+          <Router>
+            <AppRoutes />
+          </Router>
+          <Toaster />
+        </QueryClientProvider>
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
 
