@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CreditCard, DollarSign, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 
@@ -39,6 +41,27 @@ function getActionCopy(action, user) {
       description: 'This returns the account to normal user permissions.',
       confirm: 'Remove Admin',
       variant: 'outline',
+      requiresReason: true
+    },
+    add_money: {
+      title: 'Add money',
+      description: 'This manually credits the user available service balance. Use only after internal verification.',
+      confirm: 'Add Money',
+      variant: 'default',
+      requiresReason: true
+    },
+    pass_kyc: {
+      title: 'Pass KYC',
+      description: 'This manually marks the user KYC as approved.',
+      confirm: 'Pass KYC',
+      variant: 'default',
+      requiresReason: true
+    },
+    manual_card: {
+      title: 'Create manual card',
+      description: 'This creates an admin-managed virtual card record without calling the provider.',
+      confirm: 'Create Card',
+      variant: 'default',
       requiresReason: true
     },
     delete: {
@@ -80,6 +103,18 @@ function UserActions({ user, onAction }) {
         {isAdmin ? <UserMinus className="w-3.5 h-3.5" /> : <UserCog className="w-3.5 h-3.5" />}
         {isAdmin ? 'Demote' : 'Make Admin'}
       </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'add_money')}>
+        <DollarSign className="w-3.5 h-3.5" />
+        Add Money
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'pass_kyc')}>
+        <BadgeCheck className="w-3.5 h-3.5" />
+        Pass KYC
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => onAction(user, 'manual_card')}>
+        <CreditCard className="w-3.5 h-3.5" />
+        Manual Card
+      </Button>
       <Button
         type="button"
         size="sm"
@@ -103,9 +138,13 @@ export default function AdminUsers() {
 
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState('');
+  const [manualAmount, setManualAmount] = useState('');
+  const [manualCard, setManualCard] = useState({ nickname: 'Virtual Card', balance: '', lastFour: '' });
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
+  const amountMissing = pendingAction?.action === 'add_money' && (!Number.isFinite(Number(manualAmount)) || Number(manualAmount) <= 0);
+  const cardBalanceInvalid = pendingAction?.action === 'manual_card' && (!Number.isFinite(Number(manualCard.balance || 0)) || Number(manualCard.balance || 0) < 0);
 
   const userAction = useMutation({
     mutationFn: async ({ user, action, reason: actionReason }) => {
@@ -113,6 +152,16 @@ export default function AdminUsers() {
       if (action === 'activate') return apiClient.admin.users.activate(user.id);
       if (action === 'make_admin') return apiClient.admin.users.setRole(user.id, 'admin', actionReason);
       if (action === 'remove_admin') return apiClient.admin.users.setRole(user.id, 'user', actionReason);
+      if (action === 'add_money') return apiClient.admin.users.addMoney(user.id, { amount: Number(manualAmount), reason: actionReason });
+      if (action === 'pass_kyc') return apiClient.admin.users.passKyc(user.id, { reason: actionReason });
+      if (action === 'manual_card') {
+        return apiClient.admin.users.createManualCard(user.id, {
+          nickname: manualCard.nickname || 'Virtual Card',
+          balance: Number(manualCard.balance || 0),
+          lastFour: manualCard.lastFour,
+          reason: actionReason
+        });
+      }
       if (action === 'delete') return apiClient.admin.users.delete(user.id, actionReason);
       throw new Error('Unsupported action');
     },
@@ -121,6 +170,8 @@ export default function AdminUsers() {
       toast.success('User action completed');
       setPendingAction(null);
       setReason('');
+      setManualAmount('');
+      setManualCard({ nickname: 'Virtual Card', balance: '', lastFour: '' });
     },
     onError: (error) => toast.error(error.message || 'User action failed')
   });
@@ -128,6 +179,8 @@ export default function AdminUsers() {
   const openAction = (user, action) => {
     setPendingAction({ user, action });
     setReason('');
+    setManualAmount('');
+    setManualCard({ nickname: 'Virtual Card', balance: '', lastFour: '' });
   };
 
   const confirmAction = () => {
@@ -212,6 +265,52 @@ export default function AdminUsers() {
                 placeholder={actionCopy.requiresReason ? 'Required reason for audit log and support history...' : 'Optional internal note...'}
                 rows={3}
               />
+              {pendingAction.action === 'add_money' && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm">Amount in USD</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={manualAmount}
+                    onChange={(event) => setManualAmount(event.target.value)}
+                    placeholder="25.00"
+                  />
+                </div>
+              )}
+              {pendingAction.action === 'manual_card' && (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1.5 sm:col-span-3">
+                    <Label className="text-sm">Card nickname</Label>
+                    <Input
+                      value={manualCard.nickname}
+                      onChange={(event) => setManualCard((current) => ({ ...current, nickname: event.target.value }))}
+                      placeholder="Virtual Card"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-sm">Initial balance</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={manualCard.balance}
+                      onChange={(event) => setManualCard((current) => ({ ...current, balance: event.target.value }))}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Last 4</Label>
+                    <Input
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={manualCard.lastFour}
+                      onChange={(event) => setManualCard((current) => ({ ...current, lastFour: event.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                      placeholder="4242"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -220,7 +319,7 @@ export default function AdminUsers() {
               type="button"
               variant={actionCopy.variant || 'default'}
               onClick={confirmAction}
-              disabled={reasonMissing || userAction.isPending}
+              disabled={reasonMissing || amountMissing || cardBalanceInvalid || userAction.isPending}
             >
               {userAction.isPending ? 'Processing...' : actionCopy.confirm}
             </Button>

@@ -11,7 +11,7 @@ import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
 import { sanitizeUser, parseJson, generateId, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
-import { approveDeposit, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
+import { approveDeposit, creditWallet, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
 import { changeCardStatus, createVirtualCardForUser, fundVirtualCard, handleBitnobWebhook, revealCardDetails, terminateCard, verifyBitnobWebhook } from './bitnob.js';
 
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -291,6 +291,21 @@ function isPrivateDevOrigin(origin) {
   } catch {
     return false;
   }
+}
+
+function ensureWallet(userEmail) {
+  const existing = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userEmail);
+  if (existing) return existing;
+
+  const now = nowIso();
+  const walletId = generateId('wal');
+
+  db.prepare(`
+    INSERT INTO wallets (id, user_id, currency, available_balance, locked_balance, status, created_at, updated_at)
+    VALUES (?, ?, 'USD', 0, 0, 'active', ?, ?)
+  `).run(walletId, userEmail, now, now);
+
+  return db.prepare('SELECT * FROM wallets WHERE id = ?').get(walletId);
 }
 
 function addOrigin(allowedOrigins, origin) {
@@ -696,6 +711,198 @@ export function createApp() {
     });
 
     res.json(sanitizeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)));
+  });
+
+  app.post('/api/admin/users/:id/add-money', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+      if (!target) return res.status(404).json({ message: 'User not found' });
+
+      const amount = Number(req.body.amount);
+      const reason = String(req.body.reason || '').trim();
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ message: 'Enter a valid amount.' });
+      }
+      if (amount > 10000 && !isSuperadmin(req.user)) {
+        return res.status(403).json({ message: 'Only the owner can add more than $10,000 manually.' });
+      }
+      if (!reason) {
+        return res.status(400).json({ message: 'A reason is required for manual funding.' });
+      }
+
+      ensureWallet(target.email);
+
+      const reference = `manual_credit_${target.id}_${Date.now()}`;
+      const balance = creditWallet(
+        target.email,
+        amount,
+        'manual_credit',
+        `Manual admin funding: ${reason}`,
+        reference
+      );
+      const now = nowIso();
+
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'Balance Updated', ?, 'wallet', 0, ?)
+      `).run(generateId('ntf'), target.email, `Your available service balance was updated by $${amount.toFixed(2)}.`, now);
+
+      writeAudit({
+        actor: req.user.email,
+        userId: target.email,
+        action: 'manual_balance_credit',
+        entityType: 'wallet',
+        entityId: target.email,
+        newValue: { amount, balance },
+        reason
+      });
+
+      res.json({ ok: true, balance });
+    } catch (error) {
+      console.error('Manual balance credit failed:', error);
+      res.status(400).json({ message: error.message || 'Manual balance credit failed.' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/pass-kyc', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+      if (!target) return res.status(404).json({ message: 'User not found' });
+
+      const reason = String(req.body.reason || '').trim();
+      if (!reason) return res.status(400).json({ message: 'A reason is required for manual KYC approval.' });
+
+      const now = nowIso();
+      const existing = db.prepare(`
+        SELECT * FROM kyc_submissions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
+      `).get(target.email);
+
+      if (existing) {
+        db.prepare(`
+          UPDATE kyc_submissions
+          SET status = 'approved',
+              level = 2,
+              legal_name = COALESCE(NULLIF(legal_name, ''), ?),
+              email = COALESCE(NULLIF(email, ''), ?),
+              phone = COALESCE(NULLIF(phone, ''), ?),
+              rejection_reason = NULL,
+              resubmission_scope = NULL,
+              resubmission_fields = NULL,
+              reviewed_by = ?,
+              reviewed_at = ?,
+              updated_at = ?
+          WHERE id = ?
+        `).run(target.full_name || target.email, target.email, target.phone || '', req.user.email, now, now, existing.id);
+      } else {
+        db.prepare(`
+          INSERT INTO kyc_submissions (
+            id, user_id, legal_name, phone, email, country, level, status, reviewed_by, reviewed_at, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 'Ethiopia', 2, 'approved', ?, ?, ?, ?)
+        `).run(generateId('kyc'), target.email, target.full_name || target.email, target.phone || '', target.email, req.user.email, now, now, now);
+      }
+
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'KYC Approved', 'Your identity verification has been approved by an administrator.', 'kyc', 0, ?)
+      `).run(generateId('ntf'), target.email, now);
+
+      const kyc = mapRow(db.prepare(`
+        SELECT * FROM kyc_submissions
+        WHERE user_id = ?
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 1
+      `).get(target.email));
+
+      writeAudit({
+        actor: req.user.email,
+        userId: target.email,
+        action: 'manual_kyc_approved',
+        entityType: 'kyc_submission',
+        entityId: kyc?.id,
+        newValue: { status: 'approved' },
+        reason
+      });
+
+      res.json(kyc);
+    } catch (error) {
+      console.error('Manual KYC approval failed:', error);
+      res.status(400).json({ message: error.message || 'Manual KYC approval failed.' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/manual-card', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+      if (!target) return res.status(404).json({ message: 'User not found' });
+
+      const reason = String(req.body.reason || '').trim();
+      const nickname = String(req.body.nickname || 'Virtual Card').trim() || 'Virtual Card';
+      const balance = Number(req.body.balance || 0);
+      const lastFour = String(req.body.lastFour || '').replace(/\D/g, '').slice(-4);
+
+      if (!reason) return res.status(400).json({ message: 'A reason is required for manual card creation.' });
+      if (!Number.isFinite(balance) || balance < 0) return res.status(400).json({ message: 'Enter a valid card balance.' });
+      if (balance > 10000 && !isSuperadmin(req.user)) {
+        return res.status(403).json({ message: 'Only the owner can create manual cards above $10,000.' });
+      }
+
+      ensureWallet(target.email);
+
+      const now = nowIso();
+      const cardId = generateId('card');
+
+      db.prepare(`
+        INSERT INTO virtual_cards (
+          id, user_id, provider, provider_card_id, customer_reference, card_nickname, card_type, brand,
+          currency, last_four, balance, status, billing_address, masked_pan, meta, created_at, updated_at
+        ) VALUES (?, ?, 'manual', ?, ?, ?, 'general', 'visa', 'USD', ?, ?, 'active', ?, ?, ?, ?, ?)
+      `).run(
+        cardId,
+        target.email,
+        `manual_${cardId}`,
+        `manual_${target.id}`,
+        nickname,
+        lastFour || null,
+        balance,
+        JSON.stringify({ country: 'Ethiopia', source: 'manual_admin' }),
+        lastFour ? `**** **** **** ${lastFour}` : null,
+        JSON.stringify({ createdBy: req.user.email, reason }),
+        now,
+        now
+      );
+
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'Virtual Card Added', ?, 'card', 0, ?)
+      `).run(generateId('ntf'), target.email, `${nickname} was added to your account by an administrator.`, now);
+
+      const card = mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId));
+
+      writeAudit({
+        actor: req.user.email,
+        userId: target.email,
+        action: 'manual_virtual_card_created',
+        entityType: 'virtual_card',
+        entityId: cardId,
+        newValue: card,
+        reason
+      });
+
+      res.status(201).json(card);
+    } catch (error) {
+      console.error('Manual card creation failed:', error);
+      res.status(400).json({ message: error.message || 'Manual card creation failed.' });
+    }
   });
 
   app.delete('/api/admin/users/:id', authMiddleware(db), (req, res) => {
