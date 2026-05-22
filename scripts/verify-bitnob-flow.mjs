@@ -4,6 +4,7 @@ import path from 'node:path';
 
 const testDbPath = path.join(os.tmpdir(), `dinkcard-bitnob-${Date.now()}.db`);
 
+process.env.NODE_ENV = 'test';
 process.env.DATABASE_PATH = testDbPath;
 process.env.JWT_SECRET = 'test-jwt-secret-for-flow';
 process.env.COOKIE_SECRET = 'test-cookie-secret-for-flow';
@@ -95,7 +96,7 @@ try {
   const card = db.prepare('SELECT * FROM virtual_cards WHERE user_id = ?').get(user.email);
   const walletAfterCreate = db.prepare('SELECT available_balance FROM wallets WHERE user_id = ?').get(user.email).available_balance;
 
-  if (createBody.amount !== 20000000) throw new Error(`Expected create amount 20000000, got ${createBody.amount}`);
+  if (createBody.amount !== 2000000) throw new Error(`Expected create amount 2000000, got ${createBody.amount}`);
   if (createBody.name !== 'Test User') throw new Error('Expected KYC legal name on card payload');
   if (walletAfterCreate !== 77) throw new Error(`Expected wallet 77, got ${walletAfterCreate}`);
 
@@ -103,10 +104,10 @@ try {
   await fundVirtualCard(user, card.id, 5);
   const request = db.prepare('SELECT * FROM card_funding_requests WHERE card_id = ?').get(card.id);
 
-  if (fundBody.amount !== 5000000) throw new Error(`Expected fund amount 5000000, got ${fundBody.amount}`);
+  if (fundBody.amount !== 500000) throw new Error(`Expected fund amount 500000, got ${fundBody.amount}`);
 
   handleBitnobWebhook({
-    event: 'virtualcard.topup.success',
+    event: 'virtualcard.topup.complete',
     data: { cardId: 'provider-card-1', amount: 5, status: 'success', reference: request.provider_reference }
   });
   let updated = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id);
@@ -122,7 +123,7 @@ try {
   updated = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id);
   if (updated.balance !== 25) throw new Error(`Expected reversal balance 25, got ${updated.balance}`);
 
-  const raw = JSON.stringify({ event: 'virtualcard.topup.success' });
+  const raw = JSON.stringify({ event: 'virtualcard.topup.complete' });
   if (hmacSha512Hex('test-webhook', raw).length !== 128) throw new Error('Webhook HMAC length mismatch');
   if (!getFeeSettings()?.usd_to_etb_rate) throw new Error('Fee settings unavailable');
 

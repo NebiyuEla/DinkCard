@@ -4,7 +4,7 @@ import { config } from './config.js';
 import { debitWallet, creditWallet, getFeeSettings } from './payments.js';
 import { generateId, money, nowIso, hmacSha512Hex } from './utils.js';
 
-const BITNOB_AMOUNT_SCALE = 1_000_000;
+const BITNOB_AMOUNT_SCALE = 100_000;
 
 function toBitnobAmount(amountUsd) {
   return Math.round(Number(amountUsd || 0) * BITNOB_AMOUNT_SCALE);
