@@ -1,0 +1,17 @@
+{
+  "name": "DinkCard",
+  "short_name": "DinkCard",
+  "description": "DinkCard virtual card access and management platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "64x64",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
