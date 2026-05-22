@@ -278,6 +278,32 @@ function isPrivateDevOrigin(origin) {
   }
 }
 
+function addOrigin(allowedOrigins, origin) {
+  if (!origin) return;
+
+  try {
+    allowedOrigins.add(new URL(origin).origin);
+  } catch {}
+}
+
+function buildAllowedOrigins() {
+  const allowedOrigins = new Set([
+    'http://localhost:5173',
+    'http://127.0.0.1:5173'
+  ]);
+
+  [
+    config.appUrl,
+    config.apiUrl,
+    process.env.RENDER_EXTERNAL_URL,
+    process.env.PUBLIC_APP_URL,
+    process.env.PUBLIC_RENDER_URL,
+    'https://dinkcard-imfs.onrender.com'
+  ].forEach((origin) => addOrigin(allowedOrigins, origin));
+
+  return allowedOrigins;
+}
+
 export function createApp() {
   const app = express();
 
@@ -294,11 +320,7 @@ export function createApp() {
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.use(cookieParser(config.cookieSecret));
 
-  const allowedOrigins = new Set([
-    config.appUrl,
-    'http://localhost:5173',
-    'http://127.0.0.1:5173'
-  ]);
+  const allowedOrigins = buildAllowedOrigins();
 
   app.use(cors({
     origin: (origin, callback) => {
@@ -1062,6 +1084,10 @@ export function createApp() {
 
   app.use((err, req, res, next) => {
     console.error(err);
+
+    if (err.message === 'Not allowed by CORS') {
+      return res.status(403).json({ message: 'This site origin is not allowed. Check APP_URL/API_URL in hosting settings.' });
+    }
 
     if (err instanceof multer.MulterError) {
       const message = err.code === 'LIMIT_FILE_SIZE'
