@@ -7,7 +7,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { config } from './config.js';
-import { db } from './db.js';
+import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
 import { sanitizeUser, parseJson, generateId, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
@@ -965,95 +965,113 @@ export function createApp() {
   });
 
   app.post('/api/admin/kyc/:id/approve', authMiddleware(db), (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    try {
+      if (!requireAdmin(req, res)) return;
 
-    const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
 
-    if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
 
-    const now = nowIso();
+      const now = nowIso();
 
-    db.prepare(`
-      UPDATE kyc_submissions SET status = 'approved', level = 2, reviewed_by = ?, reviewed_at = ?, updated_at = ?
-      WHERE id = ?
-    `).run(req.user.email, now, now, kyc.id);
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET status = 'approved',
+            level = 2,
+            rejection_reason = NULL,
+            resubmission_scope = NULL,
+            resubmission_fields = NULL,
+            reviewed_by = ?,
+            reviewed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(req.user.email, now, now, kyc.id);
 
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
-      VALUES (?, ?, 'KYC Approved', 'Your identity has been verified. You now have full access.', 'kyc', 0, ?)
-    `).run(generateId('ntf'), kyc.user_id, now);
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'KYC Approved', 'Your identity has been verified. You now have full access.', 'kyc', 0, ?)
+      `).run(generateId('ntf'), kyc.user_id, now);
 
-    writeAudit({
-      actor: req.user.email,
-      userId: kyc.user_id,
-      action: 'kyc_approved',
-      entityType: 'kyc_submission',
-      entityId: kyc.id,
-      oldValue: kyc,
-      newValue: { status: 'approved' }
-    });
+      writeAudit({
+        actor: req.user.email,
+        userId: kyc.user_id,
+        action: 'kyc_approved',
+        entityType: 'kyc_submission',
+        entityId: kyc.id,
+        oldValue: kyc,
+        newValue: { status: 'approved' }
+      });
 
-    res.json({ ok: true });
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      console.error('KYC approval failed:', error);
+      res.status(400).json({ message: error.message || 'KYC approval failed.' });
+    }
   });
 
   app.post('/api/admin/kyc/:id/reject', authMiddleware(db), (req, res) => {
-    if (!requireAdmin(req, res)) return;
+    try {
+      if (!requireAdmin(req, res)) return;
 
-    const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
 
-    if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
 
-    const reason = String(req.body.reason || '').trim();
+      const reason = String(req.body.reason || '').trim();
 
-    if (!reason) {
-      return res.status(400).json({ message: 'A correction message is required.' });
+      if (!reason) {
+        return res.status(400).json({ message: 'A correction message is required.' });
+      }
+
+      const resubmissionScope = req.body.resubmissionScope === 'complete' ? 'complete' : 'specific';
+
+      const resubmissionFields = Array.isArray(req.body.resubmissionFields)
+        ? req.body.resubmissionFields.map((field) => String(field)).filter(Boolean)
+        : [];
+
+      if (resubmissionScope === 'specific' && !resubmissionFields.length) {
+        return res.status(400).json({ message: 'Select at least one KYC item the user must fix.' });
+      }
+
+      const now = nowIso();
+
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET status = 'resubmit_required',
+            rejection_reason = ?,
+            resubmission_scope = ?,
+            resubmission_fields = ?,
+            reviewed_by = ?,
+            reviewed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(reason, resubmissionScope, JSON.stringify(resubmissionFields), req.user.email, now, now, kyc.id);
+
+      const correctionTarget = resubmissionScope === 'complete'
+        ? 'Please redo the full KYC form.'
+        : `Please fix: ${resubmissionFields.map((field) => field.replace(/_/g, ' ')).join(', ')}.`;
+
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'KYC Needs Correction', ?, 'kyc', 0, ?)
+      `).run(generateId('ntf'), kyc.user_id, `Your KYC needs correction. ${reason} ${correctionTarget}`, now);
+
+      writeAudit({
+        actor: req.user.email,
+        userId: kyc.user_id,
+        action: 'kyc_correction_requested',
+        entityType: 'kyc_submission',
+        entityId: kyc.id,
+        oldValue: kyc,
+        newValue: { status: 'resubmit_required', resubmissionScope, resubmissionFields },
+        reason
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      console.error('KYC correction request failed:', error);
+      res.status(400).json({ message: error.message || 'KYC correction request failed.' });
     }
-
-    const resubmissionScope = req.body.resubmissionScope === 'complete' ? 'complete' : 'specific';
-
-    const resubmissionFields = Array.isArray(req.body.resubmissionFields)
-      ? req.body.resubmissionFields.map((field) => String(field)).filter(Boolean)
-      : [];
-
-    if (resubmissionScope === 'specific' && !resubmissionFields.length) {
-      return res.status(400).json({ message: 'Select at least one KYC item the user must fix.' });
-    }
-
-    const now = nowIso();
-
-    db.prepare(`
-      UPDATE kyc_submissions
-      SET status = 'resubmit_required',
-          rejection_reason = ?,
-          resubmission_scope = ?,
-          resubmission_fields = ?,
-          reviewed_by = ?,
-          reviewed_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `).run(reason, resubmissionScope, JSON.stringify(resubmissionFields), req.user.email, now, now, kyc.id);
-
-    const correctionTarget = resubmissionScope === 'complete'
-      ? 'Please redo the full KYC form.'
-      : `Please fix: ${resubmissionFields.map((field) => field.replace(/_/g, ' ')).join(', ')}.`;
-
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
-      VALUES (?, ?, 'KYC Needs Correction', ?, 'kyc', 0, ?)
-    `).run(generateId('ntf'), kyc.user_id, `Your KYC needs correction. ${reason} ${correctionTarget}`, now);
-
-    writeAudit({
-      actor: req.user.email,
-      userId: kyc.user_id,
-      action: 'kyc_correction_requested',
-      entityType: 'kyc_submission',
-      entityId: kyc.id,
-      oldValue: kyc,
-      newValue: { status: 'resubmit_required', resubmissionScope, resubmissionFields },
-      reason
-    });
-
-    res.json({ ok: true });
   });
 
   app.post('/api/webhooks/bitnob', (req, res) => {

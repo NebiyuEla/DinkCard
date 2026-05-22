@@ -271,8 +271,25 @@ function ensureColumn(table, column, definition) {
   }
 }
 
+ensureColumn('kyc_submissions', 'legal_name', 'TEXT');
+ensureColumn('kyc_submissions', 'date_of_birth', 'TEXT');
+ensureColumn('kyc_submissions', 'gender', 'TEXT');
+ensureColumn('kyc_submissions', 'phone', 'TEXT');
+ensureColumn('kyc_submissions', 'email', 'TEXT');
+ensureColumn('kyc_submissions', 'address', 'TEXT');
+ensureColumn('kyc_submissions', 'city', 'TEXT');
+ensureColumn('kyc_submissions', 'country', "TEXT DEFAULT 'Ethiopia'");
+ensureColumn('kyc_submissions', 'id_type', 'TEXT');
+ensureColumn('kyc_submissions', 'id_number', 'TEXT');
+ensureColumn('kyc_submissions', 'front_id_url', 'TEXT');
+ensureColumn('kyc_submissions', 'back_id_url', 'TEXT');
+ensureColumn('kyc_submissions', 'selfie_url', 'TEXT');
+ensureColumn('kyc_submissions', 'level', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('kyc_submissions', 'rejection_reason', 'TEXT');
 ensureColumn('kyc_submissions', 'resubmission_scope', 'TEXT');
 ensureColumn('kyc_submissions', 'resubmission_fields', 'TEXT');
+ensureColumn('kyc_submissions', 'reviewed_by', 'TEXT');
+ensureColumn('kyc_submissions', 'reviewed_at', 'TEXT');
 
 ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');

@@ -43,7 +43,9 @@ export default function AdminKYC() {
 
   const approveKYC = useMutation({
     mutationFn: (kyc) => apiClient.admin.kyc.approve(kyc.id),
-    onSuccess: () => {
+    onSuccess: (updatedKyc) => {
+      queryClient.setQueryData(['admin-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      queryClient.setQueryData(['sa-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
       invalidateOperationalData(queryClient);
       toast.success('KYC approved');
       setSelected(null);
@@ -58,7 +60,9 @@ export default function AdminKYC() {
       if (!correctionTarget?.id) throw new Error('Select a KYC submission first.');
       return apiClient.admin.kyc.requestFix(correctionTarget.id, { reason: rejectReason, resubmissionScope, resubmissionFields });
     },
-    onSuccess: () => {
+    onSuccess: (updatedKyc) => {
+      queryClient.setQueryData(['admin-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      queryClient.setQueryData(['sa-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
       invalidateOperationalData(queryClient);
       toast.success('KYC correction request sent');
       setSelected(null);
@@ -169,7 +173,7 @@ export default function AdminKYC() {
                   <Button onClick={() => approveKYC.mutate(selected)} disabled={approveKYC.isPending} className="flex-1 bg-primary text-primary-foreground">
                     <Check className="w-4 h-4 mr-2" /> {approveKYC.isPending ? 'Approving...' : 'Approve'}
                   </Button>
-                  <Button variant="destructive" onClick={openCorrectionDialog} className="flex-1">
+                  <Button variant="destructive" onClick={openCorrectionDialog} disabled={approveKYC.isPending || rejectKYC.isPending} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Request Fix
                   </Button>
                 </div>
