@@ -37,6 +37,14 @@ function getName(customer) {
   return [customer?.first_name, customer?.last_name].filter(Boolean).join(' ') || customer?.email || 'Customer';
 }
 
+function normalizeEtPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00251')) digits = digits.slice(5);
+  if (digits.startsWith('251')) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, '');
+  return digits.slice(0, 9);
+}
+
 function Stat({ label, value, icon: Icon, tone = 'text-primary' }) {
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2">
@@ -93,7 +101,11 @@ export default function AdminCards() {
   }, [cards]);
 
   const createCustomer = useMutation({
-    mutationFn: apiClient.admin.customers.create,
+    mutationFn: (payload) => apiClient.admin.customers.create({
+      ...payload,
+      dial_code: '+251',
+      phone_number: normalizeEtPhone(payload.phone_number)
+    }),
     onSuccess: () => {
       toast.success('Customer created');
       setShowCustomer(false);
@@ -178,7 +190,8 @@ export default function AdminCards() {
     setSecureDetails(null);
   };
 
-  const lowBalance = Number(balancesQuery.data?.usdc || 0) < 7;
+  const companyStableBalance = Number(balancesQuery.data?.stableUsd || Math.max(Number(balancesQuery.data?.usdc || 0), Number(balancesQuery.data?.usdt || 0)) || 0);
+  const lowBalance = companyStableBalance < 7;
   const environment = providerStatusQuery.data?.environment || balancesQuery.data?.environment || 'sandbox';
 
   return (
@@ -208,7 +221,7 @@ export default function AdminCards() {
       </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-        <Stat label="USDC Balance" value={money(balancesQuery.data?.usdc)} icon={WalletCards} tone={lowBalance ? 'text-red-500' : 'text-primary'} />
+        <Stat label="Company Wallet" value={money(companyStableBalance)} icon={WalletCards} tone={lowBalance ? 'text-red-500' : 'text-primary'} />
         <Stat label="Customers" value={customers.length} icon={BadgeCheck} />
         <Stat label="Active Cards" value={stats.active} icon={CreditCard} />
         <Stat label="Frozen" value={stats.frozen} icon={PauseCircle} tone="text-yellow-500" />
@@ -319,7 +332,17 @@ export default function AdminCards() {
             ].map(([key, label]) => (
               <div key={key} className="space-y-1.5">
                 <Label className="text-xs">{label}</Label>
-                <Input type={key === 'date_of_birth' ? 'date' : 'text'} value={customerForm[key]} onChange={(event) => setCustomerForm((current) => ({ ...current, [key]: event.target.value }))} />
+                <Input
+                  type={key === 'date_of_birth' ? 'date' : 'text'}
+                  value={key === 'dial_code' ? '+251' : customerForm[key]}
+                  disabled={key === 'dial_code'}
+                  placeholder={key === 'phone_number' ? '9...' : undefined}
+                  onChange={(event) => setCustomerForm((current) => ({
+                    ...current,
+                    [key]: key === 'phone_number' ? normalizeEtPhone(event.target.value) : event.target.value,
+                    dial_code: '+251'
+                  }))}
+                />
               </div>
             ))}
           </div>

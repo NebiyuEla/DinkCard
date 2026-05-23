@@ -35,6 +35,14 @@ function parseFixFields(value) {
   }
 }
 
+function normalizeEtPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00251')) digits = digits.slice(5);
+  if (digits.startsWith('251')) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, '');
+  return digits.slice(0, 9);
+}
+
 export default function KYCPage() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
@@ -57,7 +65,7 @@ export default function KYCPage() {
       ...prev,
       legal_name: prev.legal_name || user.full_name || '',
       email: prev.email || user.email || '',
-      phone: prev.phone || user.phone || ''
+      phone: prev.phone || normalizeEtPhone(user.phone || '') || ''
     }));
   }, [user, kyc?.id, resubmitting]);
 
@@ -112,6 +120,7 @@ export default function KYCPage() {
       const data = {
         user_id: user.email,
         ...form,
+        phone: normalizeEtPhone(form.phone),
         front_id_url: frontIdUrl,
         back_id_url: backIdUrl,
         selfie_url: selfieUrl,
@@ -260,7 +269,7 @@ export default function KYCPage() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-sm">Phone</Label><Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} placeholder="+251..." className="mt-1.5" /></div>
+          <div><Label className="text-sm">Phone</Label><Input value={form.phone} onChange={e => setForm({...form, phone: normalizeEtPhone(e.target.value)})} placeholder="9..." className="mt-1.5" /></div>
           <div><Label className="text-sm">Email</Label><Input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="mt-1.5" /></div>
           <div><Label className="text-sm">Address</Label><Input value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="mt-1.5" /></div>
           <div><Label className="text-sm">City</Label><Input value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="mt-1.5" /></div>

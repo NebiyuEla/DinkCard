@@ -205,6 +205,7 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   id TEXT PRIMARY KEY,
   key TEXT NOT NULL UNIQUE,
   usd_to_etb_rate REAL NOT NULL DEFAULT 135,
+  gateway_fee_percentage REAL NOT NULL DEFAULT 2.5,
   deposit_fee_percentage REAL NOT NULL DEFAULT 0,
   deposit_fixed_fee_etb REAL NOT NULL DEFAULT 0,
   card_creation_fee_usd REAL NOT NULL DEFAULT 3,
@@ -319,6 +320,7 @@ ensureColumn('virtual_cards', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
+ensureColumn('fee_settings', 'gateway_fee_percentage', 'REAL NOT NULL DEFAULT 2.5');
 ensureColumn('audit_logs', 'environment', 'TEXT');
 ensureColumn('audit_logs', 'provider', 'TEXT');
 ensureColumn('audit_logs', 'provider_status', 'TEXT');

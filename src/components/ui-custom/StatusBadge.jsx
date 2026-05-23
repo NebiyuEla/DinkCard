@@ -14,6 +14,8 @@ const statusColors = {
   frozen: 'bg-accent/10 text-accent border-accent/20',
   rejected: 'bg-destructive/10 text-destructive border-destructive/20',
   failed: 'bg-destructive/10 text-destructive border-destructive/20',
+  cancelled: 'bg-muted text-muted-foreground border-border',
+  canceled: 'bg-muted text-muted-foreground border-border',
   suspended: 'bg-destructive/10 text-destructive border-destructive/20',
   restricted: 'bg-destructive/10 text-destructive border-destructive/20',
   terminated: 'bg-destructive/10 text-destructive border-destructive/20',

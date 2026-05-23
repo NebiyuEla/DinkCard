@@ -93,9 +93,14 @@ export default function AdminDeposits() {
                   <td className="px-4 py-3"><StatusBadge status={d.status} className="text-[10px]" /></td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</td>
                   <td className="px-4 py-3">
-                    <Button variant="ghost" size="sm" onClick={() => setSelected(d)}>
-                      <Eye className="w-4 h-4" />
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => setSelected(d)}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => window.open(apiClient.payments.invoiceUrl(d.transaction_reference), '_blank')}>
+                        Invoice
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -143,6 +148,15 @@ export default function AdminDeposits() {
                 <div><span className="text-muted-foreground">Phone:</span> <span>{selected.sender_phone}</span></div>
                 <div className="col-span-2"><span className="text-muted-foreground">Reference:</span> <span className="font-mono">{selected.transaction_reference}</span></div>
               </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => window.open(apiClient.payments.invoiceUrl(selected.transaction_reference), '_blank')}
+              >
+                Download invoice
+              </Button>
 
               {selected.proof_url && (
                 <div>

@@ -136,9 +136,19 @@ export default function AddMoney() {
 
       {latestDeposit && (
         <div className="bg-card border border-border rounded-xl p-6 space-y-2 text-sm">
-          <div className="flex items-center gap-2 font-semibold">
-            <CheckCircle className="w-4 h-4 text-primary" />
-            Recent Deposit
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <CheckCircle className="w-4 h-4 text-primary" />
+              Recent Deposit
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(apiClient.payments.invoiceUrl(latestDeposit.transaction_reference), '_blank')}
+            >
+              Download invoice
+            </Button>
           </div>
           <div className="flex justify-between"><span className="text-muted-foreground">Reference</span><span className="font-mono">{latestDeposit.transaction_reference}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="capitalize">{String(latestDeposit.status || '').replace(/_/g, ' ')}</span></div>

@@ -11,7 +11,7 @@ import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
 import { sanitizeUser, parseJson, generateId, money, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
-import { approveDeposit, creditWallet, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
+import { approveDeposit, creditWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import {
   bitnobService,
   changeCardStatus,
@@ -374,9 +374,12 @@ function findAssetBalance(payload, asset = 'USDC') {
       return;
     }
 
-    const symbol = String(value.asset || value.currency || value.symbol || value.code || value.name || '').toUpperCase();
+    const symbolValue = value.asset?.symbol || value.asset?.code || value.currency?.symbol || value.currency?.code ||
+      value.asset || value.currency || value.symbol || value.code || value.name || value.ticker || value.asset_code || '';
+    const symbol = String(symbolValue).toUpperCase();
     if (symbol === target) {
-      const amount = value.available ?? value.available_balance ?? value.balance ?? value.amount ?? value.value;
+      const amount = value.available ?? value.available_balance ?? value.availableBalance ??
+        value.spendable ?? value.balance ?? value.amount ?? value.value ?? value.total;
       const numeric = Number(amount);
       if (Number.isFinite(numeric)) found.push(Math.abs(numeric) >= 100000 ? fromBitnobBaseUnits(numeric) : numeric);
     }
@@ -389,14 +392,21 @@ function findAssetBalance(payload, asset = 'USDC') {
 }
 
 function buildBitnobCustomerPayload(payload = {}) {
-  const { phone, countryCode } = normalizeBitnobPhone(payload.phone || payload.phone_number, payload.dial_code || payload.country_code);
+  const { phoneNumber, dialCode } = normalizeBitnobPhone(payload.phone || payload.phone_number);
   return compactPayload({
     customer_type: payload.customer_type || 'individual',
     first_name: payload.first_name,
     last_name: payload.last_name,
+    date_of_birth: payload.date_of_birth,
+    id_type: payload.id_type,
+    id_number: payload.id_number,
     email: payload.email,
-    phone,
-    country_code: countryCode
+    phone_number: phoneNumber,
+    dial_code: dialCode,
+    country: payload.country || 'ETH',
+    country_code: payload.country_code || payload.country || 'ETH',
+    address: payload.address,
+    city: payload.city
   });
 }
 
@@ -406,14 +416,13 @@ function compactPayload(payload) {
   );
 }
 
-function normalizeBitnobPhone(phoneValue, dialCodeValue = '+251') {
-  const rawPhone = String(phoneValue || '').trim().replace(/\s+/g, '');
-  const rawDial = String(dialCodeValue || '+251').trim();
-  const countryCode = rawDial.startsWith('+') ? rawDial : `+${rawDial.replace(/\D/g, '') || '251'}`;
-  if (!rawPhone) return { phone: undefined, countryCode };
-  if (rawPhone.startsWith('+')) return { phone: rawPhone, countryCode };
-  const digits = rawPhone.replace(/\D/g, '').replace(/^0+/, '');
-  return { phone: digits ? `${countryCode}${digits}` : undefined, countryCode };
+function normalizeBitnobPhone(phoneValue) {
+  let digits = String(phoneValue || '').trim().replace(/\D/g, '');
+  if (digits.startsWith('00251')) digits = digits.slice(5);
+  if (digits.startsWith('251')) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, '');
+  if (digits.length > 9 && digits.startsWith('9')) digits = digits.slice(0, 9);
+  return { phoneNumber: digits || undefined, dialCode: '+251' };
 }
 
 function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, userId }) {
@@ -426,14 +435,17 @@ function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, 
   const existing = db
     .prepare('SELECT id FROM bitnob_customers WHERE bitnob_customer_id = ? AND environment = ?')
     .get(bitnobCustomerId, environment);
+  const normalizedPhone = normalizeBitnobPhone(
+    payload.phone_number || payload.phone || customer.phone_number || customer.phoneNumber || customer.phone || ''
+  );
   const savedPayload = {
     user_id: userId || payload.user_id || payload.email || customer.email,
     customer_type: payload.customer_type || customer.customer_type || customer.type || 'individual',
     first_name: payload.first_name || customer.first_name || customer.firstName || '',
     last_name: payload.last_name || customer.last_name || customer.lastName || '',
     email: payload.email || customer.email || '',
-    phone_number: payload.phone_number || payload.phone || customer.phone_number || customer.phoneNumber || customer.phone || '',
-    dial_code: payload.dial_code || payload.country_code || customer.dial_code || customer.dialCode || customer.country_code || '+251',
+    phone_number: normalizedPhone.phoneNumber || '',
+    dial_code: normalizedPhone.dialCode,
     date_of_birth: payload.date_of_birth || customer.date_of_birth || customer.dateOfBirth || '',
     id_type: payload.id_type || customer.id_type || customer.idType || '',
     id_number: payload.id_number || customer.id_number || customer.idNumber || '',
@@ -519,11 +531,6 @@ function normalizeCountryCode(country) {
 }
 
 function dialCodeForCountry(country) {
-  const value = String(country || '').trim().toUpperCase();
-  if (['ETHIOPIA', 'ETH', 'ET'].includes(value)) return '+251';
-  if (['NIGERIA', 'NGA', 'NG'].includes(value)) return '+234';
-  if (['GHANA', 'GHA', 'GH'].includes(value)) return '+233';
-  if (['USA', 'US', 'UNITED STATES', 'UNITED STATES OF AMERICA'].includes(value)) return '+1';
   return '+251';
 }
 
@@ -707,6 +714,79 @@ function buildAllowedOrigins() {
   ].forEach((origin) => addOrigin(allowedOrigins, origin));
 
   return allowedOrigins;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function invoiceHtml(deposit) {
+  const status = String(deposit.status || '').replace(/_/g, ' ');
+  const rows = [
+    ['Invoice / reference', deposit.transaction_reference],
+    ['User', deposit.user_id],
+    ['Payment method', deposit.payment_method],
+    ['Status', status],
+    ['USD requested', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
+    ['Exchange rate', `${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
+    ['ETB amount', `${Number(deposit.etb_amount || 0).toLocaleString()} ETB`],
+    ['Gateway fee', `${Number(deposit.gateway_fee_etb || 0).toLocaleString()} ETB`],
+    ['Total paid', `${Number(deposit.total_payable_etb || 0).toLocaleString()} ETB`],
+    ['Service balance credit', `$${Number(deposit.final_usd_credit || 0).toFixed(2)}`],
+    ['Created', deposit.created_at],
+    ['Verified', deposit.verified_at || 'Not verified']
+  ];
+
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>DinkCard Invoice ${escapeHtml(deposit.transaction_reference)}</title>
+  <style>
+    body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
+    .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
+    .brand { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 18px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 28px; }
+    .status { text-transform: capitalize; color: #047857; font-weight: 700; }
+    table { width: 100%; border-collapse: collapse; margin-top: 18px; }
+    td { border-bottom: 1px solid #f1f5f9; padding: 11px 0; font-size: 14px; }
+    td:first-child { color: #64748b; }
+    td:last-child { text-align: right; font-weight: 600; }
+    .note { margin-top: 22px; padding: 14px; border-radius: 12px; background: #ecfdf5; color: #065f46; font-size: 13px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <section class="invoice">
+    <div class="brand">
+      <div>
+        <h1>DinkCard Invoice</h1>
+        <p>Card-related service funding receipt</p>
+      </div>
+      <div>
+        <p class="status">${escapeHtml(status)}</p>
+        <p>${escapeHtml(deposit.created_at)}</p>
+      </div>
+    </div>
+    <table>
+      <tbody>
+        ${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="note">
+      DinkCard is not a bank, foreign exchange bureau, or independent international card issuer. Card-related services are provided through approved third-party infrastructure partners. Merchant acceptance is not guaranteed.
+    </div>
+  </section>
+</body>
+</html>`;
+}
+
+function canReadDepositInvoice(user, deposit) {
+  return hasAnyAdminRole(user) || deposit.user_id === user.email;
 }
 
 export function createApp() {
@@ -943,6 +1023,31 @@ export function createApp() {
     res.json({ ok: true, updated: result.changes || 0 });
   });
 
+  app.get('/api/events', authMiddleware(db), (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+
+    let lastUnread = null;
+    const send = () => {
+      const row = db.prepare('SELECT COUNT(*) AS unread FROM notifications WHERE user_id = ? AND read = 0').get(req.user.email);
+      const unread = Number(row?.unread || 0);
+      if (unread !== lastUnread) {
+        lastUnread = unread;
+        res.write(`event: notification_count\n`);
+        res.write(`data: ${JSON.stringify({ unread })}\n\n`);
+      } else {
+        res.write(`event: ping\n`);
+        res.write(`data: {}\n\n`);
+      }
+    };
+
+    send();
+    const timer = setInterval(send, 3000);
+    req.on('close', () => clearInterval(timer));
+  });
+
   app.get('/api/admin/wallet-summary', authMiddleware(db), (req, res) => {
     if (!requireAdmin(req, res)) return;
     const wallets = db.prepare(`
@@ -983,6 +1088,9 @@ export function createApp() {
 
   app.get('/api/entities/:entity', authMiddleware(db), (req, res) => {
     try {
+      if (req.params.entity === 'Deposit') {
+        expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
+      }
       const rows = queryEntities(
         req.params.entity,
         {
@@ -1048,7 +1156,10 @@ export function createApp() {
     try {
       if (!requireAdmin(req, res)) return;
       const provider = await bitnobService.getBalances();
-      res.json({ provider, environment: config.bitnob.env, usdc: findAssetBalance(provider, 'USDC'), usdt: findAssetBalance(provider, 'USDT'), btc: findAssetBalance(provider, 'BTC') });
+      const usdc = findAssetBalance(provider, 'USDC');
+      const usdt = findAssetBalance(provider, 'USDT');
+      const btc = findAssetBalance(provider, 'BTC');
+      res.json({ provider, environment: config.bitnob.env, usdc, usdt, btc, stableUsd: Math.max(usdc, usdt) });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to fetch company wallet balance.' });
     }
@@ -1209,13 +1320,16 @@ export function createApp() {
 
       const balances = await bitnobService.getBalances();
       const availableUsdc = findAssetBalance(balances, 'USDC');
+      const availableUsdt = findAssetBalance(balances, 'USDT');
       const settings = getFeeSettings();
       const requiredUsdc = money(fundingAmount + Number(settings.card_creation_fee_usd || 0));
-      if (availableUsdc < requiredUsdc) {
-        return res.status(400).json({ message: `Insufficient company wallet balance. Required: ${requiredUsdc.toFixed(2)} USDC. Available: ${availableUsdc.toFixed(2)} USDC.` });
+      const availableStable = Math.max(availableUsdc, availableUsdt);
+      const availableAsset = availableUsdt > availableUsdc ? 'USDT' : 'USDC';
+      if (availableStable < requiredUsdc) {
+        return res.status(400).json({ message: `Insufficient company wallet balance. Required: ${requiredUsdc.toFixed(2)} USDC/USDT. Available: ${availableStable.toFixed(2)} ${availableAsset}.` });
       }
 
-      writeAudit({ actor: req.user.email, userId: customer.user_id || customer.email, action: 'card_create_attempted', entityType: 'bitnob_customer', entityId: customer.id, environment: config.bitnob.env, provider: 'bitnob', newValue: { fundingAmount, requiredUsdc, availableUsdc }, reason: req.body.reason || null, req });
+      writeAudit({ actor: req.user.email, userId: customer.user_id || customer.email, action: 'card_create_attempted', entityType: 'bitnob_customer', entityId: customer.id, environment: config.bitnob.env, provider: 'bitnob', newValue: { fundingAmount, requiredUsdc, availableUsdc, availableUsdt }, reason: req.body.reason || null, req });
       const provider = await bitnobService.createCard({
         card_type: 'virtual',
         currency: 'USD',
@@ -1716,6 +1830,7 @@ export function createApp() {
 
   app.post('/api/payments/chapa/initialize', authMiddleware(db), async (req, res) => {
     try {
+      expirePendingChapaDeposits(req.user.email);
       const result = await initializeChapaPayment({
         user: req.user,
         amountUsd: req.body.amountUsd,
@@ -1731,9 +1846,25 @@ export function createApp() {
   app.get('/api/payments/chapa/status/:txRef', authMiddleware(db), async (req, res) => {
     try {
       const deposit = await finalizeChapaDeposit(req.params.txRef);
+      if (!canReadDepositInvoice(req.user, deposit)) return res.status(403).json({ message: 'Forbidden' });
       res.json(deposit);
     } catch (error) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/payments/invoice/:txRef/download', authMiddleware(db), (req, res) => {
+    try {
+      expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
+      const deposit = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ? OR id = ?').get(req.params.txRef, req.params.txRef);
+      if (!deposit) return res.status(404).json({ message: 'Invoice not found' });
+      if (!canReadDepositInvoice(req.user, deposit)) return res.status(403).json({ message: 'Forbidden' });
+      const filename = `dinkcard-invoice-${String(deposit.transaction_reference || deposit.id).replace(/[^a-zA-Z0-9_-]/g, '')}.html`;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(invoiceHtml(deposit));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Invoice download failed.' });
     }
   });
 
@@ -1746,10 +1877,13 @@ export function createApp() {
       } catch {}
     }
 
-    res.redirect(`${config.appUrl}/add-money?tx_ref=${encodeURIComponent(txRef || '')}`);
+    const redirectUrl = new URL('/dashboard', config.appUrl);
+    if (txRef) redirectUrl.searchParams.set('tx_ref', txRef);
+    redirectUrl.searchParams.set('payment', 'chapa');
+    res.redirect(redirectUrl.toString());
   });
 
-  app.post('/api/webhooks/chapa', async (req, res) => {
+  async function chapaWebhookHandler(req, res) {
     const signature = req.headers['x-chapa-signature'] || req.headers['chapa-signature'];
 
     if (!verifyChapaWebhookSignature(req.rawBody || JSON.stringify(req.body), String(signature || ''))) {
@@ -1775,7 +1909,10 @@ export function createApp() {
     }
 
     res.json({ ok: true });
-  });
+  }
+
+  app.post('/api/webhooks/chapa', chapaWebhookHandler);
+  app.post('/webhook/chapa', chapaWebhookHandler);
 
   app.post('/api/cards', authMiddleware(db), async (req, res) => {
     try {

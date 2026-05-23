@@ -115,7 +115,8 @@ export const apiClient = {
   },
   payments: {
     initializeChapa: (payload) => request('/api/payments/chapa/initialize', { method: 'POST', body: JSON.stringify(payload) }),
-    getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`)
+    getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`),
+    invoiceUrl: (txRef) => `${API_BASE_URL}/api/payments/invoice/${encodeURIComponent(txRef)}/download`
   },
   notifications: {
     markRead: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),

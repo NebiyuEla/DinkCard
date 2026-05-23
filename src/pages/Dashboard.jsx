@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/api/client';
 import { useCurrentUser, useWallet, useCards, useDeposits, useKYCStatus, useFeeSettings, useWalletTransactions } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
@@ -12,23 +14,27 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
+import { invalidateOperationalData } from '@/lib/realtime';
+import { toast } from 'sonner';
 
 const quickActions = [
   { label: 'Add Money', path: '/add-money', icon: PlusCircle, color: 'text-primary' },
   { label: 'Request Card', path: '/cards/create', icon: CreditCard, color: 'text-accent' },
-  { label: 'Fund Card', path: '/cards', icon: DollarSign, color: 'text-yellow-500' },
-  { label: 'Transactions', path: '/transactions', icon: ArrowDownUp, color: 'text-muted-foreground' },
+  { label: 'Fund Card', path: '/cards', icon: DollarSign, color: 'text-yellow-500', desktopOnly: true },
+  { label: 'Transactions', path: '/transactions', icon: ArrowDownUp, color: 'text-muted-foreground', desktopOnly: true },
   { label: 'KYC', path: '/kyc', icon: ShieldCheck, color: 'text-primary' },
   { label: 'Support', path: '/support', icon: HeadphonesIcon, color: 'text-accent' },
 ];
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [paymentBanner, setPaymentBanner] = useState(null);
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: cards } = useCards(user?.email);
   const { data: deposits } = useDeposits(user?.email);
-  const { data: kyc } = useKYCStatus(user?.email);
+  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
   const { data: transactions } = useWalletTransactions(user?.email);
 
@@ -43,6 +49,32 @@ export default function Dashboard() {
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const txRef = params.get('tx_ref');
+    if (!txRef || params.get('payment') !== 'chapa') return;
+
+    apiClient.payments.getChapaStatus(txRef)
+      .then((deposit) => {
+        invalidateOperationalData(queryClient);
+        if (deposit.status === 'approved') {
+          setPaymentBanner({ tone: 'success', message: 'Payment successful. Your available service balance has been credited.', txRef });
+          toast.success('Payment successful');
+        } else if (['cancelled', 'canceled', 'failed'].includes(deposit.status)) {
+          setPaymentBanner({ tone: 'muted', message: 'Payment was cancelled. No balance was added.', txRef });
+          toast.info('Payment cancelled');
+        } else {
+          setPaymentBanner({ tone: 'pending', message: 'Payment is still pending. It will cancel automatically after 5 minutes if not completed.', txRef });
+        }
+      })
+      .catch((error) => {
+        setPaymentBanner({ tone: 'error', message: error.message || 'Payment could not be verified yet.', txRef });
+      })
+      .finally(() => {
+        window.history.replaceState({}, '', '/dashboard');
+      });
+  }, [queryClient]);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -53,8 +85,30 @@ export default function Dashboard() {
         <p className="text-sm text-muted-foreground mt-1">Here's your account overview</p>
       </div>
 
+      {paymentBanner && (
+        <div className={`rounded-xl border p-4 text-sm ${
+          paymentBanner.tone === 'success'
+            ? 'border-primary/20 bg-primary/10 text-primary'
+            : paymentBanner.tone === 'error'
+              ? 'border-destructive/20 bg-destructive/10 text-destructive'
+              : 'border-border bg-card text-muted-foreground'
+        }`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <span>{paymentBanner.message}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => window.open(apiClient.payments.invoiceUrl(paymentBanner.txRef), '_blank')}
+            >
+              Download invoice
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* KYC warning */}
-      {(!kyc || kyc.status !== 'approved') && (
+      {!kycLoading && (!kyc || kyc.status !== 'approved') && (
         <motion.div 
           initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
           className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex items-start gap-3"
@@ -75,19 +129,19 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`≈ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
-        <StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} />
-        <StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} />
+        <div className="hidden md:block"><StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} /></div>
+        <div className="hidden md:block"><StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} /></div>
         <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
-        <StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} />
+        <div className="hidden md:block"><StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} /></div>
         <StatCard title="KYC Level" value={kyc?.status === 'approved' ? `Level ${kyc.level || 1}` : 'Level 0'} icon={ShieldCheck} />
       </div>
 
       {/* Quick Actions */}
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Actions</h2>
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {quickActions.map((action) => (
-            <Link key={action.path} to={action.path}>
+            <Link key={action.path} to={action.path} className={action.desktopOnly ? 'hidden md:block' : ''}>
               <div className="bg-card border border-border rounded-xl p-4 text-center hover:border-primary/30 transition-all group cursor-pointer">
                 <action.icon className={`w-6 h-6 mx-auto mb-2 ${action.color} group-hover:scale-110 transition-transform`} />
                 <p className="text-xs font-medium">{action.label}</p>

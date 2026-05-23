@@ -1,9 +1,15 @@
-export const GATEWAY_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.5;
+
+export function getGatewayFeePercentage(settings = {}) {
+  const value = Number(settings.gateway_fee_percentage ?? DEFAULT_GATEWAY_FEE_PERCENTAGE);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_GATEWAY_FEE_PERCENTAGE;
+}
 
 export function calculateDepositFees(usdAmount, exchangeRate, settings) {
+  const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const etbAmount = usdAmount * exchangeRate;
   const serviceFeeEtb = 0;
-  const gatewayFeeEtb = (etbAmount * GATEWAY_FEE_PERCENTAGE) / 100;
+  const gatewayFeeEtb = (etbAmount * gatewayFeePercentage) / 100;
   const totalPayableEtb = etbAmount + gatewayFeeEtb;
 
   return {
@@ -12,7 +18,7 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings) {
     etbAmount: Math.round(etbAmount * 100) / 100,
     serviceFeeEtb: Math.round(serviceFeeEtb * 100) / 100,
     gatewayFeeEtb: Math.round(gatewayFeeEtb * 100) / 100,
-    gatewayFeePercentage: GATEWAY_FEE_PERCENTAGE,
+    gatewayFeePercentage,
     totalPayableEtb: Math.round(totalPayableEtb * 100) / 100,
     finalUsdCredit: usdAmount
   };
@@ -41,6 +47,7 @@ export function calculateCardFundingFees(amount) {
 
 export const DEFAULT_SETTINGS = {
   usd_to_etb_rate: 135,
+  gateway_fee_percentage: 2.5,
   deposit_fee_percentage: 0,
   deposit_fixed_fee_etb: 0,
   card_creation_fee_usd: 3,

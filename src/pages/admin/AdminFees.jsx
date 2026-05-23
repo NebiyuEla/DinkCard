@@ -47,6 +47,7 @@ export default function AdminFees() {
 
   const fields = [
     { key: 'usd_to_etb_rate', label: 'USD to ETB Rate', suffix: 'ETB' },
+    { key: 'gateway_fee_percentage', label: 'Chapa Gateway Fee', suffix: '%' },
     { key: 'card_creation_fee_usd', label: 'Bitnob Card Fee', suffix: 'USD' },
     { key: 'min_deposit_usd', label: 'Min Deposit', suffix: 'USD' },
     { key: 'max_deposit_usd', label: 'Max Deposit', suffix: 'USD' },
@@ -66,7 +67,7 @@ export default function AdminFees() {
       <div className="bg-card border border-border rounded-xl p-6">
         <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
           <p className="font-semibold text-primary">Gateway fee is only for ETB checkout</p>
-          <p className="text-muted-foreground mt-1">Users pay the 2.5% gateway fee only when adding funds through Chapa. Card requests use the Bitnob card fee plus the funding amount.</p>
+          <p className="text-muted-foreground mt-1">Users pay this gateway fee only when adding funds through Chapa. Card requests use the Bitnob card fee plus the funding amount.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {fields.map(field => (

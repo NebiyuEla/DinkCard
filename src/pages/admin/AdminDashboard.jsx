@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import { 
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard, 
-  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity
+  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity, WalletCards
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -33,11 +33,13 @@ export default function AdminDashboard() {
   const { data: cards } = useQuery({ queryKey: ['admin-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: tickets } = useQuery({ queryKey: ['admin-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: walletSummary } = useQuery({ queryKey: ['admin-wallet-summary'], queryFn: apiClient.admin.walletSummary, refetchInterval: REFRESH.admin });
+  const { data: companyBalances } = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const totalUsableBalance = Number(walletSummary?.totalUsableBalance || 0);
+  const stableCompanyBalance = Number(companyBalances?.stableUsd || Math.max(Number(companyBalances?.usdc || 0), Number(companyBalances?.usdt || 0)) || 0);
 
   const isOverview = location.pathname === '/admin';
 
@@ -82,9 +84,9 @@ export default function AdminDashboard() {
             <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
-            <StatCard title="Usable Balance" value={`$${totalUsableBalance.toFixed(0)}`} icon={Activity} />
+            <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(2)} USDT`} icon={WalletCards} />
+            <StatCard title="Platform Bal." value={`$${totalUsableBalance.toFixed(0)}`} icon={Activity} />
             <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
-            <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
           </div>
 
           {/* Recent deposits needing review */}

@@ -158,6 +158,14 @@ function getExistingBitnobCustomer(user, kyc) {
   `).get(config.bitnob.env, user.email, kyc.email || user.email);
 }
 
+function normalizeEthiopianPhone(phoneValue) {
+  let digits = String(phoneValue || '').trim().replace(/\D/g, '');
+  if (digits.startsWith('00251')) digits = digits.slice(5);
+  if (digits.startsWith('251')) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, '');
+  return digits || undefined;
+}
+
 async function ensureBitnobCustomerForCard(user, kyc) {
   const existing = getExistingBitnobCustomer(user, kyc);
   if (existing?.bitnob_customer_id) return existing;
@@ -169,8 +177,15 @@ async function ensureBitnobCustomerForCard(user, kyc) {
     first_name: firstName || 'Dink',
     last_name: lastParts.join(' ') || 'Card',
     email: kyc.email || user.email,
-    phone: kyc.phone || user.phone || undefined,
-    country_code: 'ETH'
+    date_of_birth: kyc.date_of_birth || undefined,
+    id_type: kyc.id_type || undefined,
+    id_number: kyc.id_number || undefined,
+    phone_number: normalizeEthiopianPhone(kyc.phone || user.phone),
+    dial_code: '+251',
+    country: 'ETH',
+    country_code: 'ETH',
+    address: kyc.address || undefined,
+    city: kyc.city || 'Addis Ababa'
   });
   const customer = response?.data?.customer || response?.data || response?.customer || {};
   const bitnobCustomerId = customer.id || customer.customer_id || customer.customerId;
@@ -191,7 +206,7 @@ async function ensureBitnobCustomerForCard(user, kyc) {
     firstName || 'Dink',
     lastParts.join(' ') || 'Card',
     kyc.email || user.email,
-    kyc.phone || user.phone || '',
+    normalizeEthiopianPhone(kyc.phone || user.phone) || '',
     kyc.date_of_birth || '',
     kyc.id_type || '',
     kyc.id_number || '',

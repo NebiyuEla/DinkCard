@@ -2,7 +2,7 @@ export const REFRESH = {
   user: 15000,
   admin: 8000,
   fees: 2000,
-  notifications: 12000
+  notifications: 3000
 };
 
 export function invalidateOperationalData(queryClient) {

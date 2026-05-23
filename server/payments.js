@@ -2,28 +2,91 @@ import { db, mapRow } from './db.js';
 import { config } from './config.js';
 import { generateId, money, nowIso, hmacSha256Hex } from './utils.js';
 
-export const GATEWAY_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.5;
+const PENDING_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function getFeeSettings() {
   return mapRow(db.prepare('SELECT * FROM fee_settings WHERE key = ? ORDER BY updated_at DESC, created_at DESC LIMIT 1').get('default'));
 }
 
+export function getGatewayFeePercentage(settings = getFeeSettings()) {
+  const value = Number(settings?.gateway_fee_percentage ?? DEFAULT_GATEWAY_FEE_PERCENTAGE);
+  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_GATEWAY_FEE_PERCENTAGE;
+}
+
 export function calculateDeposit(usdAmount, settings) {
   const usd = Number(usdAmount);
   const rate = Number(settings.usd_to_etb_rate || 135);
+  const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const etbAmount = money(usd * rate);
   const serviceFeeEtb = 0;
-  const gatewayFeeEtb = money(etbAmount * GATEWAY_FEE_PERCENTAGE / 100);
+  const gatewayFeeEtb = money(etbAmount * gatewayFeePercentage / 100);
   const totalPayableEtb = money(etbAmount + serviceFeeEtb + gatewayFeeEtb);
   return {
     exchangeRate: rate,
     etbAmount,
     serviceFeeEtb,
     gatewayFeeEtb,
-    gatewayFeePercentage: GATEWAY_FEE_PERCENTAGE,
+    gatewayFeePercentage,
     totalPayableEtb,
     finalUsdCredit: money(usd)
   };
+}
+
+function paymentExpired(createdAt) {
+  const createdMs = Date.parse(createdAt || '');
+  if (!Number.isFinite(createdMs)) return false;
+  return Date.now() - createdMs >= PENDING_PAYMENT_TIMEOUT_MS;
+}
+
+export function expirePendingChapaDeposits(userId) {
+  const threshold = new Date(Date.now() - PENDING_PAYMENT_TIMEOUT_MS).toISOString();
+  const now = nowIso();
+  const sql = `
+    UPDATE deposits
+    SET status = 'cancelled',
+        provider_status = COALESCE(NULLIF(provider_status, ''), 'expired'),
+        rejection_reason = COALESCE(NULLIF(rejection_reason, ''), 'Payment checkout expired after 5 minutes.'),
+        updated_at = ?
+    WHERE payment_method = 'chapa'
+      AND status = 'pending_payment'
+      AND created_at <= ?
+      ${userId ? 'AND user_id = ?' : ''}
+  `;
+  const params = userId ? [now, threshold, userId] : [now, threshold];
+  return db.prepare(sql).run(...params);
+}
+
+export function cancelChapaDeposit(txRef, reason = 'Payment was cancelled.', providerStatus = 'cancelled', providerPayload) {
+  const deposit = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ?').get(txRef);
+  if (!deposit) throw new Error('Deposit not found');
+  if (deposit.status === 'approved') return mapRow(deposit);
+  if (['failed', 'rejected', 'refunded', 'cancelled', 'canceled'].includes(deposit.status)) return mapRow(deposit);
+
+  const now = nowIso();
+  db.prepare(`
+    UPDATE deposits
+    SET status = 'cancelled',
+        provider_status = ?,
+        rejection_reason = ?,
+        provider_payload = COALESCE(?, provider_payload),
+        updated_at = ?
+    WHERE id = ?
+  `).run(providerStatus, reason, providerPayload ? JSON.stringify(providerPayload) : null, now, deposit.id);
+
+  db.prepare(`
+    INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+    VALUES (?, ?, 'Payment Cancelled', ?, 'deposit', 0, ?)
+  `).run(generateId('ntf'), deposit.user_id, reason, now);
+
+  return mapRow(db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id));
+}
+
+function buildChapaReturnUrl(txRef) {
+  const url = new URL('/dashboard', config.appUrl);
+  url.searchParams.set('tx_ref', txRef);
+  url.searchParams.set('payment', 'chapa');
+  return url.toString();
 }
 
 function providerMessage(value, fallback) {
@@ -104,7 +167,7 @@ export async function initializeChapaPayment({ user, amountUsd, phoneNumber }) {
       phone_number: phoneNumber || user.phone || '',
       tx_ref: txRef,
       callback_url: config.chapa.callbackUrl,
-      return_url: `${config.chapa.returnUrl}?tx_ref=${txRef}`,
+      return_url: buildChapaReturnUrl(txRef),
       customization: {
         title: 'DinkCard',
         description: 'Supported card-related service funding'
@@ -246,6 +309,7 @@ export async function finalizeChapaDeposit(txRef) {
   if (!String(txRef || '').startsWith('dinkcard_service_')) {
     throw new Error('Invalid platform transaction reference');
   }
+  expirePendingChapaDeposits();
   const deposit = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ?').get(txRef);
   if (!deposit) {
     throw new Error('Deposit not found');
@@ -253,15 +317,25 @@ export async function finalizeChapaDeposit(txRef) {
   if (deposit.status === 'approved') {
     return mapRow(deposit);
   }
+  if (['cancelled', 'canceled', 'failed', 'rejected', 'refunded'].includes(deposit.status)) {
+    return mapRow(deposit);
+  }
+  if (paymentExpired(deposit.created_at)) {
+    return cancelChapaDeposit(txRef, 'Payment checkout expired after 5 minutes.', 'expired');
+  }
   if (deposit.source && deposit.source !== 'dinkcard') {
     throw new Error('Transaction source mismatch');
   }
   const verified = await verifyChapaTransaction(txRef);
   const data = verified?.data || {};
-  if (String(data.status).toLowerCase() !== 'success') {
+  const providerStatus = String(data.status || verified?.status || 'pending').toLowerCase();
+  if (['cancelled', 'canceled', 'failed'].includes(providerStatus)) {
+    return cancelChapaDeposit(txRef, `Payment ${providerStatus.replace('cancelled', 'cancelled')}.`, providerStatus, verified);
+  }
+  if (providerStatus !== 'success') {
     db.prepare('UPDATE deposits SET provider_status = ?, provider_payload = ?, updated_at = ? WHERE id = ?')
-      .run(String(data.status || 'pending'), JSON.stringify(verified || {}), nowIso(), deposit.id);
-    return mapRow(deposit);
+      .run(providerStatus, JSON.stringify(verified || {}), nowIso(), deposit.id);
+    return mapRow(db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id));
   }
   if (String(data.currency).toUpperCase() !== 'ETB') {
     throw new Error('Currency mismatch from Chapa verification');
