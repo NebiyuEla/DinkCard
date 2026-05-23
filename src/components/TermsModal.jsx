@@ -53,7 +53,7 @@ export default function TermsModal({ user }) {
         </Button>
 
         <p className="text-[11px] text-muted-foreground text-center">
-          You cannot use DinkCard without accepting the Terms & Conditions.
+          You cannot use Dink Card without accepting the Terms & Conditions.
         </p>
       </DialogContent>
     </Dialog>

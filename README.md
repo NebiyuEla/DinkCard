@@ -1,6 +1,6 @@
-# DinkCard
+# Dink Card
 
-DinkCard is a React + Node platform for verified users to add service funds, request virtual cards, manage cards, and submit support/KYC requests.
+Dink Card is a React + Node platform for verified users to add service funds, request virtual cards, manage cards, and submit support/KYC requests.
 
 ## Production Recommendation
 

@@ -43,7 +43,7 @@ class AppErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error('DinkCard render error:', error, info);
+    console.error('Dink Card render error:', error, info);
   }
 
   render() {
@@ -51,7 +51,7 @@ class AppErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
           <div className="w-full max-w-md border border-border bg-card p-6 shadow-sm">
-            <h1 className="text-xl font-semibold mb-2">DinkCard could not load</h1>
+            <h1 className="text-xl font-semibold mb-2">Dink Card could not load</h1>
             <p className="text-sm text-muted-foreground mb-4">
               Refresh the page. If this continues, send support the browser console error.
             </p>
@@ -113,7 +113,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      {['terms', 'privacy', 'refund-policy', 'kyc-compliance', 'acceptable-use', 'risk-disclosure', 'contact-support'].map((slug) => (
+      {['terms', 'privacy', 'refund-policy', 'fee-disclosure', 'kyc-compliance', 'acceptable-use', 'risk-disclosure', 'contact-support', 'account-deletion', 'complaints'].map((slug) => (
         <Route key={slug} path={`/${slug}`} element={<LegalPage />} />
       ))}
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />

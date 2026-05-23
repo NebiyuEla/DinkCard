@@ -19,7 +19,7 @@ const nav = [
   { label: 'Deposits', path: '/superadmin/deposits', icon: DollarSign },
   { label: 'Cards', path: '/superadmin/cards', icon: CreditCard },
   { label: 'Tickets', path: '/superadmin/tickets', icon: HeadphonesIcon },
-  { label: 'Fees & Rates', path: '/superadmin/fees', icon: Settings },
+  { label: 'Pricing Settings', path: '/superadmin/fees', icon: Settings },
   { label: 'Audit Logs', path: '/superadmin/audit', icon: FileText },
 ];
 
@@ -51,7 +51,7 @@ export default function SuperAdminLayout() {
         <div className="h-14 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-primary" />
-            <span className="font-bold text-sm">DinkCard Admin</span>
+            <span className="font-bold text-sm">Dink Card Admin</span>
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout}>Sign Out</Button>
         </div>
@@ -81,7 +81,7 @@ export default function SuperAdminLayout() {
             <ShieldAlert className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <p className="font-bold text-sm leading-tight">DinkCard</p>
+            <p className="font-bold text-sm leading-tight">Dink Card</p>
             <p className="text-[10px] text-muted-foreground">Super Admin</p>
           </div>
         </div>

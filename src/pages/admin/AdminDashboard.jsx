@@ -18,7 +18,7 @@ const adminNav = [
   { label: 'Deposits', path: '/admin/deposits', icon: DollarSign },
   { label: 'Cards', path: '/admin/cards', icon: CreditCard },
   { label: 'Tickets', path: '/admin/tickets', icon: HeadphonesIcon },
-  { label: 'Fees & Rates', path: '/admin/fees', icon: Settings, ownerOnly: true },
+  { label: 'Pricing Settings', path: '/admin/fees', icon: Settings, ownerOnly: true },
   { label: 'Audit Logs', path: '/admin/audit', icon: FileText, ownerOnly: true },
 ];
 

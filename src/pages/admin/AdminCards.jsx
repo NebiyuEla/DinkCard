@@ -138,7 +138,7 @@ export default function AdminCards() {
       return apiClient.admin.customers.delete(deleteCustomer.id, { reason: deleteReason });
     },
     onSuccess: () => {
-      toast.success('Customer deleted from Bitnob and DinkCard');
+      toast.success('Customer deleted from Bitnob and Dink Card');
       setDeleteCustomer(null);
       setDeleteReason('');
       queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
@@ -368,7 +368,7 @@ export default function AdminCards() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Bitnob Customer</DialogTitle>
-            <DialogDescription>This deletes the customer from Bitnob and removes the linked DinkCard customer record. Active cards must be handled first.</DialogDescription>
+            <DialogDescription>This deletes the customer from Bitnob and removes the linked Dink Card customer record. Active cards must be handled first.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border border-border bg-secondary/20 p-3 text-sm">

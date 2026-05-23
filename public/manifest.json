@@ -1,7 +1,7 @@
 {
-  "name": "DinkCard",
-  "short_name": "DinkCard",
-  "description": "DinkCard virtual card access and management platform.",
+  "name": "Dink Card",
+  "short_name": "Dink Card",
+  "description": "Dink Card helps users in Ethiopia access supported virtual card-related services with clear ETB pricing, exchange-rate visibility, and simple service processing.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

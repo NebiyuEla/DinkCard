@@ -48,7 +48,7 @@ export default function Landing() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <CreditCard className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold text-lg tracking-tight">DinkCard</span>
+            <span className="font-bold text-lg tracking-tight">Dink Card</span>
           </div>
           <div className="flex items-center gap-3">
             <Link to="/login">
@@ -106,10 +106,10 @@ export default function Landing() {
             
             <div className="flex justify-between items-start">
               <div className="text-left">
-                <p className="text-xs text-muted-foreground">DinkCard</p>
+                <p className="text-xs text-muted-foreground">Dink Card</p>
                 <p className="text-[10px] text-muted-foreground/50">Virtual Card</p>
               </div>
-              <span className="text-lg font-bold tracking-widest text-primary">DINK</span>
+              <span className="text-lg font-bold tracking-tight text-primary">Dink</span>
             </div>
             <p className="font-mono text-lg tracking-[0.2em] text-foreground/70 text-left">
               •••• •••• •••• 4242
@@ -243,13 +243,13 @@ export default function Landing() {
             <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
               <CreditCard className="w-3.5 h-3.5 text-primary-foreground" />
             </div>
-            <span className="font-bold">DinkCard</span>
+            <span className="font-bold">Dink Card</span>
           </div>
           <div className="space-y-3">
             <LegalLinks />
             <p className="text-xs text-muted-foreground text-center max-w-2xl">{footerDisclaimer}</p>
           </div>
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} DinkCard</p>
+          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Dink Card</p>
         </div>
       </footer>
     </div>);

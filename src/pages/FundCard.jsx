@@ -33,9 +33,22 @@ export default function FundCard() {
   const fundableCards = cards?.filter((card) => ['active', 'frozen'].includes(card.status)) || [];
   const selectedCard = fundableCards.find((card) => card.id === selectedCardId);
   const fundAmount = parseFloat(amount) || 0;
-  const fees = useMemo(() => calculateCardFundingFees(fundAmount), [fundAmount]);
+  const fees = useMemo(() => calculateCardFundingFees(fundAmount, settings || {}), [fundAmount, settings]);
   const minFunding = settings?.min_card_funding_usd || 1;
-  const maxFunding = Math.max(0, Math.min(balance, settings?.max_card_funding_usd || 500));
+  const maxFunding = useMemo(() => {
+    const configuredMax = settings?.max_card_funding_usd || 500;
+    let low = 0;
+    let high = Math.min(configuredMax, balance);
+    for (let index = 0; index < 24; index += 1) {
+      const mid = (low + high) / 2;
+      if (calculateCardFundingFees(mid, settings || {}).totalDeduction <= balance) {
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    return Math.floor(low * 100) / 100;
+  }, [balance, settings]);
   const canFund = selectedCard && fundAmount >= minFunding && fundAmount <= maxFunding && fees.totalDeduction <= balance && acceptedNotice;
 
   const fundCard = useMutation({
@@ -105,6 +118,7 @@ export default function FundCard() {
           <h3 className="font-semibold text-sm">Card Funding</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">Funding Amount</span><span className="font-mono">${fees.amount.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Card top-up cost</span><span className="font-mono">${fees.fundingFee.toFixed(2)}</span></div>
             <div className="flex justify-between font-semibold pt-2 border-t border-border">
               <span>Total Deduction</span>
               <span className={`font-mono ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>

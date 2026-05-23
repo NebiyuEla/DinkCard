@@ -86,7 +86,7 @@ export default function AdminDeposits() {
                 <tr key={d.id} className="hover:bg-secondary/20 transition-colors">
                   <td className="px-4 py-3 text-xs">{d.user_id}</td>
                   <td className="px-4 py-3 capitalize text-xs">{d.payment_method}</td>
-                  <td className="px-4 py-3 text-xs">{d.source || 'dinkcard'}</td>
+                  <td className="px-4 py-3 text-xs">{d.source === 'dinkcard' || !d.source ? 'Dink Card' : d.source}</td>
                   <td className="px-4 py-3 text-right font-mono">${d.requested_usd_amount?.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right font-mono text-muted-foreground">{d.total_payable_etb?.toLocaleString()}</td>
                   <td className="px-4 py-3 font-mono text-xs">{d.transaction_reference}</td>
@@ -113,7 +113,7 @@ export default function AdminDeposits() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{d.user_id}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{d.payment_method} - {d.source || 'dinkcard'} - {d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</p>
+                  <p className="text-xs text-muted-foreground capitalize">{d.payment_method} - {d.source === 'dinkcard' || !d.source ? 'Dink Card' : d.source} - {d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</p>
                 </div>
                 <StatusBadge status={d.status} className="text-[10px] shrink-0" />
               </div>
@@ -138,7 +138,7 @@ export default function AdminDeposits() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">User:</span> <span className="font-medium">{selected.user_id}</span></div>
                 <div><span className="text-muted-foreground">Method:</span> <span className="capitalize">{selected.payment_method}</span></div>
-                <div><span className="text-muted-foreground">Source:</span> <span>{selected.source || 'dinkcard'}</span></div>
+                <div><span className="text-muted-foreground">Source:</span> <span>{selected.source === 'dinkcard' || !selected.source ? 'Dink Card' : selected.source}</span></div>
                 <div><span className="text-muted-foreground">Provider Status:</span> <span>{selected.provider_status || 'not verified'}</span></div>
                 <div><span className="text-muted-foreground">USD Amount:</span> <span className="font-mono">${selected.requested_usd_amount?.toFixed(2)}</span></div>
                 <div><span className="text-muted-foreground">ETB Payable:</span> <span className="font-mono">{selected.total_payable_etb?.toLocaleString()}</span></div>

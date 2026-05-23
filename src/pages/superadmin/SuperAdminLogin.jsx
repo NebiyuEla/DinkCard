@@ -45,7 +45,7 @@ export default function SuperAdminLogin() {
             <ShieldAlert className="w-7 h-7 text-primary" />
           </div>
           <h1 className="text-2xl font-bold">Superadmin Portal</h1>
-          <p className="text-sm text-muted-foreground mt-1">Restricted access for DinkCard operations.</p>
+          <p className="text-sm text-muted-foreground mt-1">Restricted access for Dink Card operations.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-4">

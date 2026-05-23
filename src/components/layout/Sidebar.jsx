@@ -58,7 +58,7 @@ export default function Sidebar({ user, unreadCount = 0 }) {
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
                 <CreditCard className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="text-lg font-bold tracking-tight">DinkCard</span>
+              <span className="text-lg font-bold tracking-tight">Dink Card</span>
             </div>
           ) : (
             <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary">

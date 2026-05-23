@@ -14,22 +14,75 @@ export function getGatewayFeePercentage(settings = getFeeSettings()) {
   return Number.isFinite(value) && value >= 0 ? value : DEFAULT_GATEWAY_FEE_PERCENTAGE;
 }
 
-export function calculateDeposit(usdAmount, settings) {
+function safeNumber(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function roundUpTo(value, nearest) {
+  const step = Math.max(1, safeNumber(nearest, 50));
+  return money(Math.ceil(Number(value || 0) / step) * step);
+}
+
+export function calculateTopupProviderFeeUsd(usdAmount, settings = getFeeSettings()) {
+  const usd = safeNumber(usdAmount, 0);
+  const fixedUnder100 = Math.max(0, safeNumber(settings?.bitnob_topup_fee_under_100_usd, 1));
+  const percent100Plus = Math.max(0, safeNumber(settings?.bitnob_topup_fee_percent_100_plus, 1));
+  if (usd <= 0) return 0;
+  return money(usd < 100 ? fixedUnder100 : (usd * percent100Plus) / 100);
+}
+
+export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const usd = Number(usdAmount);
-  const rate = Number(settings.usd_to_etb_rate || 135);
+  const rate = Math.max(0, safeNumber(settings?.usd_to_etb_rate, 190));
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
-  const etbAmount = money(usd * rate);
-  const serviceFeeEtb = 0;
-  const gatewayFeeEtb = money(etbAmount * gatewayFeePercentage / 100);
-  const totalPayableEtb = money(etbAmount + serviceFeeEtb + gatewayFeeEtb);
+  const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, 8));
+  const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, 100));
+  const safetyBufferPercentage = Math.max(0, safeNumber(settings?.safety_buffer_percentage, 3));
+  const settlementFeeEtb = Math.max(0, safeNumber(settings?.chapa_settlement_fee_etb, 0));
+  const roundingRuleEtb = Math.max(1, safeNumber(settings?.rounding_rule_etb, 50));
+  const feeDisplayStyle = ['simple', 'detailed', 'hybrid'].includes(settings?.customer_fee_display_style)
+    ? settings.customer_fee_display_style
+    : 'hybrid';
+
+  const cardAmountEtb = money(usd * rate);
+  const topupFeeUsd = calculateTopupProviderFeeUsd(usd, settings);
+  const providerCostUsd = topupFeeUsd;
+  const providerCostEtb = money(providerCostUsd * rate);
+  const baseCostEtb = money(cardAmountEtb + providerCostEtb);
+  const safetyBufferEtb = money(baseCostEtb * safetyBufferPercentage / 100);
+  const dinkServiceFeeEtb = money(Math.max(baseCostEtb * serviceMarginPercentage / 100, minimumServiceFeeEtb));
+  const requiredBeforeChapaEtb = money(baseCostEtb + safetyBufferEtb + dinkServiceFeeEtb + settlementFeeEtb);
+  const grossDivisor = Math.max(0.01, 1 - gatewayFeePercentage / 100);
+  const grossTotalBeforeRoundEtb = money(requiredBeforeChapaEtb / grossDivisor);
+  const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
+  const gatewayFeeEtb = money(Math.max(0, totalPayableEtb - requiredBeforeChapaEtb));
+  const serviceAndProcessingFeeEtb = money(Math.max(0, totalPayableEtb - cardAmountEtb));
+  const roundingAdjustmentEtb = money(Math.max(0, totalPayableEtb - grossTotalBeforeRoundEtb));
+
   return {
+    cardAmountUsd: money(usd),
+    cardAmountEtb,
     exchangeRate: rate,
-    etbAmount,
-    serviceFeeEtb,
+    etbAmount: cardAmountEtb,
+    serviceFeeEtb: serviceAndProcessingFeeEtb,
+    serviceAndProcessingFeeEtb,
     gatewayFeeEtb,
     gatewayFeePercentage,
     totalPayableEtb,
-    finalUsdCredit: money(usd)
+    finalUsdCredit: money(usd),
+    providerCostUsd,
+    providerCostEtb,
+    topupFeeUsd,
+    topupFeeEtb: providerCostEtb,
+    safetyBufferEtb,
+    dinkServiceFeeEtb,
+    settlementFeeEtb,
+    requiredBeforeChapaEtb,
+    grossTotalBeforeRoundEtb,
+    roundingAdjustmentEtb,
+    roundingRuleEtb,
+    feeDisplayStyle
   };
 }
 
@@ -125,7 +178,7 @@ export async function initializeChapaPayment({ user, amountUsd, phoneNumber }) {
   }
   const calc = calculateDeposit(amountUsd, settings);
   const txRef = `dinkcard_service_${generateId('tx')}`;
-  const firstName = user.full_name?.split(' ')[0] || 'DinkCard';
+  const firstName = user.full_name?.split(' ')[0] || 'Dink';
   const lastName = user.full_name?.split(' ').slice(1).join(' ') || 'User';
   const now = nowIso();
 
@@ -169,7 +222,7 @@ export async function initializeChapaPayment({ user, amountUsd, phoneNumber }) {
       callback_url: config.chapa.callbackUrl,
       return_url: buildChapaReturnUrl(txRef),
       customization: {
-        title: 'DinkCard',
+        title: 'Dink Card',
         description: 'Supported card-related service funding'
       }
     })

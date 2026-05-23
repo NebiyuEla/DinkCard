@@ -86,7 +86,7 @@ export default function Register() {
               <button type="button" className="text-primary hover:underline" onClick={() => setShowTerms(true)}>
                 Terms & Conditions
               </button>{' '}
-              and understand I cannot use DinkCard without accepting them.
+              and understand I cannot use Dink Card without accepting them.
             </span>
           </label>
           {error && <p className="text-sm text-destructive">{error}</p>}

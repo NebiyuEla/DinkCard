@@ -204,13 +204,21 @@ CREATE TABLE IF NOT EXISTS support_messages (
 CREATE TABLE IF NOT EXISTS fee_settings (
   id TEXT PRIMARY KEY,
   key TEXT NOT NULL UNIQUE,
-  usd_to_etb_rate REAL NOT NULL DEFAULT 135,
+  usd_to_etb_rate REAL NOT NULL DEFAULT 190,
   gateway_fee_percentage REAL NOT NULL DEFAULT 2.5,
   deposit_fee_percentage REAL NOT NULL DEFAULT 0,
   deposit_fixed_fee_etb REAL NOT NULL DEFAULT 0,
-  card_creation_fee_usd REAL NOT NULL DEFAULT 3,
+  service_margin_percentage REAL NOT NULL DEFAULT 8,
+  minimum_service_fee_etb REAL NOT NULL DEFAULT 100,
+  safety_buffer_percentage REAL NOT NULL DEFAULT 3,
+  chapa_settlement_fee_etb REAL NOT NULL DEFAULT 0,
+  card_creation_fee_usd REAL NOT NULL DEFAULT 1,
+  bitnob_topup_fee_under_100_usd REAL NOT NULL DEFAULT 1,
+  bitnob_topup_fee_percent_100_plus REAL NOT NULL DEFAULT 1,
   card_funding_fee_percentage REAL NOT NULL DEFAULT 0,
   card_withdrawal_fee_percentage REAL NOT NULL DEFAULT 1,
+  rounding_rule_etb REAL NOT NULL DEFAULT 50,
+  customer_fee_display_style TEXT NOT NULL DEFAULT 'hybrid',
   min_deposit_usd REAL NOT NULL DEFAULT 5,
   max_deposit_usd REAL NOT NULL DEFAULT 1000,
   daily_deposit_limit_usd REAL NOT NULL DEFAULT 2000,
@@ -321,6 +329,14 @@ ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandb
 ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
 ensureColumn('fee_settings', 'gateway_fee_percentage', 'REAL NOT NULL DEFAULT 2.5');
+ensureColumn('fee_settings', 'service_margin_percentage', 'REAL NOT NULL DEFAULT 8');
+ensureColumn('fee_settings', 'minimum_service_fee_etb', 'REAL NOT NULL DEFAULT 100');
+ensureColumn('fee_settings', 'safety_buffer_percentage', 'REAL NOT NULL DEFAULT 3');
+ensureColumn('fee_settings', 'chapa_settlement_fee_etb', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('fee_settings', 'bitnob_topup_fee_under_100_usd', 'REAL NOT NULL DEFAULT 1');
+ensureColumn('fee_settings', 'bitnob_topup_fee_percent_100_plus', 'REAL NOT NULL DEFAULT 1');
+ensureColumn('fee_settings', 'rounding_rule_etb', 'REAL NOT NULL DEFAULT 50');
+ensureColumn('fee_settings', 'customer_fee_display_style', "TEXT NOT NULL DEFAULT 'hybrid'");
 ensureColumn('audit_logs', 'environment', 'TEXT');
 ensureColumn('audit_logs', 'provider', 'TEXT');
 ensureColumn('audit_logs', 'provider_status', 'TEXT');
@@ -409,14 +425,32 @@ if (!defaultSettings) {
 
 db.prepare(`
   UPDATE fee_settings
-  SET deposit_fee_percentage = 0,
+  SET usd_to_etb_rate = CASE
+        WHEN usd_to_etb_rate IS NULL OR usd_to_etb_rate = 135 THEN 190
+        ELSE usd_to_etb_rate
+      END,
+      deposit_fee_percentage = 0,
       deposit_fixed_fee_etb = 0,
       card_funding_fee_percentage = 0,
       card_creation_fee_usd = CASE
-        WHEN card_creation_fee_usd IS NULL OR card_creation_fee_usd < 7 THEN 7
+        WHEN card_creation_fee_usd IS NULL OR card_creation_fee_usd IN (3, 7) THEN 1
         ELSE card_creation_fee_usd
       END,
       gateway_fee_percentage = COALESCE(gateway_fee_percentage, 2.5),
+      service_margin_percentage = COALESCE(service_margin_percentage, 8),
+      minimum_service_fee_etb = COALESCE(minimum_service_fee_etb, 100),
+      safety_buffer_percentage = COALESCE(safety_buffer_percentage, 3),
+      chapa_settlement_fee_etb = COALESCE(chapa_settlement_fee_etb, 0),
+      bitnob_topup_fee_under_100_usd = COALESCE(bitnob_topup_fee_under_100_usd, 1),
+      bitnob_topup_fee_percent_100_plus = COALESCE(bitnob_topup_fee_percent_100_plus, 1),
+      rounding_rule_etb = CASE
+        WHEN rounding_rule_etb IS NULL OR rounding_rule_etb <= 0 THEN 50
+        ELSE rounding_rule_etb
+      END,
+      customer_fee_display_style = CASE
+        WHEN customer_fee_display_style IN ('simple', 'detailed', 'hybrid') THEN customer_fee_display_style
+        ELSE 'hybrid'
+      END,
       updated_at = ?
   WHERE key = 'default'
 `).run(now);

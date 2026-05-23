@@ -64,7 +64,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
           <p className="text-xs text-muted-foreground">{card.card_nickname}</p>
           <p className="text-[10px] text-muted-foreground/60 uppercase mt-0.5">Virtual Card</p>
         </div>
-        <span className="text-lg font-bold tracking-widest text-foreground/80">DINK</span>
+        <span className="text-lg font-bold tracking-tight text-foreground/80">Dink</span>
       </div>
 
       <div className="relative">

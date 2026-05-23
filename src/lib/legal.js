@@ -1,24 +1,31 @@
-export const BRAND_NAME = 'DinkCard';
-export const LEGAL_BUSINESS_NAME = 'DinkCard';
+export const BRAND_NAME = 'Dink Card';
+export const LEGAL_BUSINESS_NAME = 'Dink Card';
 export const SUPPORT_EMAIL = 'support@dinkcard.cc';
 export const SUPPORT_LINK = '/contact-support';
 export const BUSINESS_ADDRESS = 'Addis Ababa, Ethiopia';
 export const TERMS_VERSION = 'v1.2';
-export const LAST_UPDATED = 'May 21, 2026';
+export const LAST_UPDATED = 'May 23, 2026';
 
 export const legalLinks = [
   { label: 'Terms', path: '/terms' },
   { label: 'Privacy', path: '/privacy' },
   { label: 'Refunds', path: '/refund-policy' },
+  { label: 'Fees', path: '/fee-disclosure' },
   { label: 'KYC & Compliance', path: '/kyc-compliance' },
   { label: 'Acceptable Use', path: '/acceptable-use' },
   { label: 'Card Usage Notice', path: '/risk-disclosure' },
-  { label: 'Support', path: '/contact-support' }
+  { label: 'Support', path: '/contact-support' },
+  { label: 'Account Deletion', path: '/account-deletion' },
+  { label: 'Complaints', path: '/complaints' }
 ];
 
 export const platformDisclaimer = `${BRAND_NAME} helps verified users access and manage virtual card-related services through approved third-party infrastructure partners. Card creation, funding, processing, settlement, limits, availability, and acceptance are subject to partner provider rules, compliance checks, merchant acceptance, technical availability, and applicable regulations.`;
 
-export const footerDisclaimer = `${BRAND_NAME} is operated by ${LEGAL_BUSINESS_NAME}. Card-related services are provided through approved third-party infrastructure partners. ${BRAND_NAME} is not a bank, foreign exchange bureau, or independent international payment card issuer. Merchant acceptance is not guaranteed.`;
+export const footerDisclaimer = `${BRAND_NAME} is operated by ${LEGAL_BUSINESS_NAME}. ${BRAND_NAME} is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants. Merchant acceptance is not guaranteed.`;
+
+export const appStoreDescription = `${BRAND_NAME} helps users in Ethiopia access supported virtual card-related services with clear ETB pricing, exchange-rate visibility, and simple service processing.`;
+
+export const appStoreDisclaimer = `${BRAND_NAME} is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants.`;
 
 export const checkoutAgreement = 'I understand that card approval, funding, processing, and merchant acceptance are subject to verification, provider rules, compliance checks, service availability, and applicable fees.';
 
@@ -73,6 +80,20 @@ export const policies = {
       ['Restricted Accounts', 'Accounts under fraud, chargeback, sanctions, KYC, or compliance review may experience delayed, partial, or denied refunds according to law, provider rules, and platform policy.']
     ]
   },
+  feeDisclosure: {
+    title: 'Fee Disclosure',
+    intro: [
+      `Last updated: ${LAST_UPDATED}`,
+      'We show the final payable amount and exchange rate before payment. The customer checkout may combine several business costs into one clear service & processing fee to keep pricing easy to understand.'
+    ],
+    sections: [
+      ['What the Checkout Shows', 'The main checkout shows the card amount in USD, the exchange rate used, the service & processing fee, and the total payable in ETB before payment.'],
+      ['What the Fee May Include', 'The service & processing fee may include card provider costs, payment gateway costs, service margin, exchange-rate protection, settlement costs, operational costs, and ETB rounding.'],
+      ['Configurable Fees', 'Rates, margins, provider costs, gateway costs, minimum fees, safety buffers, and rounding rules may change based on admin settings, market conditions, provider pricing, fraud risk, or operational needs.'],
+      ['Extra Card-Related Fees', 'Some international websites, failed authorizations, refunds, provider actions, merchant restrictions, or network events may create extra card-related fees. We will notify users when this applies.'],
+      ['No Hidden Final Price', 'We do not hide the final payable amount. Users should review the total payable and exchange rate before confirming payment.']
+    ]
+  },
   kyc: {
     title: 'KYC & Compliance Policy',
     intro: [`Last updated: ${LAST_UPDATED}`, 'Users must provide accurate identity, contact, and payment information before using supported card-related services.'],
@@ -109,6 +130,28 @@ export const policies = {
       ['Support Link', SUPPORT_LINK],
       ['Business Address', BUSINESS_ADDRESS],
       ['Legal Operator', LEGAL_BUSINESS_NAME]
+    ]
+  },
+  accountDeletion: {
+    title: 'Account Deletion Request',
+    intro: [`Last updated: ${LAST_UPDATED}`, `Users may request deletion or restriction of their ${BRAND_NAME} account, subject to identity verification, security checks, dispute handling, and required recordkeeping.`],
+    sections: [
+      ['How to Request Deletion', `Contact support at ${SUPPORT_EMAIL} or use the in-app support page. Include your registered email and a clear request to delete or close the account.`],
+      ['Verification', 'We may ask for identity or account verification before deleting, closing, or restricting access to prevent unauthorized account takeover.'],
+      ['Records We May Keep', 'We may retain transaction records, KYC records, payment records, support records, audit logs, fraud-prevention data, and compliance records where required for legal, security, dispute, provider, or accounting reasons.'],
+      ['Open Balances and Disputes', 'Deletion may be delayed if there are open payments, card requests, refunds, chargebacks, disputes, investigations, restricted accounts, or unresolved provider actions.'],
+      ['Processing Time', 'We aim to review account deletion requests within a reasonable time after receiving the required verification and resolving any open obligations.']
+    ]
+  },
+  complaints: {
+    title: 'Complaint & Dispute Page',
+    intro: [`Last updated: ${LAST_UPDATED}`, 'Use this page to understand how complaints, transaction questions, failed payments, refunds, and service disputes are reviewed.'],
+    sections: [
+      ['How to Submit a Complaint', `Contact support at ${SUPPORT_EMAIL} or use the in-app support page with your payment reference, card request reference, screenshots if available, and a clear description of the issue.`],
+      ['Review Process', 'We review platform records, payment gateway status, provider responses, KYC records, admin action logs, and user-submitted evidence before making a decision.'],
+      ['Payment Disputes', 'A successful payment screen alone does not guarantee final approval. Payment status must be verified by the backend and matched to the correct Dink Card transaction reference.'],
+      ['Card-Related Disputes', 'Card creation, funding, merchant acceptance, refunds, freezes, restrictions, and failed transactions may depend on authorized third-party providers and merchant/network rules.'],
+      ['Response Time', 'We aim to respond as soon as practical. Complex cases involving providers, gateway checks, fraud review, or compliance review may take longer.']
     ]
   }
 };

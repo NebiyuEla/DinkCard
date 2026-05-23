@@ -3,16 +3,19 @@ import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
-import { footerDisclaimer, policies } from '@/lib/legal';
+import { BRAND_NAME, footerDisclaimer, policies } from '@/lib/legal';
 
 const routeMap = {
   terms: 'terms',
   privacy: 'privacy',
   'refund-policy': 'refunds',
+  'fee-disclosure': 'feeDisclosure',
   'kyc-compliance': 'kyc',
   'acceptable-use': 'acceptableUse',
   'risk-disclosure': 'risk',
-  'contact-support': 'contact'
+  'contact-support': 'contact',
+  'account-deletion': 'accountDeletion',
+  complaints: 'complaints'
 };
 
 export default function LegalPage() {
@@ -28,7 +31,7 @@ export default function LegalPage() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <CreditCard className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-bold">DinkCard</span>
+            <span className="font-bold">{BRAND_NAME}</span>
           </Link>
           <Button asChild variant="outline" size="sm">
             <Link to="/login"><ArrowLeft className="w-4 h-4 mr-2" />Back</Link>

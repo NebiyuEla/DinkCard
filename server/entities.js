@@ -27,7 +27,7 @@ const fieldMap = {
   Notification: ['id', 'user_id', 'title', 'message', 'type', 'read', 'link', 'created_at'],
   SupportTicket: ['id', 'user_id', 'category', 'subject', 'message', 'screenshot_url', 'related_transaction_id', 'related_card_id', 'status', 'priority', 'created_at', 'updated_at'],
   SupportMessage: ['id', 'ticket_id', 'sender_type', 'sender_id', 'message', 'attachment_url', 'created_at'],
-  FeeSettings: ['id', 'key', 'usd_to_etb_rate', 'gateway_fee_percentage', 'deposit_fee_percentage', 'deposit_fixed_fee_etb', 'card_creation_fee_usd', 'card_funding_fee_percentage', 'card_withdrawal_fee_percentage', 'min_deposit_usd', 'max_deposit_usd', 'daily_deposit_limit_usd', 'monthly_deposit_limit_usd', 'min_card_funding_usd', 'max_card_funding_usd', 'max_cards_per_user', 'kyc_level1_deposit_limit', 'kyc_level2_deposit_limit', 'created_at', 'updated_at'],
+  FeeSettings: ['id', 'key', 'usd_to_etb_rate', 'gateway_fee_percentage', 'deposit_fee_percentage', 'deposit_fixed_fee_etb', 'service_margin_percentage', 'minimum_service_fee_etb', 'safety_buffer_percentage', 'chapa_settlement_fee_etb', 'card_creation_fee_usd', 'bitnob_topup_fee_under_100_usd', 'bitnob_topup_fee_percent_100_plus', 'card_funding_fee_percentage', 'card_withdrawal_fee_percentage', 'rounding_rule_etb', 'customer_fee_display_style', 'min_deposit_usd', 'max_deposit_usd', 'daily_deposit_limit_usd', 'monthly_deposit_limit_usd', 'min_card_funding_usd', 'max_card_funding_usd', 'max_cards_per_user', 'kyc_level1_deposit_limit', 'kyc_level2_deposit_limit', 'created_at', 'updated_at'],
   CardFundingRequest: ['id', 'user_id', 'card_id', 'amount', 'fee', 'total_wallet_deduction', 'status', 'provider_reference', 'failure_reason', 'created_at', 'updated_at'],
   AuditLog: ['id', 'admin_id', 'user_id', 'action', 'entity_type', 'entity_id', 'old_value', 'new_value', 'reason', 'created_at'],
   PaymentMethod: ['id', 'name', 'type', 'account_name', 'account_number', 'instructions', 'min_amount_etb', 'max_amount_etb', 'fixed_fee_etb', 'percentage_fee', 'enabled', 'logo_url', 'created_at', 'updated_at']
@@ -211,13 +211,27 @@ export function createEntity(entity, data, user) {
 }
 
 function normalizeFeeSettings(payload) {
+  const displayStyle = ['simple', 'detailed', 'hybrid'].includes(payload.customer_fee_display_style)
+    ? payload.customer_fee_display_style
+    : 'hybrid';
+
   return {
     ...payload,
     key: payload.key || 'default',
+    usd_to_etb_rate: Number.isFinite(Number(payload.usd_to_etb_rate)) ? Number(payload.usd_to_etb_rate) : 190,
     gateway_fee_percentage: Number.isFinite(Number(payload.gateway_fee_percentage)) ? Number(payload.gateway_fee_percentage) : 2.5,
     deposit_fee_percentage: 0,
     deposit_fixed_fee_etb: 0,
-    card_funding_fee_percentage: 0
+    service_margin_percentage: Number.isFinite(Number(payload.service_margin_percentage)) ? Number(payload.service_margin_percentage) : 8,
+    minimum_service_fee_etb: Number.isFinite(Number(payload.minimum_service_fee_etb)) ? Number(payload.minimum_service_fee_etb) : 100,
+    safety_buffer_percentage: Number.isFinite(Number(payload.safety_buffer_percentage)) ? Number(payload.safety_buffer_percentage) : 3,
+    chapa_settlement_fee_etb: Number.isFinite(Number(payload.chapa_settlement_fee_etb)) ? Number(payload.chapa_settlement_fee_etb) : 0,
+    card_creation_fee_usd: Number.isFinite(Number(payload.card_creation_fee_usd)) ? Number(payload.card_creation_fee_usd) : 1,
+    bitnob_topup_fee_under_100_usd: Number.isFinite(Number(payload.bitnob_topup_fee_under_100_usd)) ? Number(payload.bitnob_topup_fee_under_100_usd) : 1,
+    bitnob_topup_fee_percent_100_plus: Number.isFinite(Number(payload.bitnob_topup_fee_percent_100_plus)) ? Number(payload.bitnob_topup_fee_percent_100_plus) : 1,
+    card_funding_fee_percentage: 0,
+    rounding_rule_etb: Number.isFinite(Number(payload.rounding_rule_etb)) && Number(payload.rounding_rule_etb) > 0 ? Number(payload.rounding_rule_etb) : 50,
+    customer_fee_display_style: displayStyle
   };
 }
 

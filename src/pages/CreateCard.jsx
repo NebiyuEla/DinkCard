@@ -34,7 +34,7 @@ export default function CreateCard() {
   const kycApproved = kyc?.status === 'approved';
   const amount = parseFloat(fundingAmount) || 0;
   const fees = calculateCardCreationFees(amount, settings || {});
-  const bitnobFee = settings?.card_creation_fee_usd || 3;
+  const bitnobFee = settings?.card_creation_fee_usd ?? 1;
   const minFunding = settings?.min_card_funding_usd || 1;
   const maxFundingByBalance = Math.max(0, balance - bitnobFee);
   const maxFunding = Math.max(0, Math.min(maxFundingByBalance, settings?.max_card_funding_usd || 500));
@@ -110,7 +110,7 @@ export default function CreateCard() {
       <div className="bg-card border border-border rounded-xl p-6 space-y-3">
         <h3 className="font-semibold text-sm">Card Total</h3>
         <div className="space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Bitnob Card Fee</span><span className="font-mono">${fees.bitnobFee.toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Card creation cost</span><span className="font-mono">${fees.bitnobFee.toFixed(2)}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">Initial Funding</span><span className="font-mono">${fees.fundingAmount.toFixed(2)}</span></div>
           <div className="flex justify-between font-semibold pt-2 border-t border-border">
             <span>Total Service Balance Deduction</span>

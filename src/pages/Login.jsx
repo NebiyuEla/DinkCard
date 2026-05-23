@@ -42,7 +42,7 @@ export default function Login() {
           <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
             <CreditCard className="w-7 h-7 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold">Sign in to DinkCard</h1>
+          <h1 className="text-3xl font-bold">Sign in to Dink Card</h1>
           <p className="text-sm text-muted-foreground mt-2">You must agree to the Terms & Conditions before using the platform.</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-4">

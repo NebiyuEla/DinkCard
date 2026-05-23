@@ -199,7 +199,7 @@ function uploadUrlFor(filename) {
 
 function serveIndex(req, res) {
   if (!fs.existsSync(indexHtml)) {
-    return res.status(200).send('DinkCard API is running. Open the frontend on http://localhost:5173');
+    return res.status(200).send('Dink Card API is running. Open the frontend on http://localhost:5173');
   }
 
   const html = fs.readFileSync(indexHtml, 'utf8')
@@ -755,26 +755,22 @@ function escapeHtml(value) {
 
 function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
+  const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
   const rows = [
-    ['Invoice / reference', deposit.transaction_reference],
-    ['User', deposit.user_id],
-    ['Payment method', deposit.payment_method],
-    ['Status', status],
-    ['USD requested', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
-    ['Exchange rate', `${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
-    ['ETB amount', `${Number(deposit.etb_amount || 0).toLocaleString()} ETB`],
-    ['Gateway fee', `${Number(deposit.gateway_fee_etb || 0).toLocaleString()} ETB`],
+    ['Payment reference', deposit.transaction_reference],
+    ['Order status', status],
+    ['Card amount', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
+    ['Exchange rate', `1 USD = ${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
+    ['Service & processing fee', `${serviceProcessingFee.toLocaleString()} ETB`],
     ['Total paid', `${Number(deposit.total_payable_etb || 0).toLocaleString()} ETB`],
-    ['Service balance credit', `$${Number(deposit.final_usd_credit || 0).toFixed(2)}`],
-    ['Created', deposit.created_at],
-    ['Verified', deposit.verified_at || 'Not verified']
+    ['Created', deposit.created_at]
   ];
 
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>DinkCard Invoice ${escapeHtml(deposit.transaction_reference)}</title>
+  <title>Dink Card Invoice ${escapeHtml(deposit.transaction_reference)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
     .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
@@ -792,7 +788,7 @@ function invoiceHtml(deposit) {
   <section class="invoice">
     <div class="brand">
       <div>
-        <h1>DinkCard Invoice</h1>
+        <h1>Dink Card Invoice</h1>
         <p>Card-related service funding receipt</p>
       </div>
       <div>
@@ -806,7 +802,7 @@ function invoiceHtml(deposit) {
       </tbody>
     </table>
     <div class="note">
-      DinkCard is not a bank, foreign exchange bureau, or independent international card issuer. Card-related services are provided through approved third-party infrastructure partners. Merchant acceptance is not guaranteed.
+      Dink Card is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants.
     </div>
   </section>
 </body>

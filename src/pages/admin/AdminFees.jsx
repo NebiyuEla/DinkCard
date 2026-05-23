@@ -41,14 +41,25 @@ export default function AdminFees() {
       queryClient.setQueryData(['feeSettings'], saved);
       queryClient.refetchQueries({ queryKey: ['feeSettings'], type: 'active' });
       invalidateOperationalData(queryClient);
-      toast.success('Settings saved');
-    }
+      toast.success('Pricing settings saved');
+    },
+    onError: (error) => toast.error(error.message || 'Failed to save pricing settings')
   });
 
-  const fields = [
-    { key: 'usd_to_etb_rate', label: 'USD to ETB Rate', suffix: 'ETB' },
-    { key: 'gateway_fee_percentage', label: 'Chapa Gateway Fee', suffix: '%' },
-    { key: 'card_creation_fee_usd', label: 'Bitnob Card Fee', suffix: 'USD' },
+  const pricingFields = [
+    { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
+    { key: 'service_margin_percentage', label: 'Dink Card service margin', suffix: '%' },
+    { key: 'minimum_service_fee_etb', label: 'Minimum service fee', suffix: 'ETB' },
+    { key: 'safety_buffer_percentage', label: 'Safety buffer', suffix: '%' },
+    { key: 'gateway_fee_percentage', label: 'Chapa collection fee', suffix: '%' },
+    { key: 'chapa_settlement_fee_etb', label: 'Settlement/transfer fee', suffix: 'ETB' },
+    { key: 'card_creation_fee_usd', label: 'Card creation cost', suffix: 'USD' },
+    { key: 'bitnob_topup_fee_under_100_usd', label: 'Top-up cost under $100', suffix: 'USD' },
+    { key: 'bitnob_topup_fee_percent_100_plus', label: 'Top-up cost $100+', suffix: '%' },
+    { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
+  ];
+
+  const limitFields = [
     { key: 'min_deposit_usd', label: 'Min Deposit', suffix: 'USD' },
     { key: 'max_deposit_usd', label: 'Max Deposit', suffix: 'USD' },
     { key: 'daily_deposit_limit_usd', label: 'Daily Deposit Limit', suffix: 'USD' },
@@ -60,31 +71,62 @@ export default function AdminFees() {
     { key: 'kyc_level2_deposit_limit', label: 'KYC Level 2 Limit', suffix: 'USD' },
   ];
 
+  const updateNumber = (key, value) => {
+    setForm({ ...form, [key]: parseFloat(value) || 0 });
+  };
+
+  const renderField = (field) => (
+    <div key={field.key}>
+      <Label className="text-xs text-muted-foreground">{field.label}</Label>
+      <div className="flex items-center gap-2 mt-1">
+        <Input
+          type="number"
+          value={form[field.key] ?? ''}
+          onChange={e => updateNumber(field.key, e.target.value)}
+          className="font-mono"
+          step="0.01"
+        />
+        {field.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{field.suffix}</span>}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-bold">Fees & Rate Settings</h2>
+      <div>
+        <h2 className="text-lg font-bold">Pricing Settings</h2>
+        <p className="text-sm text-muted-foreground">Keep customer checkout simple while protecting Dink Card from provider, gateway, exchange-rate, and refund costs.</p>
+      </div>
 
       <div className="bg-card border border-border rounded-xl p-6">
         <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold text-primary">Minimum-profit fee mode</p>
-          <p className="text-muted-foreground mt-1">Customers pay the checkout gateway fee when adding funds and the provider card fee when requesting cards. Platform deposit and card funding fees stay at 0 unless you intentionally add markup.</p>
+          <p className="font-semibold text-primary">Protected pricing mode</p>
+          <p className="text-muted-foreground mt-1">
+            The checkout shows one clean service & processing fee. Behind the scenes it uses Chapa gross-up, provider costs, service margin, safety buffer, and ETB rounding.
+          </p>
         </div>
+
+        <div className="mb-6">
+          <Label className="text-xs text-muted-foreground">Customer fee display style</Label>
+          <select
+            value={form.customer_fee_display_style || 'hybrid'}
+            onChange={(event) => setForm({ ...form, customer_fee_display_style: event.target.value })}
+            className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+          >
+            <option value="hybrid">Hybrid: simple checkout with fee details button</option>
+            <option value="simple">Simple: hide detailed breakdown</option>
+            <option value="detailed">Detailed: show full breakdown by default</option>
+          </select>
+        </div>
+
+        <h3 className="mb-3 text-sm font-semibold">Pricing Formula</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {fields.map(field => (
-            <div key={field.key}>
-              <Label className="text-xs text-muted-foreground">{field.label}</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input
-                  type="number"
-                  value={form[field.key] ?? ''}
-                  onChange={e => setForm({ ...form, [field.key]: parseFloat(e.target.value) || 0 })}
-                  className="font-mono"
-                  step="0.01"
-                />
-                {field.suffix && <span className="text-xs text-muted-foreground whitespace-nowrap">{field.suffix}</span>}
-              </div>
-            </div>
-          ))}
+          {pricingFields.map(renderField)}
+        </div>
+
+        <h3 className="mb-3 mt-8 text-sm font-semibold">Limits</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {limitFields.map(renderField)}
         </div>
 
         <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending} className="mt-6 bg-primary text-primary-foreground">

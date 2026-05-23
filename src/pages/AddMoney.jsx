@@ -24,13 +24,16 @@ export default function AddMoney() {
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
   const [statusMessage, setStatusMessage] = useState('');
   const [acceptedNotice, setAcceptedNotice] = useState(false);
+  const [showFeeDetails, setShowFeeDetails] = useState(false);
 
   const amount = Number(usdAmount || 0);
-  const rate = settings?.usd_to_etb_rate || 135;
+  const rate = settings?.usd_to_etb_rate || 190;
   const fees = useMemo(() => {
     if (!amount) return null;
     return calculateDepositFees(amount, rate, settings || {});
   }, [amount, rate, settings]);
+  const displayStyle = fees?.feeDisplayStyle || settings?.customer_fee_display_style || 'hybrid';
+  const shouldShowDetails = displayStyle === 'detailed' || (displayStyle === 'hybrid' && showFeeDetails);
 
   useEffect(() => {
     const txRef = new URLSearchParams(window.location.search).get('tx_ref');
@@ -70,8 +73,8 @@ export default function AddMoney() {
           <Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Add Money</h1>
-          <p className="text-sm text-muted-foreground">Add funds for supported card-related service requests.</p>
+          <h1 className="text-2xl font-bold">Add Funds</h1>
+          <p className="text-sm text-muted-foreground">Pay in ETB for supported virtual card-related services.</p>
         </div>
       </div>
 
@@ -89,7 +92,7 @@ export default function AddMoney() {
 
       <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <div>
-          <Label className="text-sm font-medium">Amount in USD</Label>
+          <Label className="text-sm font-medium">Card amount in USD</Label>
           <div className="relative mt-1.5">
             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -108,11 +111,36 @@ export default function AddMoney() {
         </div>
         {fees && (
           <div className="space-y-3 border-t border-border pt-4 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">USD Amount</span><span className="font-mono">${fees.usdAmount.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Exchange Rate</span><span className="font-mono">{rate.toLocaleString()} ETB</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Gateway Fee ({fees.gatewayFeePercentage}%)</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
-            <div className="flex justify-between font-semibold pt-2 border-t border-border"><span>Total to Pay</span><span className="font-mono text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Expected Service Balance</span><span className="font-mono font-semibold text-primary">${fees.finalUsdCredit.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Card amount</span><span className="font-mono">${fees.cardAmountUsd.toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Exchange rate used</span><span className="font-mono">1 USD = {fees.exchangeRate.toLocaleString()} ETB</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Service & processing fee</span><span className="font-mono">{fees.serviceAndProcessingFeeEtb.toLocaleString()} ETB</span></div>
+            <div className="flex justify-between font-semibold pt-2 border-t border-border"><span>Total payable</span><span className="font-mono text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span></div>
+
+            {displayStyle === 'hybrid' && (
+              <button
+                type="button"
+                onClick={() => setShowFeeDetails((value) => !value)}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                {shouldShowDetails ? 'Hide fee details' : 'View fee details'}
+              </button>
+            )}
+
+            {shouldShowDetails && (
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2 text-xs">
+                <div className="flex justify-between"><span className="text-muted-foreground">Card creation/top-up cost</span><span className="font-mono">{fees.providerCostEtb.toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Payment processing fee</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Dink Card service fee</span><span className="font-mono">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Exchange-rate protection</span><span className="font-mono">{fees.safetyBufferEtb.toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Rounding adjustment</span><span className="font-mono">{fees.roundingAdjustmentEtb.toLocaleString()} ETB</span></div>
+                <p className="pt-2 text-muted-foreground">Some international websites or failed transactions may create extra card-related fees. We will notify you if this applies.</p>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              The total includes card processing, payment gateway cost, exchange-rate protection, and Dink Card service fee.
+            </p>
+            <div className="flex justify-between"><span className="text-muted-foreground">Expected service balance</span><span className="font-mono font-semibold text-primary">${fees.finalUsdCredit.toFixed(2)}</span></div>
           </div>
         )}
         <div className="bg-secondary/40 rounded-lg p-3 text-xs text-muted-foreground flex gap-2">

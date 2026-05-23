@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { db } from './db.js';
 import { config } from './config.js';
-import { debitWallet, creditWallet, getFeeSettings } from './payments.js';
+import { debitWallet, creditWallet, getFeeSettings, calculateTopupProviderFeeUsd } from './payments.js';
 import { generateId, money, nowIso, hmacSha512Hex } from './utils.js';
 
 // Bitnob virtual-card docs use card units where 5,000,000 represents $50.00.
@@ -252,7 +252,7 @@ export async function createVirtualCardForUser(user, payload) {
   if (fundingAmount > Number(settings.max_card_funding_usd || 500)) {
     throw new Error(`Maximum card funding is $${Number(settings.max_card_funding_usd || 500).toFixed(2)}.`);
   }
-  const creationFee = Number(settings.card_creation_fee_usd || 0);
+  const creationFee = Number(settings.card_creation_fee_usd ?? 1);
   const fundingFee = 0;
   const totalDeduction = money(creationFee + fundingAmount);
   const bitnobCustomer = await ensureBitnobCustomerForCard(user, kyc);
@@ -340,8 +340,8 @@ export async function fundVirtualCard(user, cardId, amount) {
   if (fundingAmount > Number(settings.max_card_funding_usd || 500)) {
     throw new Error(`Maximum card funding is $${Number(settings.max_card_funding_usd || 500).toFixed(2)}.`);
   }
-  const fundingFee = 0;
-  const total = money(fundingAmount);
+  const fundingFee = calculateTopupProviderFeeUsd(fundingAmount, settings);
+  const total = money(fundingAmount + fundingFee);
   const reference = `fund_${generateId('ref')}`;
   debitWallet(user.email, total, 'card_funding', `Fund card: ${card.card_nickname}`, reference);
 
