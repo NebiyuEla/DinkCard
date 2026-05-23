@@ -13,7 +13,7 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       <Sidebar user={user} unreadCount={unreadCount} />
       <main className="lg:ml-64 min-h-screen transition-all duration-300">
-        <div className="p-4 pt-16 lg:pt-6 lg:p-8 max-w-7xl mx-auto">
+        <div className="p-4 pb-24 lg:pb-8 lg:pt-6 lg:p-8 max-w-7xl mx-auto">
           <Outlet />
         </div>
       </main>

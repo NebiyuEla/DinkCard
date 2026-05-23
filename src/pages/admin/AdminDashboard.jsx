@@ -32,15 +32,12 @@ export default function AdminDashboard() {
   const { data: deposits } = useQuery({ queryKey: ['admin-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: cards } = useQuery({ queryKey: ['admin-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: tickets } = useQuery({ queryKey: ['admin-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const { data: walletSummary } = useQuery({ queryKey: ['admin-wallet-summary'], queryFn: apiClient.admin.walletSummary, refetchInterval: REFRESH.admin });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
-  const totalDepositsToday = deposits?.filter(d => {
-    if (!d.created_date) return false;
-    const today = new Date().toISOString().split('T')[0];
-    return d.created_date.startsWith(today) && d.status === 'approved';
-  }).reduce((s, d) => s + (d.final_usd_credit || 0), 0) || 0;
+  const totalUsableBalance = Number(walletSummary?.totalUsableBalance || 0);
 
   const isOverview = location.pathname === '/admin';
 
@@ -85,7 +82,7 @@ export default function AdminDashboard() {
             <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
-            <StatCard title="Deposits Today" value={`$${totalDepositsToday.toFixed(0)}`} icon={Activity} />
+            <StatCard title="Usable Balance" value={`$${totalUsableBalance.toFixed(0)}`} icon={Activity} />
             <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
             <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
           </div>

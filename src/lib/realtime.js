@@ -17,6 +17,7 @@ export function invalidateOperationalData(queryClient) {
     'ticketMessages',
     'notifications',
     'admin-users',
+    'admin-wallet-summary',
     'admin-kyc',
     'admin-deposits',
     'admin-cards',

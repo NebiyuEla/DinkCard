@@ -19,6 +19,7 @@ export default function WalletPage() {
 
   const typeIcons = {
     deposit: <PlusCircle className="w-4 h-4 text-primary" />,
+    card_creation: <DollarSign className="w-4 h-4 text-accent" />,
     card_funding: <DollarSign className="w-4 h-4 text-yellow-500" />,
     refund: <ArrowDownUp className="w-4 h-4 text-accent" />,
     fee: <Lock className="w-4 h-4 text-muted-foreground" />,

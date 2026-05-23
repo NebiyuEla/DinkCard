@@ -11,7 +11,7 @@ import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
 import { sanitizeUser, parseJson, generateId, money, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
-import { approveDeposit, creditWallet, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, verifyChapaWebhookSignature } from './payments.js';
+import { approveDeposit, creditWallet, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import {
   bitnobService,
   changeCardStatus,
@@ -943,6 +943,19 @@ export function createApp() {
     res.json({ ok: true, updated: result.changes || 0 });
   });
 
+  app.get('/api/admin/wallet-summary', authMiddleware(db), (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const wallets = db.prepare(`
+      SELECT w.*, u.full_name, u.email, u.account_status
+      FROM wallets w
+      LEFT JOIN users u ON u.email = w.user_id
+      ORDER BY w.updated_at DESC
+      LIMIT 500
+    `).all().map(mapRow);
+    const totalUsableBalance = wallets.reduce((sum, wallet) => sum + Number(wallet.available_balance || 0), 0);
+    res.json({ wallets, totalUsableBalance: money(totalUsableBalance) });
+  });
+
   app.post('/api/uploads', authMiddleware(db), uploadLimiter, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'File is required.' });
 
@@ -1494,6 +1507,47 @@ export function createApp() {
     } catch (error) {
       console.error('Manual balance credit failed:', error);
       res.status(400).json({ message: error.message || 'Manual balance credit failed.' });
+    }
+  });
+
+  app.post('/api/admin/users/:id/set-balance', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireSuperadmin(req, res)) return;
+
+      const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+      if (!target) return res.status(404).json({ message: 'User not found' });
+
+      const amount = Number(req.body.amount);
+      const reason = String(req.body.reason || '').trim();
+      if (!Number.isFinite(amount) || amount < 0) return res.status(400).json({ message: 'Enter a valid non-negative balance.' });
+      if (!reason) return res.status(400).json({ message: 'A reason is required for setting balance.' });
+
+      ensureWallet(target.email);
+      const before = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(target.email);
+      const balance = setWalletBalance(target.email, amount, `Owner set usable balance: ${reason}`, `manual_set_${target.id}_${Date.now()}`);
+      const now = nowIso();
+
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
+        VALUES (?, ?, 'Balance Updated', ?, 'wallet', 0, ?)
+      `).run(generateId('ntf'), target.email, `Your available service balance is now $${Number(balance).toFixed(2)}.`, now);
+
+      writeAudit({
+        actor: req.user.email,
+        userId: target.email,
+        action: 'manual_balance_set',
+        entityType: 'wallet',
+        entityId: target.email,
+        oldValue: { available_balance: before?.available_balance },
+        newValue: { available_balance: balance },
+        reason,
+        req
+      });
+
+      res.json({ ok: true, balance });
+    } catch (error) {
+      console.error('Set balance failed:', error);
+      res.status(400).json({ message: error.message || 'Set balance failed.' });
     }
   });
 

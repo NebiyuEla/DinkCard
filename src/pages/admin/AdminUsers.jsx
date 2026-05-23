@@ -51,6 +51,13 @@ function getActionCopy(action, user) {
       variant: 'default',
       requiresReason: true
     },
+    set_balance: {
+      title: 'Set usable balance',
+      description: 'This sets the user available service balance to an exact USD amount. Owner-only action.',
+      confirm: 'Set Balance',
+      variant: 'default',
+      requiresReason: true
+    },
     pass_kyc: {
       title: 'Pass KYC',
       description: 'This manually marks the user KYC as approved.',
@@ -93,6 +100,7 @@ function UserActions({ user, onAction }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={() => onAction(user, 'add_money')}><DollarSign className="h-4 w-4" /> Add money</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(user, 'set_balance')}><DollarSign className="h-4 w-4" /> Set usable balance</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction(user, 'pass_kyc')}><BadgeCheck className="h-4 w-4" /> Pass KYC</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction(user, 'manual_card')}><CreditCard className="h-4 w-4" /> Create Bitnob card</DropdownMenuItem>
         <DropdownMenuSeparator />
@@ -118,6 +126,12 @@ export default function AdminUsers() {
     queryFn: () => apiClient.entities.User.list('-created_date', 100),
     refetchInterval: REFRESH.admin
   });
+  const { data: wallets } = useQuery({
+    queryKey: ['admin-wallet-summary'],
+    queryFn: apiClient.admin.walletSummary,
+    refetchInterval: REFRESH.admin
+  });
+  const walletByUser = new Map((wallets?.wallets || []).map((wallet) => [wallet.user_id, wallet]));
 
   const [pendingAction, setPendingAction] = useState(null);
   const [reason, setReason] = useState('');
@@ -126,7 +140,10 @@ export default function AdminUsers() {
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
-  const amountMissing = pendingAction?.action === 'add_money' && (!Number.isFinite(Number(manualAmount)) || Number(manualAmount) <= 0);
+  const amountMissing = ['add_money', 'set_balance'].includes(pendingAction?.action) && (
+    !Number.isFinite(Number(manualAmount)) ||
+    (pendingAction?.action === 'add_money' ? Number(manualAmount) <= 0 : Number(manualAmount) < 0)
+  );
   const cardBalanceInvalid = pendingAction?.action === 'manual_card' && (!Number.isFinite(Number(manualCard.balance || 0)) || Number(manualCard.balance || 0) < 0);
 
   const userAction = useMutation({
@@ -136,6 +153,7 @@ export default function AdminUsers() {
       if (action === 'make_admin') return apiClient.admin.users.setRole(user.id, 'admin', actionReason);
       if (action === 'remove_admin') return apiClient.admin.users.setRole(user.id, 'user', actionReason);
       if (action === 'add_money') return apiClient.admin.users.addMoney(user.id, { amount: Number(manualAmount), reason: actionReason });
+      if (action === 'set_balance') return apiClient.admin.users.setBalance(user.id, { amount: Number(manualAmount), reason: actionReason });
       if (action === 'pass_kyc') return apiClient.admin.users.passKyc(user.id, { reason: actionReason });
       if (action === 'manual_card') {
         return apiClient.admin.users.createManualCard(user.id, {
@@ -188,6 +206,7 @@ export default function AdminUsers() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Usable $</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Account</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Joined</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Actions</th>
@@ -199,6 +218,7 @@ export default function AdminUsers() {
                   <td className="px-4 py-3 font-medium">{user.full_name || '-'}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{user.email}</td>
                   <td className="px-4 py-3"><StatusBadge status={user.role || 'user'} /></td>
+                  <td className="px-4 py-3 font-mono text-primary">${Number(walletByUser.get(user.email)?.available_balance || 0).toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <div className="space-y-1">
                       <StatusBadge status={user.account_status || 'active'} />
@@ -224,6 +244,7 @@ export default function AdminUsers() {
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <StatusBadge status={user.role || 'user'} />
+                <span className="font-mono text-primary">${Number(walletByUser.get(user.email)?.available_balance || 0).toFixed(2)}</span>
                 <span>{user.created_date ? format(new Date(user.created_date), 'MMM d, yyyy') : ''}</span>
               </div>
               {user.restricted_reason && <p className="rounded-lg bg-destructive/10 p-2 text-xs text-destructive">{user.restricted_reason}</p>}
@@ -254,9 +275,9 @@ export default function AdminUsers() {
                 placeholder={actionCopy.requiresReason ? 'Required reason for audit log and support history...' : 'Optional internal note...'}
                 rows={3}
               />
-              {pendingAction.action === 'add_money' && (
+              {['add_money', 'set_balance'].includes(pendingAction.action) && (
                 <div className="space-y-1.5">
-                  <Label className="text-sm">Amount in USD</Label>
+                  <Label className="text-sm">{pendingAction.action === 'set_balance' ? 'New usable balance in USD' : 'Amount in USD'}</Label>
                   <Input
                     type="number"
                     min="0"

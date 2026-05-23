@@ -38,7 +38,7 @@ export default function Dashboard() {
   const frozenCards = cards?.filter(c => c.status === 'frozen') || [];
   const pendingDeposits = deposits?.filter(d => ['pending_payment', 'awaiting_review'].includes(d.status)) || [];
   const totalDeposited = deposits?.filter(d => d.status === 'approved').reduce((sum, d) => sum + (d.final_usd_credit || 0), 0) || 0;
-  const totalCardDebits = transactions?.filter(t => t.type === 'card_funding' && t.status === 'completed').reduce((sum, t) => sum + Math.abs(t.amount || 0), 0) || 0;
+  const totalCardDebits = transactions?.filter(t => ['card_creation', 'card_funding'].includes(t.type) && t.status === 'completed').reduce((sum, t) => sum + Math.abs(t.amount || 0), 0) || 0;
   const cardRefunds = transactions?.filter(t => t.type === 'refund' && t.status === 'completed' && String(t.description || '').toLowerCase().includes('card')).reduce((sum, t) => sum + Math.abs(t.amount || 0), 0) || 0;
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
@@ -76,7 +76,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`≈ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
         <StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} />
-        <StatCard title="Net Card Funding" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} />
+        <StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} />
         <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
         <StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} />
         <StatCard title="KYC Level" value={kyc?.status === 'approved' ? `Level ${kyc.level || 1}` : 'Level 0'} icon={ShieldCheck} />

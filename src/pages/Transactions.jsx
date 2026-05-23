@@ -3,12 +3,13 @@ import { useCurrentUser, useWalletTransactions } from '@/hooks/useAppData';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownUp, PlusCircle, DollarSign, ArrowUpRight, Lock, Clock, Gift } from 'lucide-react';
+import { ArrowDownUp, PlusCircle, DollarSign, ArrowUpRight, Lock, Clock, CreditCard, Gift } from 'lucide-react';
 import { format } from 'date-fns';
 
 const typeFilters = [
   { value: 'all', label: 'All Transactions' },
   { value: 'deposit', label: 'Deposits' },
+  { value: 'card_creation', label: 'Card Requests' },
   { value: 'card_funding', label: 'Card Funding' },
   { value: 'card_withdrawal', label: 'Card Withdrawals' },
   { value: 'refund', label: 'Refunds' },
@@ -19,6 +20,7 @@ const typeFilters = [
 
 const typeIcons = {
   deposit: <PlusCircle className="w-4 h-4 text-primary" />,
+  card_creation: <CreditCard className="w-4 h-4 text-accent" />,
   card_funding: <DollarSign className="w-4 h-4 text-yellow-500" />,
   card_withdrawal: <ArrowUpRight className="w-4 h-4 text-accent" />,
   refund: <ArrowDownUp className="w-4 h-4 text-accent" />,

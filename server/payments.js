@@ -185,6 +185,29 @@ export function debitWallet(userId, amount, type, description, reference) {
   return after;
 }
 
+export function setWalletBalance(userId, amount, description, reference) {
+  const wallet = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
+  if (!wallet) throw new Error('Service balance account not found');
+  const nextBalance = Number(amount);
+  if (!Number.isFinite(nextBalance) || nextBalance < 0) {
+    throw new Error('Enter a valid non-negative balance.');
+  }
+  const existing = db.prepare('SELECT id FROM wallet_transactions WHERE reference = ?').get(reference);
+  if (existing) {
+    return Number(wallet.available_balance || 0);
+  }
+  const before = Number(wallet.available_balance || 0);
+  const delta = money(nextBalance - before);
+  const now = nowIso();
+  db.prepare(`
+    INSERT INTO wallet_transactions (
+      id, user_id, wallet_id, type, amount, currency, balance_before, balance_after, status, reference, description, created_at
+    ) VALUES (?, ?, ?, 'balance_set', ?, 'USD', ?, ?, 'completed', ?, ?, ?)
+  `).run(generateId('wtx'), userId, wallet.id, delta, before, money(nextBalance), reference, description, now);
+  db.prepare('UPDATE wallets SET available_balance = ?, updated_at = ? WHERE id = ?').run(money(nextBalance), now, wallet.id);
+  return money(nextBalance);
+}
+
 export function approveDeposit(deposit, approvedBy) {
   if (deposit.status === 'approved') return deposit;
   if (['rejected', 'failed', 'refunded'].includes(deposit.status)) {

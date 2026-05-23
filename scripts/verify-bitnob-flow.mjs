@@ -65,6 +65,18 @@ try {
   let fundBody;
   globalThis.fetch = async (url, options) => {
     const body = options.body ? JSON.parse(options.body) : null;
+    if (url.endsWith('/api/customers') && options.method === 'POST') {
+      return new Response(JSON.stringify({
+        success: true,
+        data: {
+          customer: {
+            id: 'provider-customer-1',
+            status: 'active',
+            email: body.email
+          }
+        }
+      }), { status: 200 });
+    }
     if (url.endsWith('/api/cards') && options.method === 'POST') {
       createBody = body;
       return new Response(JSON.stringify({
@@ -98,6 +110,7 @@ try {
 
   if (createBody.amount !== 2000000) throw new Error(`Expected create amount 2000000, got ${createBody.amount}`);
   if (createBody.name !== 'Test User') throw new Error('Expected KYC legal name on card payload');
+  if (createBody.customer_id !== 'provider-customer-1') throw new Error('Expected card payload to use linked Bitnob customer ID');
   if (walletAfterCreate !== 77) throw new Error(`Expected wallet 77, got ${walletAfterCreate}`);
 
   db.prepare("UPDATE virtual_cards SET status = 'active', balance = 20 WHERE id = ?").run(card.id);

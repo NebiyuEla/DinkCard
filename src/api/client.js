@@ -138,6 +138,7 @@ export const apiClient = {
       activate: (id) => request(`/api/admin/users/${id}/activate`, { method: 'POST' }),
       setRole: (id, role, reason) => request(`/api/admin/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role, reason }) }),
       addMoney: (id, payload) => request(`/api/admin/users/${id}/add-money`, { method: 'POST', body: JSON.stringify(payload) }),
+      setBalance: (id, payload) => request(`/api/admin/users/${id}/set-balance`, { method: 'POST', body: JSON.stringify(payload) }),
       passKyc: (id, payload) => request(`/api/admin/users/${id}/pass-kyc`, { method: 'POST', body: JSON.stringify(payload) }),
       createManualCard: (id, payload) => request(`/api/admin/users/${id}/manual-card`, { method: 'POST', body: JSON.stringify(payload) }),
       delete: (id, reason) => request(`/api/admin/users/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
@@ -170,6 +171,7 @@ export const apiClient = {
       whoami: () => request('/api/admin/bitnob/whoami'),
       balances: () => request('/api/admin/bitnob/balances')
     },
+    walletSummary: () => request('/api/admin/wallet-summary'),
     providerStatus: () => request('/api/admin/settings/provider-status'),
     balances: () => request('/api/admin/bitnob/balances'),
     auditLogs: () => request('/api/admin/audit-logs')

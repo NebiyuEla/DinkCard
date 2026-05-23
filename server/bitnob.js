@@ -149,19 +149,62 @@ export const bitnobService = {
   getSupportedChains: () => safeBitnob('GET', '/api/addresses/supported-chains')
 };
 
-function parseDialCode(phone) {
-  if (!phone) return { dialCode: '+251', localNumber: '' };
-  const normalized = String(phone).trim().replace(/\s+/g, '');
-  if (normalized.startsWith('+251')) {
-    return { dialCode: '+251', localNumber: normalized.slice(4) };
+function getExistingBitnobCustomer(user, kyc) {
+  return db.prepare(`
+    SELECT * FROM bitnob_customers
+    WHERE environment = ? AND (user_id = ? OR email = ?)
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+  `).get(config.bitnob.env, user.email, kyc.email || user.email);
+}
+
+async function ensureBitnobCustomerForCard(user, kyc) {
+  const existing = getExistingBitnobCustomer(user, kyc);
+  if (existing?.bitnob_customer_id) return existing;
+
+  const legalName = String(kyc.legal_name || user.full_name || user.email || '').trim();
+  const [firstName, ...lastParts] = legalName.split(/\s+/).filter(Boolean);
+  const response = await bitnobRequest('POST', '/api/customers', {
+    customer_type: 'individual',
+    first_name: firstName || 'Dink',
+    last_name: lastParts.join(' ') || 'Card',
+    email: kyc.email || user.email,
+    phone: kyc.phone || user.phone || undefined,
+    country_code: 'ETH'
+  });
+  const customer = response?.data?.customer || response?.data || response?.customer || {};
+  const bitnobCustomerId = customer.id || customer.customer_id || customer.customerId;
+  if (!bitnobCustomerId) {
+    throw new Error('Card provider did not return a customer ID. Check Bitnob customer access and credentials.');
   }
-  if (normalized.startsWith('251')) {
-    return { dialCode: '+251', localNumber: normalized.slice(3) };
-  }
-  if (normalized.startsWith('0')) {
-    return { dialCode: '+251', localNumber: normalized.slice(1) };
-  }
-  return { dialCode: '+251', localNumber: normalized };
+  const now = nowIso();
+  const id = generateId('cus');
+  db.prepare(`
+    INSERT INTO bitnob_customers (
+      id, user_id, bitnob_customer_id, customer_type, first_name, last_name, email, phone_number, dial_code,
+      date_of_birth, id_type, id_number, country, address, city, status, environment, provider, provider_payload, created_at, updated_at
+    ) VALUES (?, ?, ?, 'individual', ?, ?, ?, ?, '+251', ?, ?, ?, ?, ?, ?, ?, ?, 'bitnob', ?, ?, ?)
+  `).run(
+    id,
+    user.email,
+    bitnobCustomerId,
+    firstName || 'Dink',
+    lastParts.join(' ') || 'Card',
+    kyc.email || user.email,
+    kyc.phone || user.phone || '',
+    kyc.date_of_birth || '',
+    kyc.id_type || '',
+    kyc.id_number || '',
+    kyc.country || 'ETH',
+    kyc.address || '',
+    kyc.city || '',
+    customer.status || 'active',
+    config.bitnob.env,
+    JSON.stringify(response),
+    now,
+    now
+  );
+  return db.prepare('SELECT * FROM bitnob_customers WHERE id = ?').get(id);
 }
 
 export async function createVirtualCardForUser(user, payload) {
@@ -196,15 +239,15 @@ export async function createVirtualCardForUser(user, payload) {
   const creationFee = Number(settings.card_creation_fee_usd || 0);
   const fundingFee = 0;
   const totalDeduction = money(creationFee + fundingAmount);
+  const bitnobCustomer = await ensureBitnobCustomerForCard(user, kyc);
   debitWallet(
     user.email,
     totalDeduction,
-    'card_funding',
+    'card_creation',
     `Card creation: ${cardNickname} + $${fundingAmount} funding`,
     `CRT-${Date.now()}`
   );
 
-  const { dialCode, localNumber } = parseDialCode(kyc.phone || user.phone);
   try {
     const response = await bitnobRequest('POST', '/api/cards', {
       amount: toBitnobAmount(fundingAmount),
@@ -212,22 +255,7 @@ export async function createVirtualCardForUser(user, payload) {
       currency: 'USD',
       name: kyc.legal_name,
       webhook_url: config.bitnob.webhookUrl,
-      customer: {
-        customer_type: 'individual',
-        first_name: kyc.legal_name?.split(' ')[0] || user.full_name?.split(' ')[0] || 'Dink',
-        last_name: kyc.legal_name?.split(' ').slice(1).join(' ') || user.full_name?.split(' ').slice(1).join(' ') || 'Card',
-        email: kyc.email || user.email,
-        phone_number: localNumber,
-        dial_code: dialCode,
-        date_of_birth: kyc.date_of_birth,
-        id_type: kyc.id_type,
-        id_number: kyc.id_number,
-        line1: kyc.address || 'Address required',
-        city: kyc.city || 'Addis Ababa',
-        state: kyc.city || 'Addis Ababa',
-        postal_code: '1000',
-        country: 'ETH'
-      }
+      customer_id: bitnobCustomer.bitnob_customer_id
     });
 
     const card = getBitnobCard(response);
