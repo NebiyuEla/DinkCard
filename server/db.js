@@ -412,6 +412,11 @@ db.prepare(`
   SET deposit_fee_percentage = 0,
       deposit_fixed_fee_etb = 0,
       card_funding_fee_percentage = 0,
+      card_creation_fee_usd = CASE
+        WHEN card_creation_fee_usd IS NULL OR card_creation_fee_usd < 7 THEN 7
+        ELSE card_creation_fee_usd
+      END,
+      gateway_fee_percentage = COALESCE(gateway_fee_percentage, 2.5),
       updated_at = ?
   WHERE key = 'default'
 `).run(now);

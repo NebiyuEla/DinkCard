@@ -111,7 +111,7 @@ try {
   if (createBody.amount !== 2000000) throw new Error(`Expected create amount 2000000, got ${createBody.amount}`);
   if (createBody.name !== 'Test User') throw new Error('Expected KYC legal name on card payload');
   if (createBody.customer_id !== 'provider-customer-1') throw new Error('Expected card payload to use linked Bitnob customer ID');
-  if (walletAfterCreate !== 77) throw new Error(`Expected wallet 77, got ${walletAfterCreate}`);
+  if (walletAfterCreate !== 73) throw new Error(`Expected wallet 73, got ${walletAfterCreate}`);
 
   db.prepare("UPDATE virtual_cards SET status = 'active', balance = 20 WHERE id = ?").run(card.id);
   await fundVirtualCard(user, card.id, 5);

@@ -363,6 +363,34 @@ function normalizeProviderList(payload) {
   return [];
 }
 
+const ASSET_AMOUNT_SCALES = {
+  USDC: 1_000_000,
+  USDT: 1_000_000,
+  BTC: 100_000_000
+};
+
+function normalizeAssetBalanceAmount(amount, asset, row = {}) {
+  const numeric = Number(amount);
+  if (!Number.isFinite(numeric)) return null;
+
+  const raw = String(amount ?? '');
+  if (raw.includes('.')) return numeric;
+
+  const explicitDecimals = Number(row.decimals ?? row.asset?.decimals ?? row.currency?.decimals);
+  if (Number.isInteger(explicitDecimals) && explicitDecimals > 0 && explicitDecimals <= 18 && Math.abs(numeric) >= 1000) {
+    return numeric / (10 ** explicitDecimals);
+  }
+
+  const target = String(asset || '').toUpperCase();
+  const scale = ASSET_AMOUNT_SCALES[target];
+  const threshold = target === 'BTC' ? 10_000 : 100_000;
+  if (scale && Number.isInteger(numeric) && Math.abs(numeric) >= threshold) {
+    return numeric / scale;
+  }
+
+  return numeric;
+}
+
 function findAssetBalance(payload, asset = 'USDC') {
   const target = String(asset).toUpperCase();
   const found = [];
@@ -380,8 +408,8 @@ function findAssetBalance(payload, asset = 'USDC') {
     if (symbol === target) {
       const amount = value.available ?? value.available_balance ?? value.availableBalance ??
         value.spendable ?? value.balance ?? value.amount ?? value.value ?? value.total;
-      const numeric = Number(amount);
-      if (Number.isFinite(numeric)) found.push(Math.abs(numeric) >= 100000 ? fromBitnobBaseUnits(numeric) : numeric);
+      const numeric = normalizeAssetBalanceAmount(amount, target, value);
+      if (Number.isFinite(numeric)) found.push(numeric);
     }
 
     Object.values(value).forEach(visit);

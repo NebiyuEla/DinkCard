@@ -4,6 +4,7 @@ import { config } from './config.js';
 import { debitWallet, creditWallet, getFeeSettings } from './payments.js';
 import { generateId, money, nowIso, hmacSha512Hex } from './utils.js';
 
+// Bitnob virtual-card docs use card units where 5,000,000 represents $50.00.
 const BITNOB_AMOUNT_SCALE = 100_000;
 
 function toBitnobAmount(amountUsd) {

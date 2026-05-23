@@ -66,8 +66,8 @@ export default function AdminFees() {
 
       <div className="bg-card border border-border rounded-xl p-6">
         <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold text-primary">Gateway fee is only for ETB checkout</p>
-          <p className="text-muted-foreground mt-1">Users pay this gateway fee only when adding funds through Chapa. Card requests use the Bitnob card fee plus the funding amount.</p>
+          <p className="font-semibold text-primary">Minimum-profit fee mode</p>
+          <p className="text-muted-foreground mt-1">Customers pay the checkout gateway fee when adding funds and the provider card fee when requesting cards. Platform deposit and card funding fees stay at 0 unless you intentionally add markup.</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {fields.map(field => (

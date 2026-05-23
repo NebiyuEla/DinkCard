@@ -17,6 +17,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
     return (
       <div className={cn(
         'bg-gradient-to-br from-secondary to-card border rounded-xl p-4 cursor-pointer hover:border-primary/30 transition-all',
+        'min-h-[86px]',
         statusStyles[card.status]
       )}>
         <div className="flex items-center justify-between">

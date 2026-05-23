@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS = {
   gateway_fee_percentage: 2.5,
   deposit_fee_percentage: 0,
   deposit_fixed_fee_etb: 0,
-  card_creation_fee_usd: 3,
+  card_creation_fee_usd: 7,
   card_funding_fee_percentage: 0,
   card_withdrawal_fee_percentage: 1,
   min_deposit_usd: 5,

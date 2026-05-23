@@ -47,7 +47,7 @@ function normalizeEtPhone(value) {
 
 function Stat({ label, value, icon: Icon, tone = 'text-primary' }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-3 py-2">
+    <div className="flex h-full min-h-[86px] flex-col justify-between rounded-lg border border-border bg-card px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</p>
         <Icon className={`h-4 w-4 ${tone}`} />
@@ -220,7 +220,7 @@ export default function AdminCards() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-2 lg:grid-cols-6">
         <Stat label="Company Wallet" value={money(companyStableBalance)} icon={WalletCards} tone={lowBalance ? 'text-red-500' : 'text-primary'} />
         <Stat label="Customers" value={customers.length} icon={BadgeCheck} />
         <Stat label="Active Cards" value={stats.active} icon={CreditCard} />
@@ -284,9 +284,9 @@ export default function AdminCards() {
           <CompactCards cards={filteredCards} onAction={openCardAction} />
         </TabsContent>
 
-        <TabsContent value="funding" className="grid gap-3 md:grid-cols-3">
+        <TabsContent value="funding" className="grid auto-rows-fr gap-3 md:grid-cols-3">
           {['usdc', 'usdt', 'btc'].map((asset) => (
-            <div key={asset} className="rounded-lg border border-border bg-card p-4">
+            <div key={asset} className="flex h-full min-h-[140px] flex-col justify-between rounded-lg border border-border bg-card p-4">
               <p className="text-xs uppercase text-muted-foreground">{asset}</p>
               <p className="mt-1 text-2xl font-semibold">{Number(balancesQuery.data?.[asset] || 0).toFixed(asset === 'btc' ? 8 : 2)}</p>
               <p className="mt-2 text-xs text-muted-foreground">Card creation and top-ups use company wallet balance. This is provider data, not a fake local value.</p>

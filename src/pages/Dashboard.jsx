@@ -127,12 +127,12 @@ export default function Dashboard() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid-cols-3 lg:grid-cols-6">
         <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`≈ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
-        <div className="hidden md:block"><StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} /></div>
-        <div className="hidden md:block"><StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} /></div>
+        <div className="hidden h-full md:block"><StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} /></div>
+        <div className="hidden h-full md:block"><StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} /></div>
         <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
-        <div className="hidden md:block"><StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} /></div>
+        <div className="hidden h-full md:block"><StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} /></div>
         <StatCard title="KYC Level" value={kyc?.status === 'approved' ? `Level ${kyc.level || 1}` : 'Level 0'} icon={ShieldCheck} />
       </div>
 
@@ -142,7 +142,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           {quickActions.map((action) => (
             <Link key={action.path} to={action.path} className={action.desktopOnly ? 'hidden md:block' : ''}>
-              <div className="bg-card border border-border rounded-xl p-4 text-center hover:border-primary/30 transition-all group cursor-pointer">
+              <div className="group flex h-full min-h-[96px] flex-col items-center justify-center rounded-xl border border-border bg-card p-4 text-center transition-all hover:border-primary/30">
                 <action.icon className={`w-6 h-6 mx-auto mb-2 ${action.color} group-hover:scale-110 transition-transform`} />
                 <p className="text-xs font-medium">{action.label}</p>
               </div>

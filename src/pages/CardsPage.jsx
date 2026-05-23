@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, Snowflake, Trash2 } from 'lucide-react';
@@ -60,7 +60,13 @@ export default function CardsPage() {
     toast.success(`${label} copied`);
   };
 
-  const activeCards = cards?.filter((card) => card.status !== 'terminated') || [];
+  const activeCards = useMemo(() => cards?.filter((card) => card.status !== 'terminated') || [], [cards]);
+
+  useEffect(() => {
+    if (activeCards.length > 0 && (!selectedCard || !activeCards.some((card) => card.id === selectedCard.id))) {
+      setSelectedCard(activeCards[0]);
+    }
+  }, [activeCards, selectedCard]);
 
   return (
     <div className="space-y-6">
@@ -85,7 +91,7 @@ export default function CardsPage() {
           onAction={() => navigate('/cards/create')}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <div className="space-y-3">
             {activeCards.map((card) => (
               <div
