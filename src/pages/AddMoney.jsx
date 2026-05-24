@@ -179,8 +179,8 @@ export default function AddMoney() {
       </div>
 
       {latestDeposit && (
-        <div className="bg-card border border-border rounded-xl p-6 space-y-2 text-sm">
-          <div className="flex items-center justify-between gap-3">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6 space-y-3 text-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 font-semibold">
               <CheckCircle className="w-4 h-4 text-primary" />
               Recent Deposit
@@ -194,8 +194,11 @@ export default function AddMoney() {
               Download invoice
             </Button>
           </div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Reference</span><span className="font-mono">{latestDeposit.transaction_reference}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Status</span><span className="capitalize">{String(latestDeposit.status || '').replace(/_/g, ' ')}</span></div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+            <span className="text-muted-foreground">Reference</span>
+            <span className="break-all font-mono text-right sm:max-w-[70%]">{latestDeposit.transaction_reference}</span>
+          </div>
+          <div className="flex justify-between gap-3"><span className="text-muted-foreground">Status</span><span className="capitalize text-right">{String(latestDeposit.status || '').replace(/_/g, ' ')}</span></div>
         </div>
       )}
     </div>

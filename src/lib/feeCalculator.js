@@ -20,6 +20,12 @@ export function getEffectiveMinCardFunding(settings = {}) {
   return raw === 2 ? 1 : raw;
 }
 
+export function getEffectiveMinCardCreation(settings = {}) {
+  const raw = safeNumber(settings.min_card_creation_usd, 2);
+  if (raw <= 0) return 2;
+  return Math.max(2, raw);
+}
+
 function roundUpTo(value, nearest) {
   const step = Math.max(1, safeNumber(nearest, 50));
   return money(Math.ceil(Number(value || 0) / step) * step);
@@ -127,6 +133,7 @@ export const DEFAULT_SETTINGS = {
   max_deposit_usd: 1000,
   daily_deposit_limit_usd: 2000,
   monthly_deposit_limit_usd: 10000,
+  min_card_creation_usd: 2,
   min_card_funding_usd: 1,
   max_card_funding_usd: 500,
   max_cards_per_user: 3,

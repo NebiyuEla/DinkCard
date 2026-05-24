@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCurrentUser, useWallet, useCards, useKYCStatus, useFeeSettings } from '@/hooks/useAppData';
-import { calculateCardCreationFees, getEffectiveMinCardFunding } from '@/lib/feeCalculator';
+import { calculateCardCreationFees, getEffectiveMinCardCreation } from '@/lib/feeCalculator';
 import { apiClient } from '@/api/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ export default function CreateCard() {
   const amount = parseFloat(fundingAmount) || 0;
   const fees = calculateCardCreationFees(amount, settings || {});
   const bitnobFee = settings?.card_creation_fee_usd ?? 1;
-  const minFunding = getEffectiveMinCardFunding(settings || {});
+  const minFunding = getEffectiveMinCardCreation(settings || {});
   const maxFundingByBalance = Math.max(0, balance - bitnobFee);
   const maxFunding = Math.max(0, Math.min(maxFundingByBalance, settings?.max_card_funding_usd || 500));
 
@@ -102,6 +102,7 @@ export default function CreateCard() {
               Max
             </Button>
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">Minimum starting card amount: ${minFunding.toFixed(2)}</p>
           <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg bg-secondary/40 p-2">
               <p className="text-muted-foreground">Available</p>

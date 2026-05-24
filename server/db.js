@@ -223,6 +223,7 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   max_deposit_usd REAL NOT NULL DEFAULT 1000,
   daily_deposit_limit_usd REAL NOT NULL DEFAULT 2000,
   monthly_deposit_limit_usd REAL NOT NULL DEFAULT 10000,
+  min_card_creation_usd REAL NOT NULL DEFAULT 2,
   min_card_funding_usd REAL NOT NULL DEFAULT 1,
   max_card_funding_usd REAL NOT NULL DEFAULT 500,
   max_cards_per_user INTEGER NOT NULL DEFAULT 3,
@@ -337,6 +338,7 @@ ensureColumn('fee_settings', 'bitnob_topup_fee_under_100_usd', 'REAL NOT NULL DE
 ensureColumn('fee_settings', 'bitnob_topup_fee_percent_100_plus', 'REAL NOT NULL DEFAULT 1');
 ensureColumn('fee_settings', 'rounding_rule_etb', 'REAL NOT NULL DEFAULT 50');
 ensureColumn('fee_settings', 'customer_fee_display_style', "TEXT NOT NULL DEFAULT 'hybrid'");
+ensureColumn('fee_settings', 'min_card_creation_usd', 'REAL NOT NULL DEFAULT 2');
 ensureColumn('audit_logs', 'environment', 'TEXT');
 ensureColumn('audit_logs', 'provider', 'TEXT');
 ensureColumn('audit_logs', 'provider_status', 'TEXT');
@@ -456,6 +458,10 @@ db.prepare(`
       min_card_funding_usd = CASE
         WHEN min_card_funding_usd IS NULL OR min_card_funding_usd = 2 THEN 1
         ELSE min_card_funding_usd
+      END,
+      min_card_creation_usd = CASE
+        WHEN min_card_creation_usd IS NULL OR min_card_creation_usd < 2 THEN 2
+        ELSE min_card_creation_usd
       END,
       customer_fee_display_style = CASE
         WHEN customer_fee_display_style IN ('simple', 'detailed', 'hybrid') THEN customer_fee_display_style

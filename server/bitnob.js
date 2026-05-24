@@ -26,6 +26,12 @@ function getEffectiveMinCardFunding(settings) {
   return raw === 2 ? 1 : raw;
 }
 
+function getEffectiveMinCardCreation(settings) {
+  const raw = Number(settings?.min_card_creation_usd);
+  if (!Number.isFinite(raw) || raw <= 0) return 2;
+  return Math.max(2, raw);
+}
+
 function signBitnob(body = '') {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
@@ -116,6 +122,13 @@ function friendlyBitnobError(error) {
     const providerMinimum = Number(minimumFundingMatch[1]);
     if (Number.isFinite(providerMinimum)) {
       return new Error(`Card provider currently requires at least $${providerMinimum.toFixed(2)} for this action. Increase the amount and try again.`);
+    }
+  }
+  const belowMinimumMatch = message.match(/below minimum funding of \$?(\d+(?:\.\d+)?)/i);
+  if (belowMinimumMatch) {
+    const providerMinimum = Number(belowMinimumMatch[1]);
+    if (Number.isFinite(providerMinimum)) {
+      return new Error(`Card provider currently requires at least $${providerMinimum.toFixed(2)} to create a card. Increase the starting amount and try again.`);
     }
   }
   return error;
@@ -260,9 +273,9 @@ export async function createVirtualCardForUser(user, payload) {
   }
 
   const fundingAmount = Number(payload.fundingAmount || 0);
-  const minFunding = getEffectiveMinCardFunding(settings);
+  const minFunding = getEffectiveMinCardCreation(settings);
   if (!Number.isFinite(fundingAmount) || fundingAmount < minFunding) {
-    throw new Error(`Minimum card funding is $${Number(minFunding).toFixed(2)}.`);
+    throw new Error(`Minimum card creation amount is $${Number(minFunding).toFixed(2)}.`);
   }
   if (fundingAmount > Number(settings.max_card_funding_usd || 500)) {
     throw new Error(`Maximum card funding is $${Number(settings.max_card_funding_usd || 500).toFixed(2)}.`);

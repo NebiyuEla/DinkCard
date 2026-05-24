@@ -31,7 +31,7 @@ const navItems = [
 
 const mobileNavItems = [
   { label: 'Home', path: '/dashboard', icon: LayoutDashboard },
-  { label: 'Add', path: '/add-money', icon: PlusCircle, primary: true },
+  { label: 'Add', path: '/add-money', icon: PlusCircle },
   { label: 'Cards', path: '/cards', icon: CreditCard },
   { label: 'Balance', path: '/wallet', icon: Wallet },
   { label: 'Alerts', path: '/notifications', icon: Bell }
@@ -134,15 +134,13 @@ export default function Sidebar({ user, unreadCount = 0 }) {
                 to={item.path}
                 className={cn(
                   'relative flex min-h-[60px] flex-col items-center justify-center gap-1.5 rounded-[22px] px-1 text-[11px] font-semibold transition-all active:scale-95',
-                  item.primary
-                    ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
-                    : isActive
-                      ? 'bg-secondary text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:bg-secondary/70'
+                  isActive
+                    ? 'bg-secondary text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:bg-secondary/70'
                 )}
               >
-                {isActive && !item.primary && <span className="absolute inset-x-4 top-1 h-1 rounded-full bg-primary/70" />}
-                <item.icon className={cn('h-5 w-5', item.primary && 'h-[22px] w-[22px]')} />
+                {isActive && <span className="absolute inset-x-4 top-1 h-1 rounded-full bg-primary/70" />}
+                <item.icon className="h-5 w-5" />
                 <span className="leading-none">{item.label}</span>
                 {item.label === 'Alerts' && unreadCount > 0 && (
                   <span className="absolute right-3 top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] text-primary-foreground">
