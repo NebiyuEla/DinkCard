@@ -6,9 +6,11 @@ function hashSeed(seed) {
   return hash;
 }
 
-export function getSeededAvatarDataUrl(seed) {
+export function getSeededAvatarDataUrl(seed, gender = '') {
   const hash = hashSeed(seed);
-  const hueA = hash % 360;
+  const normalizedGender = String(gender || '').toLowerCase();
+  const baseOffset = normalizedGender === 'female' ? 320 : normalizedGender === 'male' ? 180 : 250;
+  const hueA = (hash + baseOffset) % 360;
   const hueB = (hueA + 48) % 360;
   const hueC = (hueA + 120) % 360;
   const dotX = 28 + (hash % 44);

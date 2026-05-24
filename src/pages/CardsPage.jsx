@@ -41,10 +41,11 @@ export default function CardsPage() {
   });
 
   const terminateCard = useMutation({
-    mutationFn: (cardId) => apiClient.cards.terminate(cardId),
+    mutationFn: ({ cardId, pin: pinCode }) => apiClient.cards.terminate(cardId, pinCode),
     onSuccess: () => {
       refreshCards();
       setConfirmDialog(null);
+      setPin('');
       toast.success('Card terminated');
     },
     onError: (error) => toast.error(error.message || 'Termination failed')
@@ -63,8 +64,9 @@ export default function CardsPage() {
 
   const setCardPin = useMutation({
     mutationFn: () => apiClient.cards.setPin(selectedCard.id, newPin),
-    onSuccess: () => {
+    onSuccess: (updatedCard) => {
       refreshCards();
+      setSelectedCard((current) => current ? { ...current, ...(updatedCard || {}), card_pin_enabled_at: updatedCard?.card_pin_enabled_at || new Date().toISOString() } : current);
       setConfirmDialog(null);
       setNewPin('');
       setConfirmPin('');
@@ -88,7 +90,7 @@ export default function CardsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
           <p className="text-sm text-muted-foreground">Manage virtual cards for supported online payments.</p>
@@ -109,7 +111,7 @@ export default function CardsPage() {
           onAction={() => navigate('/cards/create')}
         />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-6">
           <div className="space-y-3">
             {activeCards.map((card) => (
               <div
@@ -136,7 +138,8 @@ export default function CardsPage() {
 
           {selectedCard && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <div className="flex justify-center">
+              <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5">
+                <div className="flex justify-center">
                 <VirtualCardDisplay
                   card={{
                     ...selectedCard,
@@ -147,9 +150,10 @@ export default function CardsPage() {
                   }}
                   showDetails={Boolean(secureDetails)}
                 />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 {!selectedCard.card_pin_enabled_at && (
                   <Button variant="outline" className="col-span-2" onClick={() => setConfirmDialog('set-pin')}>
                     <Shield className="w-4 h-4 mr-2" /> Create 4-digit card PIN
@@ -186,14 +190,19 @@ export default function CardsPage() {
                   </Button>
                 ) : null}
 
-                <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>
-                  <Trash2 className="w-4 h-4 mr-2" /> Terminate
-                </Button>
               </div>
 
               <div className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedCard.status} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${(selectedCard.balance || 0).toFixed(2)}</span></div>
+              </div>
+
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+                <p className="text-sm font-semibold text-destructive">Danger Zone</p>
+                <p className="mt-1 text-xs text-muted-foreground">Terminate only when you are done with this card. If you set a PIN, you will need it here too.</p>
+                <Button variant="outline" className="mt-3 text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>
+                  <Trash2 className="mr-2 h-4 w-4" /> Terminate Card
+                </Button>
               </div>
             </motion.div>
           )}
@@ -263,9 +272,12 @@ export default function CardsPage() {
             </DialogTitle>
             <DialogDescription>This action is permanent. Any refundable remaining balance will be returned to your available service balance after the provider confirms termination.</DialogDescription>
           </DialogHeader>
+          {selectedCard?.card_pin_enabled_at && (
+            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={() => terminateCard.mutate(selectedCard.id)} disabled={terminateCard.isPending}>
+            <Button variant="destructive" onClick={() => terminateCard.mutate({ cardId: selectedCard.id, pin })} disabled={terminateCard.isPending || (selectedCard?.card_pin_enabled_at && pin.length !== 4)}>
               {terminateCard.isPending ? 'Terminating...' : 'Terminate Card'}
             </Button>
           </DialogFooter>

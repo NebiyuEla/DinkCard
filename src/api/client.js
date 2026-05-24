@@ -134,13 +134,14 @@ export const apiClient = {
     create: (payload) => request('/api/cards', { method: 'POST', body: JSON.stringify(payload) }),
     fund: (cardId, amount) => request(`/api/cards/${cardId}/fund`, { method: 'POST', body: JSON.stringify({ amount }) }),
     updateStatus: (cardId, status, pin) => request(`/api/cards/${cardId}/status`, { method: 'POST', body: JSON.stringify({ status, pin }) }),
-    terminate: (cardId) => request(`/api/cards/${cardId}`, { method: 'DELETE' }),
+    terminate: (cardId, pin) => request(`/api/cards/${cardId}`, { method: 'DELETE', body: JSON.stringify({ pin }) }),
     reveal: (cardId, pin) => request(`/api/cards/${cardId}/reveal`, { method: 'POST', body: JSON.stringify({ pin }) }),
     setPin: (cardId, pin) => request(`/api/cards/${cardId}/pin`, { method: 'POST', body: JSON.stringify({ pin }) })
   },
   admin: {
     kyc: {
       approve: (id) => request(`/api/admin/kyc/${id}/approve`, { method: 'POST' }),
+      unapprove: (id, payload) => request(`/api/admin/kyc/${id}/unapprove`, { method: 'POST', body: JSON.stringify(payload || {}) }),
       requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) }),
       manualReview: (id, payload) => request(`/api/admin/kyc/${id}/manual-review`, { method: 'POST', body: JSON.stringify(payload || {}) })
     },
@@ -187,6 +188,7 @@ export const apiClient = {
     providerStatus: () => request('/api/admin/settings/provider-status'),
     balances: () => request('/api/admin/bitnob/balances'),
     auditLogs: () => request('/api/admin/audit-logs'),
+    deleteAuditLog: (id) => request(`/api/admin/audit-logs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     system: {
       clearData: (payload) => request('/api/admin/system/clear-data', { method: 'POST', body: JSON.stringify(payload) })
     }

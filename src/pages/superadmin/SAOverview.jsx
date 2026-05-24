@@ -18,9 +18,11 @@ export default function SAOverview() {
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
-  const totalProfitEtb = (deposits || [])
+  const netProfitEtb = (deposits || [])
     .filter((deposit) => deposit.status === 'approved')
-    .reduce((sum, deposit) => sum + Number(deposit.service_fee_etb || 0), 0);
+    .reduce((sum, deposit) => sum + Math.max(0, Number(deposit.service_fee_etb || 0) - Number(deposit.gateway_fee_etb || 0)), 0);
+  const approvedDepositCount = deposits?.filter((deposit) => deposit.status === 'approved')?.length || 0;
+  const averageProfitEtb = approvedDepositCount ? netProfitEtb / approvedDepositCount : 0;
 
   return (
     <div className="space-y-6">
@@ -33,12 +35,12 @@ export default function SAOverview() {
         All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
       </div>
 
-      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid-cols-3 lg:grid-cols-7">
+      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-3 md:grid-cols-3 xl:grid-cols-7">
         <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
         <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
-        <StatCard title="Profit Total" value={`${totalProfitEtb.toLocaleString()} ETB`} subtitle="Approved deposits" icon={DollarSign} />
+        <StatCard title="Net Profit" value={`${netProfitEtb.toLocaleString()} ETB`} subtitle={`Avg ${averageProfitEtb.toFixed(0)} ETB / approved deposit`} icon={DollarSign} />
         <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
         <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
       </div>

@@ -85,8 +85,8 @@ export default function AccountPage() {
 
   const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
   const avatarUrl = useMemo(
-    () => getSeededAvatarDataUrl(user?.id || user?.email || form.username || `${form.first_name}${form.last_name}`),
-    [user?.id, user?.email, form.username, form.first_name, form.last_name]
+    () => getSeededAvatarDataUrl(user?.id || user?.email || form.username || `${form.first_name}${form.last_name}`, kyc?.gender),
+    [user?.id, user?.email, form.username, form.first_name, form.last_name, kyc?.gender]
   );
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const kycLocked = kyc?.status === 'approved';

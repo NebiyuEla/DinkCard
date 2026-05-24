@@ -62,8 +62,19 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       <div className="relative flex items-start justify-between">
         <div>
           <p className="text-xs text-muted-foreground">{card.card_nickname}</p>
+          <div className="mt-2">
+            <span className={cn(
+              'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase',
+              card.status === 'active' ? 'bg-primary/15 text-primary' :
+                card.status === 'frozen' ? 'bg-accent/20 text-accent' :
+                  card.status === 'terminated' ? 'bg-destructive/20 text-destructive' :
+                    'bg-muted text-muted-foreground'
+            )}>
+              {card.status}
+            </span>
+          </div>
         </div>
-        <span className="text-lg font-bold tracking-tight text-foreground/80">Dink</span>
+        <span className="whitespace-nowrap text-base font-bold tracking-tight text-foreground/80 sm:text-lg">Dink Card</span>
       </div>
 
       <div className="relative">
@@ -93,18 +104,6 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
         </div>
       </div>
 
-      {card.status !== 'active' && (
-        <div className="absolute top-3 right-3">
-          <span className={cn(
-            'text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full',
-            card.status === 'frozen' ? 'bg-accent/20 text-accent' :
-              card.status === 'terminated' ? 'bg-destructive/20 text-destructive' :
-                'bg-muted text-muted-foreground'
-          )}>
-            {card.status}
-          </span>
-        </div>
-      )}
     </motion.div>
   );
 }

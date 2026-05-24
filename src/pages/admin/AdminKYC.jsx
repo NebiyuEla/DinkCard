@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
-import { Check, X, Eye } from 'lucide-react';
+import { Check, X, Eye, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -77,21 +77,15 @@ export default function AdminKYC() {
     }
   });
 
-  const manualReview = useMutation({
-    mutationFn: (kyc) => apiClient.admin.kyc.manualReview(kyc.id, { reason: 'Marked for manual review.' }),
+  const removeApproval = useMutation({
+    mutationFn: (kyc) => apiClient.admin.kyc.unapprove(kyc.id, { reason: 'Approval removed by admin.' }),
     onSuccess: () => {
       invalidateOperationalData(queryClient);
-      toast.success('KYC marked for manual review');
+      toast.success('KYC approval removed');
       setSelected(null);
     },
     onError: (error) => toast.error(error.message || 'Could not update KYC status')
   });
-
-  const maskIdNumber = (value) => {
-    const clean = String(value || '');
-    if (clean.length <= 4) return clean;
-    return `${'*'.repeat(Math.max(0, clean.length - 4))}${clean.slice(-4)}`;
-  };
 
   const toggleField = (field, checked) => {
     setResubmissionFields(prev => checked ? [...new Set([...prev, field])] : prev.filter(item => item !== field));
@@ -181,7 +175,7 @@ export default function AdminKYC() {
                 <div><span className="text-muted-foreground">Postal Code:</span> {selected.postal_code || '-'}</div>
                 <div><span className="text-muted-foreground">Country:</span> {selected.country || 'Ethiopia'}</div>
                 <div><span className="text-muted-foreground">ID Type:</span> <span className="capitalize">{(selected.id_type || '').replace(/_/g, ' ')}</span></div>
-                <div><span className="text-muted-foreground">ID Number:</span> <span className="font-mono">{maskIdNumber(selected.id_number)}</span></div>
+                <div><span className="text-muted-foreground">ID Number:</span> <span className="font-mono">{selected.id_number || '-'}</span></div>
                 <div className="col-span-2"><span className="text-muted-foreground">Street Address:</span> {selected.street_address || selected.address || '-'}</div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -197,10 +191,12 @@ export default function AdminKYC() {
                   <Button variant="destructive" onClick={openCorrectionDialog} disabled={approveKYC.isPending || rejectKYC.isPending} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Request Fix
                   </Button>
-                  <Button variant="outline" onClick={() => manualReview.mutate(selected)} disabled={manualReview.isPending} className="flex-1">
-                    Manual Review
-                  </Button>
                 </div>
+              )}
+              {selected.status === 'approved' && (
+                <Button variant="outline" onClick={() => removeApproval.mutate(selected)} disabled={removeApproval.isPending} className="w-full">
+                  <Undo2 className="mr-2 h-4 w-4" /> {removeApproval.isPending ? 'Removing...' : 'Remove Approval'}
+                </Button>
               )}
             </div>
           )}

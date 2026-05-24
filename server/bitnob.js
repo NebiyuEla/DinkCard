@@ -368,6 +368,7 @@ export async function createVirtualCardForUser(user, payload) {
       now
     );
     const created = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ?').get(card.id);
+    writeCardNotification(created, 'Card Request Submitted', 'Your virtual card request was created and is waiting for provider activation.');
     return created;
   } catch (error) {
     creditWallet(
@@ -436,14 +437,20 @@ export async function changeCardStatus(user, cardId, status, pin) {
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
   await bitnobRequest('POST', `/api/cards/${card.provider_card_id}/status`, { status });
   db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso(), card.id);
+  writeCardNotification(card, status === 'frozen' ? 'Card Locked' : 'Card Unlocked', status === 'frozen' ? 'Your card was locked successfully.' : 'Your card is active again.');
 }
 
-export async function terminateCard(user, cardId) {
+export async function terminateCard(user, cardId, pin, providerReason = 'User terminated card') {
   const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
+  if (user.role === 'user' && card.card_pin_hash) {
+    const normalizedPin = String(pin || '').trim();
+    const validPin = await bcrypt.compare(normalizedPin, card.card_pin_hash);
+    if (!validPin) throw new Error('Incorrect card PIN.');
+  }
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
-  const response = await bitnobRequest('DELETE', `/api/cards/${card.provider_card_id}`, { reason: 'User terminated card' });
+  const response = await bitnobRequest('DELETE', `/api/cards/${card.provider_card_id}`, { reason: providerReason });
   const remainingBaseUnits = response?.data?.remaining_balance ?? response.remaining_balance ?? 0;
   const remaining = fromBitnobAmount(remainingBaseUnits);
   if (remaining > 0) {
@@ -451,6 +458,7 @@ export async function terminateCard(user, cardId) {
   }
   db.prepare('UPDATE virtual_cards SET status = ?, balance = 0, updated_at = ? WHERE id = ?')
     .run('terminated', nowIso(), card.id);
+  writeCardNotification(card, 'Card Terminated', 'Your virtual card was terminated successfully.');
 }
 
 export async function setCardPin(user, cardId, pin) {
@@ -463,6 +471,8 @@ export async function setCardPin(user, cardId, pin) {
   const now = nowIso();
   db.prepare('UPDATE virtual_cards SET card_pin_hash = ?, card_pin_enabled_at = ?, updated_at = ? WHERE id = ?')
     .run(pinHash, now, now, card.id);
+  writeCardNotification(card, 'Card PIN Saved', 'Your 4-digit card PIN is now active for reveal, lock, unlock, and terminate actions.');
+  return db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id);
 }
 
 export async function revealCardDetails(user, cardId, pin) {

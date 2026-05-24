@@ -119,8 +119,9 @@ export default function AdminCards() {
   const syncCustomers = useMutation({
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: (result) => {
-      toast.success(`Synced ${result.imported || 0} Bitnob customers`);
+      toast.success(`Synced ${result.importedCustomers || result.imported || 0} customers and ${result.importedCards || 0} cards`);
       queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-cards'] });
       queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
     },
     onError: (error) => toast.error(error.message || 'Bitnob sync failed')

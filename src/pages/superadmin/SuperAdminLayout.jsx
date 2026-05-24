@@ -55,18 +55,18 @@ export default function SuperAdminLayout() {
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout}>Sign Out</Button>
         </div>
-        <nav className="grid grid-cols-2 gap-2 px-3 pb-3 sm:grid-cols-4">
+        <nav className="grid grid-cols-3 gap-2 px-3 pb-3">
           {nav.map(item => {
             const badge = badges[item.path] || 0;
             const active = location.pathname === item.path;
             return (
               <Link key={item.path} to={item.path} className="min-w-0">
                 <div className={cn(
-                  'flex min-h-[48px] items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium transition-all',
+                  'flex min-h-[44px] items-center gap-2 rounded-xl px-2.5 py-2 text-[11px] font-medium transition-all',
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 )}>
                   <item.icon className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate">{item.label.replace('Pricing Settings', 'Pricing').replace('Audit Logs', 'Audit')}</span>
                   {badge > 0 && <span className="rounded-full bg-yellow-500 px-1.5 py-0.5 text-[10px] font-bold text-white">{badge}</span>}
                 </div>
               </Link>
@@ -119,7 +119,7 @@ export default function SuperAdminLayout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto p-4 md:p-6">
+        <div className="mx-auto max-w-6xl p-4 md:p-6">
           <Outlet />
         </div>
       </main>

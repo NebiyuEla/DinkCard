@@ -93,6 +93,15 @@ function writeAudit({
   }
 }
 
+function createNotification(userId, title, message, type = 'system', link = null) {
+  try {
+    db.prepare(`
+      INSERT INTO notifications (id, user_id, title, message, type, link, read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+    `).run(generateId('ntf'), userId, title, message, type, link, nowIso());
+  } catch {}
+}
+
 const ADMIN_ROLES = ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'];
 
 function hasAnyAdminRole(user) {
@@ -344,6 +353,72 @@ function isPrivateDevOrigin(origin) {
       /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
   } catch {
     return false;
+  }
+}
+
+async function cleanupBitnobResourcesForUser(user, actor, req, reason = 'Account deleted') {
+  const providerCards = db.prepare(`
+    SELECT * FROM virtual_cards
+    WHERE user_id = ? AND provider = 'bitnob' AND provider_card_id IS NOT NULL AND status != 'terminated'
+    ORDER BY created_at DESC
+  `).all(user.email);
+
+  for (const card of providerCards) {
+    try {
+      await terminateCard({ role: 'superadmin', email: actor || 'system' }, card.id, null, `${reason}: provider cleanup`);
+    } catch (error) {
+      writeAudit({
+        actor: actor || 'system',
+        userId: user.email,
+        action: 'bitnob_card_cleanup_failed',
+        entityType: 'virtual_card',
+        entityId: card.id,
+        oldValue: mapRow(card),
+        provider: 'bitnob',
+        providerStatus: error.providerStatus || 'failed',
+        providerResponse: error.providerResponse || { message: error.message },
+        reason,
+        req
+      });
+    }
+  }
+
+  const customers = db.prepare(`
+    SELECT * FROM bitnob_customers
+    WHERE environment = ? AND (user_id = ? OR email = ?)
+    ORDER BY created_at DESC
+  `).all(config.bitnob.env, user.email, user.email);
+
+  for (const customer of customers) {
+    if (!customer.bitnob_customer_id) continue;
+    try {
+      await bitnobService.deleteCustomer(customer.bitnob_customer_id);
+      writeAudit({
+        actor: actor || 'system',
+        userId: user.email,
+        action: 'bitnob_customer_deleted_during_cleanup',
+        entityType: 'bitnob_customer',
+        entityId: customer.id,
+        oldValue: mapRow(customer),
+        provider: 'bitnob',
+        reason,
+        req
+      });
+    } catch (error) {
+      writeAudit({
+        actor: actor || 'system',
+        userId: user.email,
+        action: 'bitnob_customer_cleanup_failed',
+        entityType: 'bitnob_customer',
+        entityId: customer.id,
+        oldValue: mapRow(customer),
+        provider: 'bitnob',
+        providerStatus: error.providerStatus || 'failed',
+        providerResponse: error.providerResponse || { message: error.message },
+        reason,
+        req
+      });
+    }
   }
 }
 
@@ -1203,6 +1278,7 @@ export function createApp() {
       WHERE id = ?
     `).run(passwordHash, nowIso(), user.id);
 
+    createNotification(user.email, 'Password Updated', 'Your Dink Card password was changed successfully.', 'security', '/account');
     writeAudit({ actor: user.email, userId: user.email, action: 'password_reset_completed', entityType: 'auth' });
     res.json({ message: 'Password updated successfully.' });
   });
@@ -1275,6 +1351,7 @@ export function createApp() {
     }
 
     const uploadUrls = collectUserUploadUrls(user.email);
+    await cleanupBitnobResourcesForUser(user, user.email, req, 'Account deleted by user');
     deleteUserCascade(user);
     uploadUrls.forEach(removeUploadUrl);
     clearSessionCookie(res);
@@ -1671,11 +1748,36 @@ export function createApp() {
     try {
       if (!requireAdmin(req, res)) return;
       writeAudit({ actor: req.user.email, userId: req.user.email, action: 'bitnob_sync_started', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', req });
-      const provider = await bitnobService.listCustomers();
-      const providerCustomers = normalizeProviderList(provider);
-      const saved = providerCustomers.map((customer) => saveBitnobCustomer({ providerResponse: customer, providerCustomer: customer }));
-      writeAudit({ actor: req.user.email, userId: req.user.email, action: 'bitnob_sync_completed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: 'success', providerResponse: { imported: saved.length }, req });
-      res.json({ imported: saved.length, customers: saved });
+      const [customersProvider, cardsProvider] = await Promise.all([
+        bitnobService.listCustomers(),
+        bitnobService.listCards()
+      ]);
+      const providerCustomers = normalizeProviderList(customersProvider);
+      const savedCustomers = providerCustomers.map((customer) => saveBitnobCustomer({ providerResponse: customer, providerCustomer: customer }));
+      const customerByBitnobId = new Map(savedCustomers.map((customer) => [customer.bitnob_customer_id, customer]));
+      const providerCards = normalizeProviderList(cardsProvider);
+      const savedCards = providerCards.map((card) => {
+        const providerCustomerId = card.customer_id || card.customerId || '';
+        return providerCardToDb({
+          card,
+          customer: customerByBitnobId.get(providerCustomerId),
+          fallbackUserId: customerByBitnobId.get(providerCustomerId)?.user_id || card.customer_email || card.email || '',
+          nickname: card.name || 'Virtual Card',
+          providerPayload: card
+        });
+      });
+      writeAudit({
+        actor: req.user.email,
+        userId: req.user.email,
+        action: 'bitnob_sync_completed',
+        entityType: 'bitnob_customer',
+        environment: config.bitnob.env,
+        provider: 'bitnob',
+        providerStatus: 'success',
+        providerResponse: { importedCustomers: savedCustomers.length, importedCards: savedCards.length },
+        req
+      });
+      res.json({ imported: savedCustomers.length, importedCustomers: savedCustomers.length, importedCards: savedCards.length, customers: savedCustomers, cards: savedCards });
     } catch (error) {
       writeAudit({ actor: req.user?.email, userId: req.user?.email, action: 'bitnob_sync_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, req });
       res.status(400).json({ message: error.message || 'Bitnob customer sync failed.' });
@@ -2365,7 +2467,7 @@ export function createApp() {
     }
   });
 
-  app.delete('/api/admin/users/:id', authMiddleware(db), (req, res) => {
+  app.delete('/api/admin/users/:id', authMiddleware(db), async (req, res) => {
     if (!requireSuperadmin(req, res)) return;
 
     const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
@@ -2378,6 +2480,7 @@ export function createApp() {
 
     const reason = String(req.body?.reason || '').trim() || 'Deleted by superadmin';
     const uploadUrls = collectUserUploadUrls(target.email);
+    await cleanupBitnobResourcesForUser(target, req.user.email, req, reason);
 
     deleteUserCascade(target);
     uploadUrls.forEach(removeUploadUrl);
@@ -2519,7 +2622,7 @@ export function createApp() {
 
   app.delete('/api/cards/:id', authMiddleware(db), async (req, res) => {
     try {
-      await terminateCard(req.user, req.params.id);
+      await terminateCard(req.user, req.params.id, req.body?.pin);
       res.json({ ok: true });
     } catch (error) {
       res.status(400).json({ message: error.message });
@@ -2824,6 +2927,44 @@ export function createApp() {
     }
   });
 
+  app.post('/api/admin/kyc/:id/unapprove', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+      if (kyc.status !== 'approved') return res.status(400).json({ message: 'Only approved KYC can be reopened.' });
+
+      const now = nowIso();
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET status = 'pending',
+            level = 0,
+            reviewed_by = ?,
+            reviewed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(req.user.email, now, now, kyc.id);
+
+      createNotification(kyc.user_id, 'KYC Reopened', 'Your KYC approval was removed and your profile is back in review.', 'kyc', '/kyc');
+      writeAudit({
+        actor: req.user.email,
+        userId: kyc.user_id,
+        action: 'kyc_approval_removed',
+        entityType: 'kyc_submission',
+        entityId: kyc.id,
+        oldValue: kyc,
+        newValue: { status: 'pending', level: 0 },
+        reason: String(req.body?.reason || '').trim() || 'Approval removed by admin',
+        req
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not remove KYC approval.' });
+    }
+  });
+
   app.post('/api/admin/kyc/:id/manual-review', authMiddleware(db), (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
@@ -2839,6 +2980,14 @@ export function createApp() {
     } catch (error) {
       res.status(400).json({ message: error.message || 'Could not mark KYC for manual review.' });
     }
+  });
+
+  app.delete('/api/admin/audit-logs/:id', authMiddleware(db), (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+    const log = db.prepare('SELECT * FROM audit_logs WHERE id = ?').get(req.params.id);
+    if (!log) return res.status(404).json({ message: 'Audit log not found' });
+    db.prepare('DELETE FROM audit_logs WHERE id = ?').run(log.id);
+    res.json({ ok: true });
   });
 
   app.get('/api/kyc/status', authMiddleware(db), (req, res) => {
