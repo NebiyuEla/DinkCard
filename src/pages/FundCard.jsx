@@ -138,12 +138,9 @@ export default function FundCard() {
             </div>
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold">Total deduction</span>
+                <span className="font-semibold">You will use</span>
                 <span className={`font-mono text-lg font-bold text-right ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>
               </div>
-              {selectedCard && (
-                <p className="mt-1 text-xs text-muted-foreground">Estimated card balance: ${((selectedCard.balance || 0) + fundAmount).toFixed(2)}</p>
-              )}
             </div>
           </div>
         </div>

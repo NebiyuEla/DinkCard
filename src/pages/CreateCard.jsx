@@ -132,12 +132,11 @@ export default function CreateCard() {
           </div>
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-semibold">Total deduction</span>
+              <span className="font-semibold">You will use</span>
               <span className={`font-mono text-lg font-bold text-right ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>
                 ${fees.totalDeduction.toFixed(2)}
               </span>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">Remaining balance: ${Math.max(0, balance - fees.totalDeduction).toFixed(2)}</p>
           </div>
         </div>
       </div>
