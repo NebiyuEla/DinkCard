@@ -11,6 +11,7 @@ import { apiClient } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import TermsContent from '@/components/TermsContent';
 import LegalLinks from '@/components/LegalLinks';
+import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
@@ -109,6 +110,9 @@ export default function Register() {
         <p className="text-sm text-center text-muted-foreground mt-4">
           Already registered? <Link to="/login" className="text-primary hover:underline">Sign in</Link>
         </p>
+        <div className="mt-4 flex justify-center">
+          <PoweredByDinkDev compact />
+        </div>
         <LegalLinks className="mt-5" />
       </div>
 

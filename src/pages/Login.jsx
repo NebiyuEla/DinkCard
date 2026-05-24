@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { apiClient } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import LegalLinks from '@/components/LegalLinks';
+import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 
 export default function Login() {
   const { setAuthenticatedUser } = useAuth();
@@ -126,6 +127,9 @@ export default function Login() {
         <p className="text-sm text-center text-muted-foreground mt-4">
           New here? <Link to="/register" className="text-primary hover:underline">Create your account</Link>
         </p>
+        <div className="mt-4 flex justify-center">
+          <PoweredByDinkDev compact />
+        </div>
         <LegalLinks className="mt-5" />
       </div>
     </div>

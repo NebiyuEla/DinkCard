@@ -126,3 +126,12 @@
 .glow-blue {
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 60px rgba(59, 130, 246, 0.05);
 }
+
+@keyframes avatar-drift {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(1.5deg); }
+}
+
+.animate-avatar-drift {
+  animation: avatar-drift 5.5s ease-in-out infinite;
+}

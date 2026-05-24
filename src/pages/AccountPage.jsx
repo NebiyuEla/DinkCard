@@ -174,7 +174,7 @@ export default function AccountPage() {
             style={{ backgroundImage: profileTheme.bg, boxShadow: `0 18px 40px ${profileTheme.glow}` }}
           >
             <div className="flex items-start justify-between gap-3">
-              <Avatar className="h-16 w-16 rounded-2xl border border-white/20 bg-white/12 backdrop-blur">
+              <Avatar className="animate-avatar-drift h-16 w-16 rounded-2xl border border-white/20 bg-white/12 backdrop-blur">
                 <AvatarImage src={avatarUrl} alt="Profile avatar" className="rounded-2xl object-cover" />
                 <AvatarFallback className="rounded-2xl bg-transparent text-lg font-bold text-white">
                   {initials}

@@ -598,6 +598,16 @@ function compactPayload(payload) {
   );
 }
 
+function findUserByIdentifier(identifier) {
+  const normalized = String(identifier || '').trim().toLowerCase();
+  if (!normalized) return null;
+  let normalizedPhone = null;
+  try {
+    normalizedPhone = normalizeEthiopianPhone(normalized);
+  } catch {}
+  return db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(normalized, normalized, normalizedPhone);
+}
+
 function normalizeBitnobPhone(phoneValue) {
   let digits = String(phoneValue || '').trim().replace(/\D/g, '');
   if (digits.startsWith('00251')) digits = digits.slice(5);
@@ -1108,11 +1118,11 @@ export function createApp() {
     }
 
     const existing = normalizedUsername
-      ? db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(normalizedEmail, normalizedUsername)
-      : db.prepare("SELECT id FROM users WHERE lower(email) = ?").get(normalizedEmail);
+      ? db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(normalizedEmail, normalizedUsername, normalizedPhone || null)
+      : db.prepare("SELECT id FROM users WHERE lower(email) = ? OR phone = ?").get(normalizedEmail, normalizedPhone || null);
 
     if (existing) {
-      return res.status(409).json({ message: 'An account with this email or username already exists.' });
+      return res.status(409).json({ message: 'An account with this email, phone number, or username already exists.' });
     }
 
     const now = nowIso();
@@ -1156,12 +1166,7 @@ export function createApp() {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    let normalizedPhone = null;
-    try {
-      normalizedPhone = normalizeEthiopianPhone(normalized);
-    } catch {}
-
-    const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(normalized, normalized, normalizedPhone);
+    const user = findUserByIdentifier(normalized);
 
     if (!user) {
       writeAudit({ actor: 'system:auth', userId: normalized, action: 'login_failed', entityType: 'auth', reason: 'unknown_account' });
@@ -1215,12 +1220,7 @@ export function createApp() {
       return res.status(400).json({ message: 'Last name and date of birth are required to reset your password.' });
     }
 
-    let normalizedPhone = null;
-    try {
-      normalizedPhone = normalizeEthiopianPhone(identifier);
-    } catch {}
-
-    const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(identifier, identifier, normalizedPhone);
+    const user = findUserByIdentifier(identifier);
     if (!user) {
       return res.json({ message: 'If the account exists, a password reset link has been prepared.' });
     }
@@ -1407,8 +1407,11 @@ export function createApp() {
     }
 
     if (!approvedKyc && typeof req.body.phone === 'string') {
+      const normalizedPhone = normalizeEthiopianPhone(req.body.phone);
+      const existingPhone = db.prepare('SELECT id FROM users WHERE phone = ? AND id != ?').get(normalizedPhone, req.user.id);
+      if (existingPhone) return res.status(409).json({ message: 'That phone number is already in use.' });
       updates.push('phone = ?');
-      values.push(normalizeEthiopianPhone(req.body.phone));
+      values.push(normalizedPhone);
     }
 
     if (typeof req.body.username === 'string') {
@@ -1600,6 +1603,64 @@ export function createApp() {
     `).all().map(mapRow);
     const totalUsableBalance = wallets.reduce((sum, wallet) => sum + Number(wallet.available_balance || 0), 0);
     res.json({ wallets, totalUsableBalance: money(totalUsableBalance) });
+  });
+
+  app.post('/api/wallet/share/lookup', authMiddleware(db), (req, res) => {
+    const identifier = String(req.body?.identifier || '').trim();
+    if (!identifier) return res.status(400).json({ message: 'Enter an email, phone number, or username.' });
+    const recipient = findUserByIdentifier(identifier);
+    if (!recipient || recipient.id === req.user.id) {
+      return res.status(404).json({ message: 'Receiver not found.' });
+    }
+    res.json({
+      id: recipient.id,
+      email: recipient.email,
+      phone: recipient.phone,
+      username: recipient.username,
+      full_name: recipient.full_name || `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim()
+    });
+  });
+
+  app.post('/api/wallet/share', authMiddleware(db), (req, res) => {
+    try {
+      const identifier = String(req.body?.identifier || '').trim();
+      const amount = Number(req.body?.amount || 0);
+      if (!identifier) return res.status(400).json({ message: 'Choose a receiver first.' });
+      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ message: 'Enter a valid amount.' });
+
+      const recipient = findUserByIdentifier(identifier);
+      if (!recipient || recipient.id === req.user.id) {
+        return res.status(404).json({ message: 'Receiver not found.' });
+      }
+
+      ensureWallet(req.user.email);
+      ensureWallet(recipient.email);
+      const reference = `SND-${Date.now()}-${generateId('bal')}`;
+      debitWallet(req.user.email, amount, 'balance_share_sent', `Shared balance to ${recipient.full_name || recipient.email}`, reference);
+      creditWallet(recipient.email, amount, 'balance_share_received', `Received balance from ${req.user.full_name || req.user.email}`, reference);
+      createNotification(recipient.email, 'Balance Received', `$${money(amount).toFixed(2)} was shared to you by ${req.user.full_name || req.user.email}.`, 'wallet', '/wallet');
+      createNotification(req.user.email, 'Balance Sent', `You shared $${money(amount).toFixed(2)} to ${recipient.full_name || recipient.email}.`, 'wallet', '/wallet');
+      writeAudit({
+        actor: req.user.email,
+        userId: recipient.email,
+        action: 'balance_shared',
+        entityType: 'wallet',
+        entityId: reference,
+        newValue: { from: req.user.email, to: recipient.email, amount: money(amount) },
+        req
+      });
+      res.json({
+        ok: true,
+        reference,
+        amount: money(amount),
+        receiver: {
+          full_name: recipient.full_name || `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim(),
+          email: recipient.email
+        }
+      });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Balance share failed.' });
+    }
   });
 
   app.post('/api/uploads', authMiddleware(db), uploadLimiter, upload.single('file'), (req, res) => {

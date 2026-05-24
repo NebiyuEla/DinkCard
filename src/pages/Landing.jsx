@@ -1,258 +1,242 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useTheme } from 'next-themes';
+import { ArrowRight, CreditCard, Globe2, Landmark, MoonStar, ShieldCheck, SunMedium, WalletCards, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
-import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
-import {
-  CreditCard, Shield, Zap, Globe, ArrowRight, ChevronDown,
-  Smartphone, DollarSign, CheckCircle, Lock } from
-'lucide-react';
+import PoweredByDinkDev from '@/components/PoweredByDinkDev';
+import { footerDisclaimer } from '@/lib/legal';
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.55 } }
 };
 
-const stagger = {
-  visible: { transition: { staggerChildren: 0.1 } }
+const translations = {
+  en: {
+    badge: 'Built for Ethiopia',
+    titleA: 'Virtual card access',
+    titleB: 'designed for Ethiopia',
+    subtitle: 'Pay in ETB, get clear pricing, and manage verified virtual card services with a smoother local experience.',
+    cta: 'Create Account',
+    secondary: 'Sign In',
+    powered: '⚡ Powered by DinkDev',
+    stepsTitle: 'How it flows',
+    steps: [
+      { title: 'Verify once', desc: 'Complete KYC and unlock secure funding and card requests.' },
+      { title: 'Add funds in ETB', desc: 'See the real total before payment with transparent service pricing.' },
+      { title: 'Request card', desc: 'Create and fund your virtual card for supported online payments.' }
+    ],
+    whyTitle: 'Made for local trust',
+    why: [
+      { title: 'ETB-first checkout', desc: 'Customers see a simple ETB total with the right exchange view.' },
+      { title: 'Secure controls', desc: 'KYC, PIN-protected card actions, audit logs, and verified payment flows.' },
+      { title: 'Fast support flow', desc: 'Clear alerts, smoother mobile experience, and cleaner card management.' }
+    ],
+    footerLead: 'Dink Card by DinkDevLabs'
+  },
+  am: {
+    badge: 'ለኢትዮጵያ የተሰራ',
+    titleA: 'የቨርቹዋል ካርድ አገልግሎት',
+    titleB: 'ለኢትዮጵያ በተሻለ መንገድ',
+    subtitle: 'በብር ይክፈሉ፣ ግልፅ ዋጋ ይመልከቱ፣ እና የተረጋገጠ የቨርቹዋል ካርድ አገልግሎት በቀላሉ ያስተዳድሩ።',
+    cta: 'አካውንት ፍጠር',
+    secondary: 'ግባ',
+    powered: '⚡ Powered by DinkDev',
+    stepsTitle: 'እንዴት ይሰራል',
+    steps: [
+      { title: 'አንድ ጊዜ ያረጋግጡ', desc: 'KYC ያጠናቅቁ እና የደህንነት የገንዘብ ጨመር እና የካርድ ጥያቄ ይክፈቱ።' },
+      { title: 'በብር ገንዘብ ያክሉ', desc: 'ከመክፈልዎ በፊት ትክክለኛውን ጠቅላላ ይመልከቱ።' },
+      { title: 'ካርድ ይጠይቁ', desc: 'ለተፈቀዱ የመስመር ላይ ክፍያዎች ካርድ ይፍጠሩ እና ይሙሉ።' }
+    ],
+    whyTitle: 'ለአካባቢ ታማኝነት የተሰራ',
+    why: [
+      { title: 'በብር የሚጀምር መክፈያ', desc: 'ተጠቃሚዎች ቀላል የብር ጠቅላላ እና ግልፅ የመቀየሪያ እይታ ያያሉ።' },
+      { title: 'የደህንነት መቆጣጠሪያ', desc: 'KYC፣ PIN የተጠበቀ የካርድ እርምጃ፣ audit logs እና የተረጋገጠ የክፍያ ፍሰት።' },
+      { title: 'ፈጣን ድጋፍ', desc: 'ግልፅ ማሳወቂያዎች፣ የተሻለ ሞባይል ተሞክሮ እና ንጹህ የካርድ አስተዳደር።' }
+    ],
+    footerLead: 'Dink Card በ DinkDevLabs'
+  }
 };
-
-const steps = [
-{ icon: Smartphone, title: 'Sign Up & Verify', desc: 'Create your account and complete KYC verification in minutes.' },
-{ icon: DollarSign, title: 'Add Funds for Services', desc: 'Use supported local payment methods for card-related service requests.' },
-{ icon: CreditCard, title: 'Request Virtual Card', desc: 'Request a USD virtual card for supported online payments after KYC approval.' },
-{ icon: Globe, title: 'Pay Online', desc: 'Use supported virtual card services where merchants and providers allow acceptance.' }];
-
-
-const useCases = [
-'Telegram Premium', 'Netflix', 'Spotify', 'Canva Pro', 'Apple Subscriptions',
-'Google Play', 'Meta Ads', 'Amazon', 'ChatGPT Plus', 'GitHub', 'Figma', 'Adobe'];
-
-
-const faqs = [
-{ q: 'What currencies are supported?', a: 'You pay supported local amounts and receive available platform balance for eligible card-related services. Virtual cards are denominated in USD where available.' },
-{ q: 'How long does funding take?', a: 'Hosted checkout funding requests are verified server-side. Manual reviews, if needed, are typically handled within 1-24 hours during business hours.' },
-{ q: 'Is my card data secure?', a: 'Card details are encrypted and only revealed after verification. We never store raw card numbers on our servers.' },
-{ q: 'Which merchants accept these cards?', a: 'Acceptance depends on the merchant, region, card network, provider rules, transaction type, and compliance checks.' },
-{ q: 'Can I get a refund?', a: 'Refund policies depend on the merchant and provider. Contact support for assistance with disputes.' }];
-
 
 export default function Landing() {
+  const [lang, setLang] = useState('en');
+  const { theme, setTheme } = useTheme();
+  const copy = useMemo(() => translations[lang], [lang]);
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 bg-background/80 backdrop-blur-xl border-b border-border/50">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <CreditCard className="w-4 h-4 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-lg tracking-tight">Dink Card</span>
-          </div>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/80 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
-            <Link to="/login">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
-            <Link to="/register">
-              <Button size="sm" className="bg-primary text-primary-foreground">
-                Get Started
-              </Button>
-            </Link>
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+              <CreditCard className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-base font-bold tracking-tight">Dink Card</p>
+              <PoweredByDinkDev compact className="text-[11px]" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setLang((current) => current === 'en' ? 'am' : 'en')}
+              className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold"
+            >
+              {lang === 'en' ? 'AM' : 'EN'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+              className="rounded-full border border-border bg-card p-2"
+            >
+              {theme === 'light' ? <MoonStar className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+            </button>
+            <Link to="/login"><Button variant="ghost" size="sm">{copy.secondary}</Button></Link>
+            <Link to="/register"><Button size="sm" className="bg-primary text-primary-foreground">{copy.cta}</Button></Link>
           </div>
         </div>
-      </nav>
+      </div>
 
-      {/* Hero */}
-      <section className="pt-32 pb-20 px-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent" />
-        <div className="absolute top-40 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-primary/5 rounded-full blur-[120px]" />
-        
-        <motion.div
-          className="max-w-4xl mx-auto text-center relative"
-          initial="hidden" animate="visible" variants={stagger}>
-          
-          <motion.div variants={fadeUp} className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-sm font-medium mb-8">
-            <Zap className="w-3.5 h-3.5" />
-            Now available for Ethiopian users
-          </motion.div>
-          
-          <motion.h1 variants={fadeUp} className="text-4xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight mb-6">
-            Virtual USD Cards{' '}
-            <span className="text-primary">From Ethiopia</span>
-          </motion.h1>
-          
-          <motion.p variants={fadeUp} className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Access and manage partner-powered virtual card services for supported online payments. Simple, transparent, and built for verified users.
-          </motion.p>
-          
-          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/register">
-              <Button size="lg" className="bg-primary text-primary-foreground px-8 h-12 text-base font-semibold">
-                Create Account <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-            <a href="#how-it-works">
-              <Button size="lg" variant="outline" className="h-12 text-base px-8">
-                How It Works <ChevronDown className="w-4 h-4 ml-2" />
-              </Button>
-            </a>
-          </motion.div>
+      <section className="relative overflow-hidden px-4 pb-20 pt-28 sm:pb-28 sm:pt-32">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(42,157,143,0.16),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(227,153,35,0.16),transparent_28%),linear-gradient(135deg,rgba(204,36,29,0.08),transparent_40%)]" />
+        <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(90deg, transparent 0, transparent 24px, currentColor 24px, currentColor 25px)', backgroundSize: '25px 25px' }} />
 
-          {/* Floating card preview */}
-          <motion.div
-            variants={fadeUp}
-            className="mt-16 mx-auto w-full max-w-sm aspect-[1.586/1] rounded-2xl bg-gradient-to-br from-secondary to-card border border-border p-6 flex flex-col justify-between animate-float">
-            
-            <div className="flex justify-between items-start">
-              <div className="text-left">
-                <p className="text-xs text-muted-foreground">Dink Card</p>
-                <p className="text-[10px] text-muted-foreground/50">Virtual Card</p>
-              </div>
-              <span className="text-lg font-bold tracking-tight text-primary">Dink</span>
+        <motion.div initial="hidden" animate="visible" className="relative mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+          <motion.div variants={fadeUp} className="space-y-6">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-4 py-1.5 text-sm font-semibold text-primary">
+              <Zap className="h-4 w-4" />
+              {copy.badge}
             </div>
-            <p className="font-mono text-lg tracking-[0.2em] text-foreground/70 text-left">
-              •••• •••• •••• 4242
-            </p>
-            <div className="flex justify-between items-end">
-              <div className="text-left">
-                <p className="text-[10px] text-muted-foreground">CARDHOLDER</p>
-                <p className="text-xs font-medium">YOUR NAME</p>
+            <div className="space-y-4">
+              <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-tight sm:text-6xl">
+                {copy.titleA} <span className="text-primary">{copy.titleB}</span>
+              </h1>
+              <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">{copy.subtitle}</p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/register">
+                <Button size="lg" className="h-12 rounded-full bg-primary px-8 text-base font-semibold text-primary-foreground transition-transform hover:scale-[1.02]">
+                  {copy.cta} <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+              <Link to="/login">
+                <Button size="lg" variant="outline" className="h-12 rounded-full px-8 text-base">{copy.secondary}</Button>
+              </Link>
+            </div>
+            <div className="grid max-w-2xl gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-card/80 p-4 shadow-sm">
+                <Landmark className="h-5 w-5 text-primary" />
+                <p className="mt-3 whitespace-nowrap text-xl font-bold">ETB Pricing</p>
+                <p className="mt-1 text-sm text-muted-foreground">Clear local checkout before you pay.</p>
               </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground">EXPIRY</p>
-                <p className="text-xs font-mono">12/28</p>
+              <div className="rounded-2xl border border-border bg-card/80 p-4 shadow-sm">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+                <p className="mt-3 whitespace-nowrap text-xl font-bold">Verified Access</p>
+                <p className="mt-1 text-sm text-muted-foreground">KYC-first controls and safer card actions.</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-card/80 p-4 shadow-sm">
+                <Globe2 className="h-5 w-5 text-primary" />
+                <p className="mt-3 whitespace-nowrap text-xl font-bold">Online Ready</p>
+                <p className="mt-1 text-sm text-muted-foreground">Built for supported global digital payments.</p>
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div variants={fadeUp} className="relative">
+            <div className="absolute -left-6 top-10 h-24 w-24 rounded-full bg-primary/20 blur-2xl" />
+            <div className="absolute -right-6 bottom-10 h-24 w-24 rounded-full bg-accent/20 blur-2xl" />
+            <div className="relative overflow-hidden rounded-[32px] border border-border bg-card p-5 shadow-2xl shadow-black/10">
+              <div className="rounded-[28px] bg-gradient-to-br from-[#0d1b2a] via-[#102a43] to-[#16324f] p-5 text-white">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-white/80">Dink Card</p>
+                    <p className="mt-1 text-xs text-white/50">{copy.powered}</p>
+                  </div>
+                  <WalletCards className="h-6 w-6 text-emerald-300" />
+                </div>
+                <div className="mt-10 space-y-4">
+                  <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                    <span className="text-sm text-white/70">Available balance</span>
+                    <span className="whitespace-nowrap font-mono text-lg font-bold">$25.00</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white/5 px-4 py-3">
+                    <span className="text-sm text-white/70">Card status</span>
+                    <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-300">ACTIVE</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-2xl bg-[#f6bd60] px-4 py-4 text-[#3d2a09]">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em]">Add money</p>
+                      <p className="mt-2 text-lg font-black">ETB</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#2a9d8f] px-4 py-4 text-white">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em]">Request card</p>
+                      <p className="mt-2 text-lg font-black">USD</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </motion.div>
         </motion.div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="py-20 px-4">
-        <div className="max-w-5xl mx-auto">
-          <motion.div className="text-center mb-14" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">How It Works</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">Request virtual card-related services in four simple steps after verification.</p>
-          </motion.div>
-          
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
-            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
-            
-            {steps.map((step, i) =>
-            <motion.div key={i} variants={fadeUp} className="bg-card border border-border rounded-xl p-6 relative group hover:border-primary/30 transition-all">
-                <div className="absolute -top-3 -left-2 w-7 h-7 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
-                  {i + 1}
-                </div>
-                <step.icon className="w-8 h-8 text-primary mb-4" />
-                <h3 className="font-semibold mb-2">{step.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
-              </motion.div>
-            )}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Supported uses */}
-      <section className="py-20 px-4 bg-card/50">
-        <div className="max-w-5xl mx-auto text-center">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Use Supported Online Payments</h2>
-            <p className="text-muted-foreground mb-10 max-w-xl mx-auto">Merchant acceptance is not guaranteed and depends on provider, network, region, and merchant rules.</p>
-          </motion.div>
-          <motion.div
-            className="flex flex-wrap justify-center gap-3"
-            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
-            
-            {useCases.map((name, i) =>
-            <motion.span key={i} variants={fadeUp} className="px-4 py-2 rounded-full bg-secondary border border-border text-sm font-medium hover:border-primary/30 transition-all cursor-default">
-                {name}
-              </motion.span>
-            )}
-          </motion.div>
-          <p className="text-xs text-muted-foreground mt-6">Virtual cards may be used only for supported online payments. Merchant acceptance is not guaranteed.</p>
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="py-20 px-4">
-        <div className="max-w-5xl mx-auto">
-          <motion.div className="text-center mb-14" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Security First</h2>
-            <p className="text-muted-foreground max-w-xl mx-auto">Your money and data are protected with industry-standard security.</p>
-          </motion.div>
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
-            initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
-            
-            {[
-            { icon: Lock, title: 'Encrypted Data', desc: 'Card details and personal data are encrypted at rest and in transit.' },
-            { icon: Shield, title: 'KYC Verified', desc: 'All users complete identity verification for fraud prevention.' },
-            { icon: CheckCircle, title: 'Transparent Fees', desc: 'Every fee is shown before you confirm. No hidden charges.' }].
-            map((item, i) =>
-            <motion.div key={i} variants={fadeUp} className="bg-card border border-border rounded-xl p-6 text-center">
-                <item.icon className="w-10 h-10 text-primary mx-auto mb-4" />
-                <h3 className="font-semibold mb-2">{item.title}</h3>
-                <p className="text-sm text-muted-foreground">{item.desc}</p>
-              </motion.div>
-            )}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* FAQ */}
-      <section className="py-20 px-4 bg-card/50">
-        <div className="max-w-3xl mx-auto">
-          <motion.div className="text-center mb-14" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Frequently Asked Questions</h2>
-          </motion.div>
-          <motion.div className="space-y-4" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
-            {faqs.map((faq, i) =>
-            <motion.details key={i} variants={fadeUp} className="group bg-card border border-border rounded-xl">
-                <summary className="flex items-center justify-between px-6 py-4 cursor-pointer font-medium">
-                  {faq.q}
-                  <ChevronDown className="w-4 h-4 text-muted-foreground group-open:rotate-180 transition-transform" />
-                </summary>
-                <div className="px-6 pb-4 text-sm text-muted-foreground">{faq.a}</div>
-              </motion.details>
-            )}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="py-20 px-4">
-        <div className="max-w-3xl mx-auto text-center">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Get Your Virtual Card?</h2>
-            <p className="text-muted-foreground mb-8">{platformDisclaimer}</p>
-            <Link to="/register">
-              <Button size="lg" className="bg-primary text-primary-foreground px-10 h-12 text-base font-semibold">
-                Get Started Now <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </Link>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t border-border py-12 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
-              <CreditCard className="w-3.5 h-3.5 text-primary-foreground" />
+      <section className="px-4 py-16">
+        <div className="mx-auto max-w-6xl">
+          <div className="mb-8 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">{copy.stepsTitle}</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight">Simple, local, and secure</h2>
             </div>
-            <span className="font-bold">Dink Card</span>
+            <PoweredByDinkDev compact className="hidden sm:inline-flex" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {copy.steps.map((step, index) => (
+              <motion.div key={step.title} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="rounded-3xl border border-border bg-card p-6 shadow-sm">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-primary">0{index + 1}</p>
+                <h3 className="mt-4 whitespace-nowrap text-2xl font-black">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-muted-foreground">{step.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 pb-20">
+        <div className="mx-auto max-w-6xl rounded-[36px] border border-border bg-card p-6 shadow-sm sm:p-8">
+          <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-primary">{copy.whyTitle}</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight">Dink Card by DinkDevLabs</h2>
+              <p className="mt-4 max-w-xl text-sm leading-7 text-muted-foreground">
+                Dink Card helps verified Ethiopian users access partner-powered virtual card services with cleaner pricing, safer flows, and a mobile-first experience.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {copy.why.map((item) => (
+                <motion.div key={item.title} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp} className="rounded-3xl border border-border bg-background/70 p-5">
+                  <h3 className="whitespace-nowrap text-lg font-black">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-7 text-muted-foreground">{item.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-border px-4 py-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-base font-bold">{copy.footerLead}</p>
+            <PoweredByDinkDev compact className="mt-2" />
           </div>
           <div className="space-y-3">
             <LegalLinks />
-            <p className="text-xs text-muted-foreground text-center max-w-2xl">{footerDisclaimer}</p>
+            <p className="max-w-2xl text-xs text-muted-foreground">{footerDisclaimer}</p>
           </div>
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Dink Card</p>
         </div>
       </footer>
-    </div>);
-
+    </div>
+  );
 }
-

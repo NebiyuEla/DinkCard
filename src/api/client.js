@@ -126,6 +126,10 @@ export const apiClient = {
     getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`),
     invoiceUrl: (txRef) => `${API_BASE_URL}/api/payments/invoice/${encodeURIComponent(txRef)}/download`
   },
+  wallet: {
+    lookupShareRecipient: (identifier) => request('/api/wallet/share/lookup', { method: 'POST', body: JSON.stringify({ identifier }) }),
+    shareBalance: (payload) => request('/api/wallet/share', { method: 'POST', body: JSON.stringify(payload) })
+  },
   notifications: {
     markRead: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),
     markAllRead: () => request('/api/notifications/read-all', { method: 'POST' })

@@ -1,17 +1,29 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useCurrentUser, useWallet, useWalletTransactions, useFeeSettings } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock } from 'lucide-react';
+import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { apiClient } from '@/api/client';
+import { invalidateOperationalData } from '@/lib/realtime';
+import { toast } from 'sonner';
 
 export default function WalletPage() {
+  const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: transactions } = useWalletTransactions(user?.email);
   const { data: settings } = useFeeSettings();
+  const [shareOpen, setShareOpen] = useState(false);
+  const [recipientInput, setRecipientInput] = useState('');
+  const [recipient, setRecipient] = useState(null);
+  const [shareAmount, setShareAmount] = useState('');
 
   const balance = wallet?.available_balance || 0;
   const locked = wallet?.locked_balance || 0;
@@ -25,21 +37,53 @@ export default function WalletPage() {
     fee: <Lock className="w-4 h-4 text-muted-foreground" />,
     adjustment: <Clock className="w-4 h-4 text-muted-foreground" />,
     card_withdrawal: <ArrowDownUp className="w-4 h-4 text-primary" />,
-    referral_reward: <DollarSign className="w-4 h-4 text-primary" />
+    referral_reward: <DollarSign className="w-4 h-4 text-primary" />,
+    balance_share_sent: <SendHorizontal className="w-4 h-4 text-accent" />,
+    balance_share_received: <SendHorizontal className="w-4 h-4 text-primary" />
   };
+
+  const lookupRecipient = useMutation({
+    mutationFn: () => apiClient.wallet.lookupShareRecipient(recipientInput),
+    onSuccess: (payload) => {
+      setRecipient(payload);
+      toast.success('Receiver found');
+    },
+    onError: (error) => {
+      setRecipient(null);
+      toast.error(error.message || 'Receiver not found');
+    }
+  });
+
+  const shareBalance = useMutation({
+    mutationFn: () => apiClient.wallet.shareBalance({ identifier: recipientInput, amount: Number(shareAmount) }),
+    onSuccess: (payload) => {
+      invalidateOperationalData(queryClient);
+      toast.success(`$${Number(payload.amount || 0).toFixed(2)} sent successfully`);
+      setShareOpen(false);
+      setRecipientInput('');
+      setRecipient(null);
+      setShareAmount('');
+    },
+    onError: (error) => toast.error(error.message || 'Could not share balance')
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Service Balance</h1>
           <p className="text-sm text-muted-foreground">Your available platform balance and history</p>
         </div>
-        <Link to="/add-money">
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShareOpen(true)}>
+            <SendHorizontal className="w-4 h-4 mr-2" /> Share Balance
+          </Button>
+          <Link to="/add-money">
           <Button className="bg-primary text-primary-foreground">
             <PlusCircle className="w-4 h-4 mr-2" /> Add Money
           </Button>
-        </Link>
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -79,6 +123,49 @@ export default function WalletPage() {
           </div>
         )}
       </div>
+
+      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Balance</DialogTitle>
+            <DialogDescription>Send balance with no fee using the receiver&apos;s email, phone number, or username.</DialogDescription>
+          </DialogHeader>
+
+          {!recipient ? (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Receiver</Label>
+                <Input value={recipientInput} onChange={(event) => setRecipientInput(event.target.value)} placeholder="email, phone, or username" />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShareOpen(false)}>Cancel</Button>
+                <Button onClick={() => lookupRecipient.mutate()} disabled={!recipientInput.trim() || lookupRecipient.isPending}>
+                  {lookupRecipient.isPending ? 'Checking...' : 'Next'}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-secondary/20 p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Receiver</p>
+                <p className="mt-2 font-semibold">{recipient.full_name || recipient.email}</p>
+                <p className="text-xs text-muted-foreground">{recipient.username ? `@${recipient.username}` : recipient.email}</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Amount in USD</Label>
+                <Input type="number" min="0.01" step="0.01" value={shareAmount} onChange={(event) => setShareAmount(event.target.value)} />
+              </div>
+              <p className="text-xs text-muted-foreground">No fee is charged for this balance share.</p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setRecipient(null); setShareAmount(''); }}>Back</Button>
+                <Button onClick={() => shareBalance.mutate()} disabled={!Number(shareAmount) || Number(shareAmount) > balance || shareBalance.isPending}>
+                  {shareBalance.isPending ? 'Sending...' : 'Send Balance'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
