@@ -28,7 +28,6 @@ export default function AddMoney() {
   const [enteredAmount, setEnteredAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
   const [selectedNetwork, setSelectedNetwork] = useState('');
-  const [txHash, setTxHash] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [acceptedNotice, setAcceptedNotice] = useState(false);
   const [showFeeDetails, setShowFeeDetails] = useState(false);
@@ -150,16 +149,6 @@ export default function AddMoney() {
       toast.success('USDC address generated.');
     },
     onError: (error) => toast.error(error.message || 'Unable to generate a USDC address')
-  });
-
-  const submitUsdcTransfer = useMutation({
-    mutationFn: () => apiClient.payments.submitUsdcTransfer(activeUsdcDeposit.id, { txHash }),
-    onSuccess: (deposit) => {
-      setGeneratedUsdcDeposit(deposit);
-      invalidateOperationalData(queryClient);
-      toast.success('USDC transfer submitted for admin review.');
-    },
-    onError: (error) => toast.error(error.message || 'Unable to submit transfer')
   });
 
   const goBack = () => {
@@ -335,7 +324,7 @@ export default function AddMoney() {
                   USDC funding
                 </div>
                 <p className="mt-2 text-muted-foreground">
-                  Generate a USDC address for your preferred network, send the exact amount, then submit it for admin verification.
+                  Generate a USDC address for your preferred network, send the exact amount, and wait for automatic provider confirmation.
                 </p>
                 {amount > 0 && (
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -395,22 +384,9 @@ export default function AddMoney() {
                       )}
                     </div>
                   </div>
-                  {activeUsdcDeposit.status !== 'awaiting_review' && (
-                    <>
-                      <div>
-                        <Label className="text-sm font-medium">Transaction hash (optional)</Label>
-                        <Input value={txHash} onChange={(e) => setTxHash(e.target.value)} className="mt-1.5 font-mono" placeholder="Paste transaction hash if you have it" />
-                      </div>
-                      <Button
-                        type="button"
-                        className="w-full h-12 bg-primary text-primary-foreground"
-                        onClick={() => submitUsdcTransfer.mutate()}
-                        disabled={!acceptedNotice || submitUsdcTransfer.isPending}
-                      >
-                        {submitUsdcTransfer.isPending ? 'Submitting...' : 'I Sent the USDC'}
-                      </Button>
-                    </>
-                  )}
+                  <div className="rounded-xl bg-card p-3 text-xs text-muted-foreground">
+                    After you send the USDC, Dink Card will wait for Bitnob to confirm the deposit and then credit your available balance automatically.
+                  </div>
                 </div>
               )}
             </div>
