@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import TermsModal from '@/components/TermsModal';
+import { announceNewNotifications, getNotificationPermission, markNotificationsAsSeen } from '@/lib/deviceNotifications';
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
@@ -24,6 +25,15 @@ export default function AppLayout() {
 
     return () => events.close();
   }, [queryClient, user?.email]);
+
+  useEffect(() => {
+    if (!user?.email || !notifications?.length) return;
+    if (getNotificationPermission() !== 'granted') {
+      markNotificationsAsSeen(notifications.filter((item) => item.read));
+      return;
+    }
+    announceNewNotifications(notifications);
+  }, [notifications, user?.email]);
 
   return (
     <div className="min-h-screen bg-background">

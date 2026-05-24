@@ -1,4 +1,4 @@
-#env
+# Env
 .env
 .env.*
 !.env.example
@@ -17,6 +17,9 @@ dist
 dist-ssr
 *.local
 data/
+uploads/
+uploads-test/
+server/data/
 
 # Editor directories and files
 .vscode/*
@@ -29,5 +32,4 @@ data/
 *.sln
 *.sw?
 
-.env
 .vite

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import { apiClient } from '@/api/client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Bell, CheckCheck, CreditCard, DollarSign, ShieldCheck, HeadphonesIcon, 
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getNotificationPermission, requestDeviceNotificationPermission } from '@/lib/deviceNotifications';
 
 const typeIcons = {
   deposit: DollarSign,
@@ -23,6 +24,7 @@ export default function NotificationsPage() {
   const { data: user } = useCurrentUser();
   const { data: notifications } = useNotifications(user?.email);
   const queryClient = useQueryClient();
+  const [permission, setPermission] = useState(() => getNotificationPermission());
 
   const markRead = useMutation({
     mutationFn: (id) => apiClient.notifications.markRead(id),
@@ -64,12 +66,34 @@ export default function NotificationsPage() {
           <h1 className="text-2xl font-bold">Notifications</h1>
           <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
-            <CheckCheck className="w-4 h-4 mr-2" /> {markAllRead.isPending ? 'Marking...' : 'Mark All Read'}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {permission !== 'granted' && permission !== 'unsupported' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                const result = await requestDeviceNotificationPermission();
+                setPermission(result);
+                if (result === 'granted') toast.success('Device alerts enabled.');
+                else toast.error('Device alerts were not enabled.');
+              }}
+            >
+              Enable Device Alerts
+            </Button>
+          )}
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
+              <CheckCheck className="w-4 h-4 mr-2" /> {markAllRead.isPending ? 'Marking...' : 'Mark All Read'}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {permission === 'granted' && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
+          Device alerts are on. Dink Card will show important account, deposit, card, and KYC updates on this device.
+        </div>
+      )}
 
       {!notifications?.length ? (
         <EmptyState icon={Bell} title="No notifications" description="You're all caught up!" />
