@@ -146,7 +146,12 @@ export default function AdminDeposits() {
                 <div><span className="text-muted-foreground">USD Credit:</span> <span className="font-mono text-primary">${selected.final_usd_credit?.toFixed(2)}</span></div>
                 <div><span className="text-muted-foreground">Sender:</span> <span>{selected.sender_name}</span></div>
                 <div><span className="text-muted-foreground">Phone:</span> <span>{selected.sender_phone}</span></div>
+                {selected.payment_currency && <div><span className="text-muted-foreground">Currency:</span> <span>{selected.payment_currency}</span></div>}
+                {selected.payment_network && <div><span className="text-muted-foreground">Network:</span> <span>{selected.payment_network}</span></div>}
+                {selected.payment_amount && <div><span className="text-muted-foreground">Payment Amount:</span> <span className="font-mono">{Number(selected.payment_amount).toFixed(2)} {selected.payment_currency || ''}</span></div>}
+                {selected.tx_hash && <div><span className="text-muted-foreground">Tx Hash:</span> <span className="font-mono break-all">{selected.tx_hash}</span></div>}
                 <div className="col-span-2"><span className="text-muted-foreground">Reference:</span> <span className="font-mono">{selected.transaction_reference}</span></div>
+                {selected.payment_address && <div className="col-span-2"><span className="text-muted-foreground">Deposit Address:</span> <span className="font-mono break-all">{selected.payment_address}</span></div>}
               </div>
 
               <Button

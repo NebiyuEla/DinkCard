@@ -5,7 +5,6 @@ import { apiClient } from '@/api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -43,9 +42,6 @@ export default function ResetPassword() {
         <p className="text-sm text-center text-muted-foreground">
           <Link to="/login" className="text-primary hover:underline">Back to sign in</Link>
         </p>
-        <div className="flex justify-center">
-          <PoweredByDinkDev compact />
-        </div>
       </div>
     </div>
   );

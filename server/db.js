@@ -154,6 +154,11 @@ CREATE TABLE IF NOT EXISTS deposits (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
   payment_method TEXT NOT NULL,
+  payment_currency TEXT,
+  payment_network TEXT,
+  payment_address TEXT,
+  payment_amount REAL,
+  tx_hash TEXT,
   requested_usd_amount REAL NOT NULL,
   exchange_rate REAL NOT NULL,
   etb_amount REAL NOT NULL,
@@ -427,6 +432,11 @@ ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');
 ensureColumn('deposits', 'source', "TEXT NOT NULL DEFAULT 'dinkcard'");
 ensureColumn('deposits', 'verified_at', 'TEXT');
+ensureColumn('deposits', 'payment_currency', 'TEXT');
+ensureColumn('deposits', 'payment_network', 'TEXT');
+ensureColumn('deposits', 'payment_address', 'TEXT');
+ensureColumn('deposits', 'payment_amount', 'REAL');
+ensureColumn('deposits', 'tx_hash', 'TEXT');
 
 db.prepare("UPDATE deposits SET source = 'dinkcard' WHERE source IS NULL OR source = ''").run();
 

@@ -40,7 +40,7 @@ export default function Dashboard() {
   const etbEstimate = balance * (settings?.usd_to_etb_rate || 135);
   const activeCards = cards?.filter((card) => card.status === 'active') || [];
   const frozenCards = cards?.filter((card) => card.status === 'frozen') || [];
-  const pendingDeposits = deposits?.filter((deposit) => ['pending_payment', 'awaiting_review'].includes(deposit.status)) || [];
+  const pendingDeposits = deposits?.filter((deposit) => ['pending_payment', 'pending_transfer', 'awaiting_review'].includes(deposit.status)) || [];
   const totalDeposited = deposits?.filter((deposit) => deposit.status === 'approved').reduce((sum, deposit) => sum + (deposit.final_usd_credit || 0), 0) || 0;
   const totalCardDebits = transactions?.filter((tx) => ['card_creation', 'card_funding'].includes(tx.type) && tx.status === 'completed').reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0) || 0;
   const cardRefunds = transactions?.filter((tx) => tx.type === 'refund' && tx.status === 'completed' && String(tx.description || '').toLowerCase().includes('card')).reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0) || 0;

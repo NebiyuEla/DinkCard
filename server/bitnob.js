@@ -176,7 +176,7 @@ export const bitnobService = {
   getBalances: () => safeBitnob('GET', '/api/balances'),
   generateAddress: (data) => safeBitnob('POST', '/api/addresses', data),
   listAddresses: () => safeBitnob('GET', '/api/addresses'),
-  getSupportedChains: () => safeBitnob('GET', '/api/addresses/supported-chains')
+  getSupportedChains: () => safeBitnob('GET', '/api/stablecoins/supported-chains')
 };
 
 function getExistingBitnobCustomer(user, kyc) {

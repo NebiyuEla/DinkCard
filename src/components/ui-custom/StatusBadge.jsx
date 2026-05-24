@@ -10,6 +10,7 @@ const statusColors = {
   solved: 'bg-primary/10 text-primary border-primary/20',
   pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
   pending_payment: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+  pending_transfer: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
   payment_received: 'bg-primary/10 text-primary border-primary/20',
   processing: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
   awaiting_review: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',

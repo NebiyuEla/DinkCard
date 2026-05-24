@@ -567,6 +567,52 @@ function findAssetBalance(payload, asset = 'USDC') {
   return found.length ? Math.max(...found) : 0;
 }
 
+function normalizeStablecoinChains(payload, currency = 'USDC') {
+  const target = String(currency || 'USDC').toUpperCase();
+  const data = payload?.data;
+  const rawChains = []
+    .concat(Array.isArray(data?.chains) ? data.chains : [])
+    .concat(Array.isArray(data) ? data : [])
+    .concat(Array.isArray(payload?.chains) ? payload.chains : []);
+
+  const seen = new Set();
+  return rawChains.flatMap((entry) => {
+    const stablecoins = []
+      .concat(Array.isArray(entry?.stablecoins) ? entry.stablecoins : [])
+      .concat(Array.isArray(entry?.assets) ? entry.assets : [])
+      .concat(Array.isArray(entry?.currencies) ? entry.currencies : []);
+    const supportsTarget = stablecoins.some((coin) => {
+      const symbol = String(coin?.symbol || coin?.code || coin?.asset || coin || '').toUpperCase();
+      return symbol === target;
+    });
+    if (!supportsTarget) return [];
+
+    const chainValue = String(entry?.name || entry?.chain || entry?.network || entry?.code || '').trim();
+    if (!chainValue) return [];
+    const key = chainValue.toUpperCase();
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{
+      value: chainValue,
+      label: chainValue.replace(/_/g, ' '),
+      currency: target
+    }];
+  });
+}
+
+function extractGeneratedAddress(payload) {
+  const data = extractProviderData(payload);
+  return String(
+    data?.address
+      || data?.wallet_address
+      || data?.deposit_address
+      || data?.account
+      || payload?.data?.address
+      || payload?.address
+      || ''
+  ).trim();
+}
+
 function buildBitnobCustomerPayload(payload = {}) {
   const { phoneNumber, dialCode } = normalizeBitnobPhone(payload.phone || payload.phone_number);
   const addressParts = [
@@ -923,21 +969,33 @@ function escapeHtml(value) {
 function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
   const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
-  const rows = [
-    ['Payment reference', deposit.transaction_reference],
-    ['Order status', status],
-    ['Card amount', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
-    ['Exchange rate', `1 USD = ${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
-    ['Service & processing fee', `${serviceProcessingFee.toLocaleString()} ETB`],
-    ['Total paid', `${Number(deposit.total_payable_etb || 0).toLocaleString()} ETB`],
-    ['Created', deposit.created_at]
-  ];
+  const isStablecoinDeposit = String(deposit.payment_method || '').toLowerCase() === 'usdc';
+  const rows = isStablecoinDeposit
+    ? [
+        ['Payment reference', deposit.transaction_reference],
+        ['Order status', status],
+        ['Funding amount', `${Number(deposit.payment_amount || deposit.final_usd_credit || 0).toFixed(2)} ${deposit.payment_currency || 'USDC'}`],
+        ['Network', deposit.payment_network || 'USDC'],
+        ['Deposit address', deposit.payment_address || '-'],
+        ['USD credit', `$${Number(deposit.final_usd_credit || 0).toFixed(2)}`],
+        ['ETB equivalent', `${Number(deposit.etb_amount || 0).toLocaleString()} ETB`],
+        ['Created', deposit.created_at]
+      ]
+    : [
+        ['Payment reference', deposit.transaction_reference],
+        ['Order status', status],
+        ['Card amount', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
+        ['Exchange rate', `1 USD = ${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
+        ['Service & processing fee', `${serviceProcessingFee.toLocaleString()} ETB`],
+        ['Total paid', `${Number(deposit.total_payable_etb || 0).toLocaleString()} ETB`],
+        ['Created', deposit.created_at]
+      ];
 
   return `<!doctype html>
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dink Card Chapa Receipt ${escapeHtml(deposit.transaction_reference)}</title>
+  <title>Dink Card Receipt ${escapeHtml(deposit.transaction_reference)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
     .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
@@ -955,8 +1013,8 @@ function invoiceHtml(deposit) {
   <section class="invoice">
     <div class="brand">
       <div>
-        <h1>Dink Card Chapa Receipt</h1>
-        <p>Hosted checkout payment receipt</p>
+        <h1>Dink Card Receipt</h1>
+        <p>${escapeHtml(isStablecoinDeposit ? 'USDC funding request receipt' : 'Hosted checkout payment receipt')}</p>
       </div>
       <div>
         <p class="status">${escapeHtml(status)}</p>
@@ -2571,6 +2629,154 @@ export function createApp() {
       res.json(result);
     } catch (error) {
       res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/payments/usdc/networks', authMiddleware(db), async (req, res) => {
+    try {
+      const supportedChains = await bitnobService.getSupportedChains();
+      const networks = normalizeStablecoinChains(supportedChains, 'USDC');
+      res.json({ currency: 'USDC', networks });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to load USDC networks right now.' });
+    }
+  });
+
+  app.post('/api/payments/usdc/address', authMiddleware(db), async (req, res) => {
+    try {
+      const approvedKyc = db.prepare(`
+        SELECT id FROM kyc_submissions
+        WHERE user_id = ? AND status = 'approved'
+        ORDER BY created_at DESC LIMIT 1
+      `).get(req.user.email);
+      if (!approvedKyc) {
+        return res.status(400).json({ message: 'Approved KYC is required before adding funds.' });
+      }
+
+      const settings = getFeeSettings();
+      const amountUsd = Number(req.body?.amountUsd || 0);
+      const network = String(req.body?.network || '').trim();
+      if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+        return res.status(400).json({ message: 'Enter a valid USD amount.' });
+      }
+      if (amountUsd < Number(settings.min_deposit_usd || 5)) {
+        return res.status(400).json({ message: `Minimum deposit is $${Number(settings.min_deposit_usd || 5).toFixed(2)}.` });
+      }
+      if (amountUsd > Number(settings.max_deposit_usd || 1000)) {
+        return res.status(400).json({ message: `Maximum deposit is $${Number(settings.max_deposit_usd || 1000).toFixed(2)}.` });
+      }
+      if (!network) {
+        return res.status(400).json({ message: 'Choose a USDC network first.' });
+      }
+
+      const supportedChains = await bitnobService.getSupportedChains();
+      const networks = normalizeStablecoinChains(supportedChains, 'USDC');
+      const selectedNetwork = networks.find((item) => item.value.toUpperCase() === network.toUpperCase());
+      if (!selectedNetwork) {
+        return res.status(400).json({ message: 'That USDC network is not available right now.' });
+      }
+
+      db.prepare(`
+        UPDATE deposits
+        SET status = 'cancelled',
+            provider_status = 'replaced',
+            rejection_reason = 'Replaced by a newer USDC funding request.',
+            updated_at = ?
+        WHERE user_id = ?
+          AND payment_method = 'usdc'
+          AND status IN ('pending_transfer', 'awaiting_review')
+      `).run(nowIso(), req.user.email);
+
+      const txRef = `dinkcard_usdc_${generateId('tx')}`;
+      const providerResponse = await bitnobService.generateAddress({
+        chain: selectedNetwork.value,
+        customer_email: req.user.email,
+        label: `Dink Card USDC ${selectedNetwork.label}`,
+        reference: txRef
+      });
+      const address = extractGeneratedAddress(providerResponse);
+      if (!address) {
+        return res.status(400).json({ message: 'Bitnob did not return a deposit address for that network.' });
+      }
+
+      const rate = Number(settings.usd_to_etb_rate || 190);
+      const etbEquivalent = money(amountUsd * rate);
+      const now = nowIso();
+      const depositId = generateId('dep');
+      db.prepare(`
+        INSERT INTO deposits (
+          id, user_id, payment_method, payment_currency, payment_network, payment_address, payment_amount,
+          requested_usd_amount, exchange_rate, etb_amount, service_fee_etb, gateway_fee_etb, total_payable_etb,
+          final_usd_credit, sender_name, sender_phone, transaction_reference, status, provider_status, provider_payload,
+          source, created_at, updated_at
+        ) VALUES (?, ?, 'usdc', 'USDC', ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 'pending_transfer', 'address_generated', ?, 'dinkcard', ?, ?)
+      `).run(
+        depositId,
+        req.user.email,
+        selectedNetwork.value,
+        address,
+        money(amountUsd),
+        money(amountUsd),
+        rate,
+        etbEquivalent,
+        etbEquivalent,
+        money(amountUsd),
+        req.user.full_name || req.user.email,
+        req.user.phone || '',
+        txRef,
+        JSON.stringify(providerResponse || {}),
+        now,
+        now
+      );
+
+      res.status(201).json({
+        id: depositId,
+        reference: txRef,
+        currency: 'USDC',
+        network: selectedNetwork.value,
+        address,
+        amountUsd: money(amountUsd),
+        amountUsdc: money(amountUsd)
+      });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to create a USDC funding address right now.' });
+    }
+  });
+
+  app.post('/api/payments/usdc/:depositId/submit', authMiddleware(db), (req, res) => {
+    try {
+      const deposit = db.prepare('SELECT * FROM deposits WHERE id = ? AND user_id = ?').get(req.params.depositId, req.user.email);
+      if (!deposit) return res.status(404).json({ message: 'Funding request not found.' });
+      if (deposit.payment_method !== 'usdc') return res.status(400).json({ message: 'This funding request is not a USDC transfer.' });
+      if (!['pending_transfer', 'awaiting_review'].includes(deposit.status)) {
+        return res.status(400).json({ message: 'This funding request can no longer be submitted.' });
+      }
+
+      const txHash = String(req.body?.txHash || '').trim();
+      const now = nowIso();
+      db.prepare(`
+        UPDATE deposits
+        SET status = 'awaiting_review',
+            provider_status = 'submitted_by_user',
+            tx_hash = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(txHash || null, now, deposit.id);
+
+      createNotification(req.user.email, 'USDC Transfer Submitted', 'Your USDC funding request is awaiting admin verification.', 'deposit', '/dashboard');
+      writeAudit({
+        actor: req.user.email,
+        userId: req.user.email,
+        action: 'usdc_funding_submitted',
+        entityType: 'deposit',
+        entityId: deposit.id,
+        newValue: { network: deposit.payment_network, amount: deposit.payment_amount, txHash: txHash || null },
+        req
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to submit this USDC transfer right now.' });
     }
   });
 
