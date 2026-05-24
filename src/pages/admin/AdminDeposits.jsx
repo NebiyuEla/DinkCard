@@ -11,6 +11,8 @@ import { Check, X, Eye, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
+const MANUAL_APPROVAL_STATUSES = new Set(['awaiting_review', 'pending_transfer', 'pending_payment', 'processing']);
+
 export default function AdminDeposits() {
   const queryClient = useQueryClient();
   const { data: deposits } = useQuery({
@@ -24,14 +26,7 @@ export default function AdminDeposits() {
   const [showReject, setShowReject] = useState(false);
 
   const approveDeposit = useMutation({
-    mutationFn: async (deposit) => {
-      const response = await fetch(`/api/admin/deposits/${deposit.id}/approve`, { method: 'POST', credentials: 'include' });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || 'Approval failed');
-      }
-      return response.json();
-    },
+    mutationFn: (deposit) => apiClient.admin.deposits.approve(deposit.id),
     onSuccess: () => {
       invalidateOperationalData(queryClient);
       toast.success('Funding approved and service balance credited');
@@ -40,18 +35,7 @@ export default function AdminDeposits() {
   });
 
   const rejectDeposit = useMutation({
-    mutationFn: async () => {
-      const response = await fetch(`/api/admin/deposits/${selected.id}/reject`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: rejectReason })
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        throw new Error(payload.message || 'Rejection failed');
-      }
-    },
+    mutationFn: () => apiClient.admin.deposits.reject(selected.id, { reason: rejectReason }),
     onSuccess: () => {
       invalidateOperationalData(queryClient);
       toast.success('Deposit rejected');
@@ -170,10 +154,10 @@ export default function AdminDeposits() {
                 </div>
               )}
 
-              {selected.status === 'awaiting_review' && (
+              {MANUAL_APPROVAL_STATUSES.has(selected.status) && (
                 <div className="flex gap-2 pt-2">
                   <Button onClick={() => approveDeposit.mutate(selected)} disabled={approveDeposit.isPending} className="flex-1 bg-primary text-primary-foreground">
-                    <Check className="w-4 h-4 mr-2" /> {approveDeposit.isPending ? 'Approving...' : 'Approve'}
+                    <Check className="w-4 h-4 mr-2" /> {approveDeposit.isPending ? 'Approving...' : 'Manual Approve'}
                   </Button>
                   <Button variant="destructive" onClick={() => setShowReject(true)} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Reject

@@ -6,6 +6,10 @@ import StatCard from '@/components/ui-custom/StatCard';
 import { REFRESH } from '@/lib/realtime';
 import { Users, ShieldCheck, DollarSign, CreditCard, HeadphonesIcon, WalletCards } from 'lucide-react';
 
+function formatUsd(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
 export default function SAOverview() {
   const { data: users } = useQuery({ queryKey: ['sa-users'], queryFn: () => apiClient.entities.User.list('-created_date', 200), refetchInterval: REFRESH.admin });
   const { data: kycSubs } = useQuery({ queryKey: ['sa-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 200), refetchInterval: REFRESH.admin });
@@ -60,7 +64,7 @@ export default function SAOverview() {
                     <p className="text-xs text-muted-foreground capitalize">{d.payment_method?.replace(/_/g, ' ')} • Ref: {d.transaction_reference}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-mono font-semibold">${d.requested_usd_amount?.toFixed(2)}</p>
+                    <p className="text-sm font-mono font-semibold">{formatUsd(d.requested_usd_amount)}</p>
                     <p className="text-xs text-muted-foreground">{d.total_payable_etb?.toLocaleString()} ETB</p>
                   </div>
                 </div>

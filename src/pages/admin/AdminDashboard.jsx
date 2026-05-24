@@ -11,6 +11,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+function formatUsd(value) {
+  return `$${Number(value || 0).toFixed(2)}`;
+}
+
 const adminNav = [
   { label: 'Overview', path: '/admin', icon: LayoutDashboard },
   { label: 'Users', path: '/admin/users', icon: Users, ownerOnly: true },
@@ -117,7 +121,7 @@ export default function AdminDashboard() {
                         <p className="text-xs text-muted-foreground">{d.payment_method} • Ref: {d.transaction_reference}</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm font-mono font-semibold">${d.requested_usd_amount?.toFixed(2)}</p>
+                        <p className="text-sm font-mono font-semibold">{formatUsd(d.requested_usd_amount)}</p>
                         <p className="text-xs text-muted-foreground">{d.total_payable_etb?.toLocaleString()} ETB</p>
                       </div>
                     </div>

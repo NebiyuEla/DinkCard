@@ -12,6 +12,7 @@ const statusStyles = {
 
 export default function VirtualCardDisplay({ card, showDetails = false, compact = false }) {
   const masked = `**** **** **** ${card.last_four || '----'}`;
+  const balance = Number(card.balance || 0);
 
   if (compact) {
     return (
@@ -29,7 +30,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
             </div>
           </div>
           <div className="text-right">
-            <p className="font-bold font-mono text-sm">${(card.balance || 0).toFixed(2)}</p>
+            <p className="font-bold font-mono text-sm">${balance.toFixed(2)}</p>
             <div className="flex items-center gap-1 mt-0.5">
               {card.status === 'frozen' && <Snowflake className="w-3 h-3 text-accent" />}
               <span className={cn(
@@ -99,7 +100,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
         <div className="text-right">
           <p className="text-[10px] text-muted-foreground uppercase">Balance</p>
           <p className="font-mono text-lg font-bold text-primary">
-            ${(card.balance || 0).toFixed(2)}
+            ${balance.toFixed(2)}
           </p>
         </div>
       </div>

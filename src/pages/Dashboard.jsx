@@ -36,14 +36,14 @@ export default function Dashboard() {
   const { data: settings } = useFeeSettings();
   const { data: transactions } = useWalletTransactions(user?.email);
 
-  const balance = wallet?.available_balance || 0;
+  const balance = Number(wallet?.available_balance || 0);
   const etbEstimate = balance * (settings?.usd_to_etb_rate || 135);
   const activeCards = cards?.filter((card) => card.status === 'active') || [];
   const frozenCards = cards?.filter((card) => card.status === 'frozen') || [];
   const pendingDeposits = deposits?.filter((deposit) => ['pending_payment', 'pending_transfer', 'awaiting_review'].includes(deposit.status)) || [];
-  const totalDeposited = deposits?.filter((deposit) => deposit.status === 'approved').reduce((sum, deposit) => sum + (deposit.final_usd_credit || 0), 0) || 0;
-  const totalCardDebits = transactions?.filter((tx) => ['card_creation', 'card_funding'].includes(tx.type) && tx.status === 'completed').reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0) || 0;
-  const cardRefunds = transactions?.filter((tx) => tx.type === 'refund' && tx.status === 'completed' && String(tx.description || '').toLowerCase().includes('card')).reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0) || 0;
+  const totalDeposited = deposits?.filter((deposit) => deposit.status === 'approved').reduce((sum, deposit) => sum + Number(deposit.final_usd_credit || 0), 0) || 0;
+  const totalCardDebits = transactions?.filter((tx) => ['card_creation', 'card_funding'].includes(tx.type) && tx.status === 'completed').reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
+  const cardRefunds = transactions?.filter((tx) => tx.type === 'refund' && tx.status === 'completed' && String(tx.description || '').toLowerCase().includes('card')).reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
   const mobileQuickActions = quickActions.filter((action) => !action.desktopOnly);
@@ -218,7 +218,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <p className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                      {tx.amount >= 0 ? '+' : ''}{tx.amount?.toFixed(2)} USD
+                      {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
                     </p>
                     <StatusBadge status={tx.status} className="text-[10px]" />
                   </div>

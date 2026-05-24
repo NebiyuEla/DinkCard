@@ -26,6 +26,8 @@ const KYC_FIX_OPTIONS = [
   { value: 'selfie', label: 'Selfie upload' }
 ];
 
+const APPROVABLE_KYC_STATUSES = new Set(['pending', 'manual_review', 'resubmit_required']);
+
 export default function AdminKYC() {
   const queryClient = useQueryClient();
   const { data: submissions } = useQuery({
@@ -183,10 +185,10 @@ export default function AdminKYC() {
                 {selected.id_type !== 'passport' && <FilePreview url={selected.back_id_url} label="Back ID" />}
                 <FilePreview url={selected.selfie_url} label="Selfie" />
               </div>
-              {selected.status === 'pending' && (
+              {APPROVABLE_KYC_STATUSES.has(selected.status) && (
                 <div className="flex gap-2">
                   <Button onClick={() => approveKYC.mutate(selected)} disabled={approveKYC.isPending} className="flex-1 bg-primary text-primary-foreground">
-                    <Check className="w-4 h-4 mr-2" /> {approveKYC.isPending ? 'Approving...' : 'Approve'}
+                    <Check className="w-4 h-4 mr-2" /> {approveKYC.isPending ? 'Approving...' : 'Manual Approve'}
                   </Button>
                   <Button variant="destructive" onClick={openCorrectionDialog} disabled={approveKYC.isPending || rejectKYC.isPending} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Request Fix

@@ -146,11 +146,18 @@ export const apiClient = {
     setPin: (cardId, pin) => request(`/api/cards/${cardId}/pin`, { method: 'POST', body: JSON.stringify({ pin }) })
   },
   admin: {
+    deposits: {
+      approve: (id) => request(`/api/admin/deposits/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+      reject: (id, payload) => request(`/api/admin/deposits/${encodeURIComponent(id)}/reject`, { method: 'POST', body: JSON.stringify(payload || {}) })
+    },
     kyc: {
       approve: (id) => request(`/api/admin/kyc/${id}/approve`, { method: 'POST' }),
       unapprove: (id, payload) => request(`/api/admin/kyc/${id}/unapprove`, { method: 'POST', body: JSON.stringify(payload || {}) }),
       requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) }),
       manualReview: (id, payload) => request(`/api/admin/kyc/${id}/manual-review`, { method: 'POST', body: JSON.stringify(payload || {}) })
+    },
+    tickets: {
+      updateStatus: (id, status) => request(`/api/entities/SupportTicket/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) })
     },
     users: {
       suspend: (id, reason) => request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
