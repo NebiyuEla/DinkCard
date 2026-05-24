@@ -77,7 +77,8 @@ export const apiClient = {
     getTwoFactorStatus: () => request('/api/auth/2fa/status'),
     setupTwoFactor: (payload) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify(payload) }),
     enableTwoFactor: (payload) => request('/api/auth/2fa/enable', { method: 'POST', body: JSON.stringify(payload) }),
-    disableTwoFactor: (payload) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify(payload) })
+    disableTwoFactor: (payload) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify(payload) }),
+    deleteAccount: (payload) => request('/api/auth/account', { method: 'DELETE', body: JSON.stringify(payload) })
   },
   entities: {
     User: entityApi('User'),
@@ -130,9 +131,10 @@ export const apiClient = {
   cards: {
     create: (payload) => request('/api/cards', { method: 'POST', body: JSON.stringify(payload) }),
     fund: (cardId, amount) => request(`/api/cards/${cardId}/fund`, { method: 'POST', body: JSON.stringify({ amount }) }),
-    updateStatus: (cardId, status) => request(`/api/cards/${cardId}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
+    updateStatus: (cardId, status, pin) => request(`/api/cards/${cardId}/status`, { method: 'POST', body: JSON.stringify({ status, pin }) }),
     terminate: (cardId) => request(`/api/cards/${cardId}`, { method: 'DELETE' }),
-    reveal: (cardId, password) => request(`/api/cards/${cardId}/reveal`, { method: 'POST', body: JSON.stringify({ password }) })
+    reveal: (cardId, pin) => request(`/api/cards/${cardId}/reveal`, { method: 'POST', body: JSON.stringify({ pin }) }),
+    setPin: (cardId, pin) => request(`/api/cards/${cardId}/pin`, { method: 'POST', body: JSON.stringify({ pin }) })
   },
   admin: {
     kyc: {
@@ -180,7 +182,10 @@ export const apiClient = {
     walletSummary: () => request('/api/admin/wallet-summary'),
     providerStatus: () => request('/api/admin/settings/provider-status'),
     balances: () => request('/api/admin/bitnob/balances'),
-    auditLogs: () => request('/api/admin/audit-logs')
+    auditLogs: () => request('/api/admin/audit-logs'),
+    system: {
+      clearData: (payload) => request('/api/admin/system/clear-data', { method: 'POST', body: JSON.stringify(payload) })
+    }
   }
 };
 

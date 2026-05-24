@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { config } from './config.js';
 import { debitWallet, creditWallet, getFeeSettings, calculateTopupProviderFeeUsd } from './payments.js';
@@ -393,13 +394,19 @@ export async function fundVirtualCard(user, cardId, amount) {
   }
 }
 
-export async function changeCardStatus(user, cardId, status) {
+export async function changeCardStatus(user, cardId, status, pin) {
   if (!['active', 'frozen'].includes(status)) {
     throw new Error('Unsupported card status action.');
   }
   const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
+  if (user.role === 'user') {
+    const normalizedPin = String(pin || '').trim();
+    if (!card.card_pin_hash) throw new Error('Set a 4-digit card PIN first.');
+    const validPin = await bcrypt.compare(normalizedPin, card.card_pin_hash);
+    if (!validPin) throw new Error('Incorrect card PIN.');
+  }
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
   await bitnobRequest('POST', `/api/cards/${card.provider_card_id}/status`, { status });
   db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso(), card.id);
@@ -420,15 +427,27 @@ export async function terminateCard(user, cardId) {
     .run('terminated', nowIso(), card.id);
 }
 
-export async function revealCardDetails(user, cardId, password) {
-  const dbUser = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
-  const validPassword = await import('bcryptjs').then(({ default: bcrypt }) => bcrypt.compare(password, dbUser.password_hash));
-  if (!validPassword) {
-    throw new Error('Incorrect password');
-  }
+export async function setCardPin(user, cardId, pin) {
   const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
+  const normalizedPin = String(pin || '').trim();
+  if (!/^\d{4}$/.test(normalizedPin)) throw new Error('Card PIN must be exactly 4 digits.');
+  const pinHash = await bcrypt.hash(normalizedPin, 12);
+  const now = nowIso();
+  db.prepare('UPDATE virtual_cards SET card_pin_hash = ?, card_pin_enabled_at = ?, updated_at = ? WHERE id = ?')
+    .run(pinHash, now, now, card.id);
+}
+
+export async function revealCardDetails(user, cardId, pin) {
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  if (!card) throw new Error('Card not found');
+  if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
+  if (!card.card_pin_hash) throw new Error('Set a 4-digit card PIN first.');
+  const validPin = await bcrypt.compare(String(pin || '').trim(), card.card_pin_hash);
+  if (!validPin) {
+    throw new Error('Incorrect card PIN');
+  }
   if (!['active', 'frozen'].includes(card.status)) throw new Error('Card details are unavailable for this card status.');
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
   const response = await bitnobRequest('GET', `/api/cards/${card.provider_card_id}/secure`);

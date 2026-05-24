@@ -22,7 +22,7 @@ const fieldMap = {
   Wallet: ['id', 'user_id', 'currency', 'available_balance', 'locked_balance', 'status', 'created_at', 'updated_at'],
   WalletTransaction: ['id', 'user_id', 'wallet_id', 'type', 'amount', 'currency', 'balance_before', 'balance_after', 'status', 'reference', 'description', 'metadata', 'created_at'],
   KYCSubmission: ['id', 'user_id', 'legal_name', 'date_of_birth', 'gender', 'phone', 'email', 'address', 'city', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url', 'level', 'status', 'rejection_reason', 'resubmission_scope', 'resubmission_fields', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
-  VirtualCard: ['id', 'user_id', 'provider', 'provider_card_id', 'customer_reference', 'card_nickname', 'card_type', 'brand', 'currency', 'last_four', 'expiry_month', 'expiry_year', 'balance', 'status', 'billing_address', 'masked_pan', 'meta', 'created_at', 'updated_at'],
+  VirtualCard: ['id', 'user_id', 'provider', 'provider_card_id', 'customer_reference', 'card_nickname', 'card_type', 'brand', 'currency', 'last_four', 'expiry_month', 'expiry_year', 'balance', 'status', 'billing_address', 'masked_pan', 'card_pin_enabled_at', 'meta', 'created_at', 'updated_at'],
   Deposit: ['id', 'user_id', 'payment_method', 'requested_usd_amount', 'exchange_rate', 'etb_amount', 'service_fee_etb', 'gateway_fee_etb', 'total_payable_etb', 'final_usd_credit', 'proof_url', 'sender_name', 'sender_phone', 'transaction_reference', 'status', 'rejection_reason', 'approved_by', 'approved_at', 'admin_note', 'promo_code', 'provider_reference', 'provider_status', 'provider_payload', 'source', 'verified_at', 'checkout_url', 'created_at', 'updated_at'],
   Notification: ['id', 'user_id', 'title', 'message', 'type', 'read', 'link', 'created_at'],
   SupportTicket: ['id', 'user_id', 'category', 'subject', 'message', 'screenshot_url', 'related_transaction_id', 'related_card_id', 'status', 'priority', 'created_at', 'updated_at'],
@@ -211,10 +211,6 @@ export function createEntity(entity, data, user) {
 }
 
 function normalizeFeeSettings(payload) {
-  const displayStyle = ['simple', 'detailed', 'hybrid'].includes(payload.customer_fee_display_style)
-    ? payload.customer_fee_display_style
-    : 'hybrid';
-
   return {
     ...payload,
     key: payload.key || 'default',
@@ -222,17 +218,19 @@ function normalizeFeeSettings(payload) {
     gateway_fee_percentage: Number.isFinite(Number(payload.gateway_fee_percentage)) ? Number(payload.gateway_fee_percentage) : 2.5,
     deposit_fee_percentage: 0,
     deposit_fixed_fee_etb: 0,
-    service_margin_percentage: Number.isFinite(Number(payload.service_margin_percentage)) ? Number(payload.service_margin_percentage) : 4,
+    service_margin_percentage: Number.isFinite(Number(payload.service_margin_percentage)) ? Number(payload.service_margin_percentage) : 15,
     minimum_service_fee_etb: Number.isFinite(Number(payload.minimum_service_fee_etb)) ? Number(payload.minimum_service_fee_etb) : 100,
-    safety_buffer_percentage: Number.isFinite(Number(payload.safety_buffer_percentage)) ? Number(payload.safety_buffer_percentage) : 1,
+    safety_buffer_percentage: 0,
     chapa_settlement_fee_etb: Number.isFinite(Number(payload.chapa_settlement_fee_etb)) ? Number(payload.chapa_settlement_fee_etb) : 0,
     card_creation_fee_usd: Number.isFinite(Number(payload.card_creation_fee_usd)) ? Number(payload.card_creation_fee_usd) : 1,
     bitnob_topup_fee_under_100_usd: Number.isFinite(Number(payload.bitnob_topup_fee_under_100_usd)) ? Number(payload.bitnob_topup_fee_under_100_usd) : 1,
     bitnob_topup_fee_percent_100_plus: Number.isFinite(Number(payload.bitnob_topup_fee_percent_100_plus)) ? Number(payload.bitnob_topup_fee_percent_100_plus) : 1,
     card_funding_fee_percentage: 0,
-    rounding_rule_etb: Number.isFinite(Number(payload.rounding_rule_etb)) && Number(payload.rounding_rule_etb) > 0 ? Number(payload.rounding_rule_etb) : 50,
-    customer_fee_display_style: displayStyle,
-    min_card_creation_usd: Number.isFinite(Number(payload.min_card_creation_usd)) ? Number(payload.min_card_creation_usd) : 2
+    rounding_rule_etb: Number.isFinite(Number(payload.rounding_rule_etb)) && Number(payload.rounding_rule_etb) >= 0 ? Number(payload.rounding_rule_etb) : 0,
+    customer_fee_display_style: 'simple',
+    min_card_creation_usd: 2,
+    min_card_funding_usd: 1,
+    max_cards_per_user: 3
   };
 }
 

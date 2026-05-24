@@ -21,14 +21,19 @@ export default function AddMoney() {
   const { data: settings } = useFeeSettings();
   const { data: kyc } = useKYCStatus(user?.email);
   const { data: deposits } = useDeposits(user?.email);
-  const [usdAmount, setUsdAmount] = useState('');
+  const [amountMode, setAmountMode] = useState('usd');
+  const [enteredAmount, setEnteredAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
   const [statusMessage, setStatusMessage] = useState('');
   const [acceptedNotice, setAcceptedNotice] = useState(false);
   const [showFeeDetails, setShowFeeDetails] = useState(false);
 
-  const amount = Number(usdAmount || 0);
   const rate = settings?.usd_to_etb_rate || 190;
+  const amount = useMemo(() => {
+    const numeric = Number(enteredAmount || 0);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return amountMode === 'etb' ? numeric / rate : numeric;
+  }, [amountMode, enteredAmount, rate]);
   const fees = useMemo(() => {
     if (!amount) return null;
     return calculateDepositFees(amount, rate, settings || {});
@@ -99,18 +104,32 @@ export default function AddMoney() {
 
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm">
         <div>
-          <Label className="text-sm font-medium">Card amount in USD</Label>
+          <Label className="text-sm font-medium">Card amount</Label>
+          <div className="mt-1.5 grid grid-cols-2 gap-2">
+            <Button type="button" variant={amountMode === 'usd' ? 'default' : 'outline'} className={amountMode === 'usd' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setAmountMode('usd')}>
+              Enter USD
+            </Button>
+            <Button type="button" variant={amountMode === 'etb' ? 'default' : 'outline'} className={amountMode === 'etb' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setAmountMode('etb')}>
+              Enter ETB
+            </Button>
+          </div>
           <div className="relative mt-1.5">
             <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="number"
-              value={usdAmount}
-              onChange={(e) => setUsdAmount(e.target.value)}
-              min={settings?.min_deposit_usd || 5}
-              max={settings?.max_deposit_usd || 1000}
+              value={enteredAmount}
+              onChange={(e) => setEnteredAmount(e.target.value)}
+              min={amountMode === 'etb' ? (settings?.min_deposit_usd || 5) * rate : (settings?.min_deposit_usd || 5)}
+              max={amountMode === 'etb' ? (settings?.max_deposit_usd || 1000) * rate : (settings?.max_deposit_usd || 1000)}
               className="pl-9 h-12 font-mono"
+              placeholder={amountMode === 'etb' ? 'Enter ETB amount' : 'Enter USD amount'}
             />
           </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {amountMode === 'etb'
+              ? `Estimated card amount: $${amount.toFixed(2)} at 1 USD = ${rate.toFixed(2)} ETB`
+              : `Equivalent conversion amount: ${(amount * rate).toFixed(2)} ETB`}
+          </p>
         </div>
         <div>
           <Label className="text-sm font-medium">Phone Number</Label>
@@ -129,12 +148,16 @@ export default function AddMoney() {
               </div>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-              <span className="text-muted-foreground">Effective payable rate</span>
-              <span className="font-mono font-semibold text-right">1 USD = {fees.effectivePayableRate.toFixed(2)} ETB</span>
+              <span className="text-muted-foreground">Conversion amount</span>
+              <span className="font-mono font-semibold text-right">{fees.etbAmount.toLocaleString()} ETB</span>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-              <span className="text-muted-foreground">Service & processing fee</span>
-              <span className="font-mono font-semibold text-right">{fees.serviceAndProcessingFeeEtb.toLocaleString()} ETB</span>
+              <span className="text-muted-foreground">Fees & charges</span>
+              <span className="font-mono font-semibold text-right">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+              <span className="text-muted-foreground">Gateway fee (%)</span>
+              <span className="font-mono font-semibold text-right">{fees.gatewayFeePercentage.toFixed(2)}%</span>
             </div>
             <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between gap-3">
@@ -156,11 +179,10 @@ export default function AddMoney() {
 
             {shouldShowDetails && (
               <div className="rounded-lg border border-border bg-secondary/30 p-3 space-y-2 text-xs">
-                <div className="flex justify-between"><span className="text-muted-foreground">Card creation/top-up cost</span><span className="font-mono">{fees.providerCostEtb.toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Fixed charge</span><span className="font-mono">{(settings?.minimum_service_fee_etb ?? 100).toLocaleString()} ETB</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Charge percentage</span><span className="font-mono">{(settings?.service_margin_percentage ?? 15).toFixed(2)}%</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Payment processing fee</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Dink Card service fee</span><span className="font-mono">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Exchange-rate protection</span><span className="font-mono">{fees.safetyBufferEtb.toLocaleString()} ETB</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Rounding adjustment</span><span className="font-mono">{fees.roundingAdjustmentEtb.toLocaleString()} ETB</span></div>
                 <p className="pt-2 text-muted-foreground">Some international websites or failed transactions may create extra card-related fees. We will notify you if this applies.</p>
               </div>
             )}

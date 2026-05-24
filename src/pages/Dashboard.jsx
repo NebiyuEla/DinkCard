@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Wallet, CreditCard, PlusCircle, ArrowDownUp, ShieldCheck,
-  HeadphonesIcon, DollarSign, TrendingUp, AlertCircle, ArrowUpRight, Copy
+  HeadphonesIcon, DollarSign, TrendingUp, AlertCircle, ArrowUpRight, Copy, LogOut, Trash2
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
@@ -39,6 +39,9 @@ export default function Dashboard() {
   const [setupPayload, setSetupPayload] = useState(null);
   const [recoveryCodes, setRecoveryCodes] = useState([]);
   const [securityError, setSecurityError] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: cards } = useCards(user?.email);
@@ -109,6 +112,17 @@ export default function Dashboard() {
     },
     onError: (error) => {
       setSecurityError(error.message || 'Could not disable 2FA.');
+    }
+  });
+
+  const deleteAccount = useMutation({
+    mutationFn: () => apiClient.auth.deleteAccount({ password: deletePassword }),
+    onSuccess: async () => {
+      toast.success('Account deleted.');
+      await apiClient.auth.logout('/');
+    },
+    onError: (error) => {
+      setDeleteError(error.message || 'Could not delete account.');
     }
   });
 
@@ -327,6 +341,18 @@ export default function Dashboard() {
             {twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
           </Button>
         </div>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <Button type="button" variant="outline" onClick={() => apiClient.auth.logout('/')}>
+            <LogOut className="mr-2 h-4 w-4" />Sign out
+          </Button>
+          <Button type="button" variant="destructive" onClick={() => {
+            setDeleteDialogOpen(true);
+            setDeletePassword('');
+            setDeleteError('');
+          }}>
+            <Trash2 className="mr-2 h-4 w-4" />Delete account
+          </Button>
+        </div>
       </div>
 
       <Dialog open={securityDialog.open} onOpenChange={(open) => {
@@ -365,6 +391,14 @@ export default function Dashboard() {
                       <Copy className="mr-2 h-4 w-4" />Copy
                     </Button>
                   </div>
+                </div>
+                <div className="rounded-lg bg-background/90 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Scan QR</p>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(setupPayload.otpauthUrl)}`}
+                    alt="2FA QR code"
+                    className="mt-2 h-[180px] w-[180px] rounded-lg border border-border"
+                  />
                 </div>
                 <div>
                   <Label>Authenticator Code</Label>
@@ -415,6 +449,30 @@ export default function Dashboard() {
                 {disableTwoFactor.isPending ? 'Disabling...' : 'Disable 2FA'}
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete account completely</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              This removes your account, KYC, deposits, cards, support tickets, and notifications from this platform.
+            </p>
+            <div>
+              <Label>Password</Label>
+              <Input type="password" value={deletePassword} onChange={(event) => setDeletePassword(event.target.value)} className="mt-1.5" />
+            </div>
+            {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button type="button" variant="destructive" disabled={!deletePassword || deleteAccount.isPending} onClick={() => deleteAccount.mutate()}>
+              {deleteAccount.isPending ? 'Deleting...' : 'Delete completely'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

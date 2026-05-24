@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { Save } from 'lucide-react';
+import { Save, Trash2 } from 'lucide-react';
 
 export default function AdminFees() {
   const queryClient = useQueryClient();
@@ -22,6 +22,7 @@ export default function AdminFees() {
   });
 
   const [form, setForm] = useState(DEFAULT_SETTINGS);
+  const [clearScope, setClearScope] = useState('notifications');
   const preview = calculateDepositFees(50, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
   const effectiveMinCreation = getEffectiveMinCardCreation(form);
   const effectiveMinFunding = getEffectiveMinCardFunding(form);
@@ -49,16 +50,21 @@ export default function AdminFees() {
     onError: (error) => toast.error(error.message || 'Failed to save pricing settings')
   });
 
+  const clearData = useMutation({
+    mutationFn: () => apiClient.admin.system.clearData({ scope: clearScope }),
+    onSuccess: (result) => {
+      invalidateOperationalData(queryClient);
+      toast.success(`${String(result.scope).replace(/_/g, ' ')} data cleared`);
+    },
+    onError: (error) => toast.error(error.message || 'Failed to clear data')
+  });
+
   const pricingFields = [
     { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
-    { key: 'service_margin_percentage', label: 'Dink Card service margin', suffix: '%' },
-    { key: 'minimum_service_fee_etb', label: 'Minimum service fee', suffix: 'ETB' },
-    { key: 'safety_buffer_percentage', label: 'Safety buffer', suffix: '%' },
-    { key: 'gateway_fee_percentage', label: 'Chapa collection fee', suffix: '%' },
+    { key: 'minimum_service_fee_etb', label: 'Fixed charge', suffix: 'ETB' },
+    { key: 'service_margin_percentage', label: 'Charge percentage', suffix: '%' },
+    { key: 'gateway_fee_percentage', label: 'Gateway fee', suffix: '%' },
     { key: 'chapa_settlement_fee_etb', label: 'Settlement/transfer fee', suffix: 'ETB' },
-    { key: 'card_creation_fee_usd', label: 'Card creation cost', suffix: 'USD' },
-    { key: 'bitnob_topup_fee_under_100_usd', label: 'Top-up cost under $100', suffix: 'USD' },
-    { key: 'bitnob_topup_fee_percent_100_plus', label: 'Top-up cost $100+', suffix: '%' },
     { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
   ];
 
@@ -67,12 +73,8 @@ export default function AdminFees() {
     { key: 'max_deposit_usd', label: 'Max Deposit', suffix: 'USD' },
     { key: 'daily_deposit_limit_usd', label: 'Daily Deposit Limit', suffix: 'USD' },
     { key: 'monthly_deposit_limit_usd', label: 'Monthly Deposit Limit', suffix: 'USD' },
-    { key: 'min_card_creation_usd', label: 'Min Card Creation', suffix: 'USD' },
-    { key: 'min_card_funding_usd', label: 'Min Card Top-up', suffix: 'USD' },
-    { key: 'max_card_funding_usd', label: 'Max Card Funding', suffix: 'USD' },
-    { key: 'max_cards_per_user', label: 'Max Cards Per User', suffix: '' },
     { key: 'kyc_level1_deposit_limit', label: 'KYC Level 1 Limit', suffix: 'USD' },
-    { key: 'kyc_level2_deposit_limit', label: 'KYC Level 2 Limit', suffix: 'USD' },
+    { key: 'kyc_level2_deposit_limit', label: 'KYC Level 2 Limit', suffix: 'USD' }
   ];
 
   const updateNumber = (key, value) => {
@@ -99,15 +101,12 @@ export default function AdminFees() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-bold">Pricing Settings</h2>
-        <p className="text-sm text-muted-foreground">Keep customer checkout simple while protecting Dink Card from provider, gateway, exchange-rate, and refund costs.</p>
+        <p className="text-sm text-muted-foreground">Simple ETB pricing for Dink Card deposits.</p>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6">
         <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
-          <p className="font-semibold text-primary">Protected pricing mode</p>
-          <p className="text-muted-foreground mt-1">
-            The checkout shows one clean service & processing fee. Behind the scenes it uses Chapa gross-up, provider costs, service margin, safety buffer, and ETB rounding.
-          </p>
+          <p className="font-semibold text-primary">Checkout preview</p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">$50 preview</p>
@@ -115,7 +114,7 @@ export default function AdminFees() {
             </div>
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Visible fee</p>
-              <p className="font-mono font-semibold">{preview.serviceAndProcessingFeeEtb.toLocaleString()} ETB</p>
+              <p className="font-mono font-semibold">{preview.dinkServiceFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Chapa covered</p>
@@ -130,23 +129,10 @@ export default function AdminFees() {
               <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
-              <p className="text-muted-foreground">Effective minimum card creation / top-up</p>
-              <p className="font-mono font-semibold">${effectiveMinCreation.toFixed(2)} / ${effectiveMinFunding.toFixed(2)}</p>
+              <p className="text-muted-foreground">Locked provider rules</p>
+              <p className="font-mono font-semibold">Max cards per user: 3 • Min create: ${effectiveMinCreation.toFixed(2)} • Min top-up: ${effectiveMinFunding.toFixed(2)}</p>
             </div>
           </div>
-        </div>
-
-        <div className="mb-6">
-          <Label className="text-xs text-muted-foreground">Customer fee display style</Label>
-          <select
-            value={form.customer_fee_display_style || 'hybrid'}
-            onChange={(event) => setForm({ ...form, customer_fee_display_style: event.target.value })}
-            className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="hybrid">Hybrid: simple checkout with fee details button</option>
-            <option value="simple">Simple: hide detailed breakdown</option>
-            <option value="detailed">Detailed: show full breakdown by default</option>
-          </select>
         </div>
 
         <h3 className="mb-3 text-sm font-semibold">Pricing Formula</h3>
@@ -162,6 +148,41 @@ export default function AdminFees() {
         <Button onClick={() => saveSettings.mutate()} disabled={saveSettings.isPending} className="mt-6 bg-primary text-primary-foreground">
           <Save className="w-4 h-4 mr-2" /> {saveSettings.isPending ? 'Saving...' : 'Save Settings'}
         </Button>
+
+        <div className="mt-8 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+          <h3 className="text-sm font-semibold text-destructive">Data Tools</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Clear specific operational data or wipe all non-user operational records.</p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <select
+              value={clearScope}
+              onChange={(event) => setClearScope(event.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm sm:max-w-xs"
+            >
+              <option value="notifications">Notifications</option>
+              <option value="deposits">Deposits</option>
+              <option value="cards">Cards</option>
+              <option value="customers">Customers</option>
+              <option value="kyc">KYC</option>
+              <option value="support">Support</option>
+              <option value="transactions">Transactions & balances</option>
+              <option value="audit">Audit logs</option>
+              <option value="webhooks">Webhook history</option>
+              <option value="all">All operational data</option>
+            </select>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={clearData.isPending}
+              onClick={() => {
+                if (window.confirm(`Clear ${clearScope.replace(/_/g, ' ')} data?`)) {
+                  clearData.mutate();
+                }
+              }}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />{clearData.isPending ? 'Clearing...' : 'Clear Data'}
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

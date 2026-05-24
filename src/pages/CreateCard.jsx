@@ -50,7 +50,7 @@ export default function CreateCard() {
     mutationFn: () => apiClient.cards.create({ nickname: DEFAULT_CARD_NICKNAME, cardType: 'credit_card', fundingAmount: amount }),
     onSuccess: () => {
       invalidateOperationalData(queryClient);
-      toast.success('Virtual card request submitted.');
+      toast.success('Virtual card created. Open the card and set your 4-digit PIN.');
       navigate('/cards');
     },
     onError: (error) => {

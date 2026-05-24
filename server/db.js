@@ -109,6 +109,8 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   status TEXT NOT NULL DEFAULT 'pending',
   billing_address TEXT,
   masked_pan TEXT,
+  card_pin_hash TEXT,
+  card_pin_enabled_at TEXT,
   environment TEXT NOT NULL DEFAULT 'sandbox',
   meta TEXT,
   created_at TEXT NOT NULL,
@@ -213,17 +215,17 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   gateway_fee_percentage REAL NOT NULL DEFAULT 2.5,
   deposit_fee_percentage REAL NOT NULL DEFAULT 0,
   deposit_fixed_fee_etb REAL NOT NULL DEFAULT 0,
-  service_margin_percentage REAL NOT NULL DEFAULT 4,
+  service_margin_percentage REAL NOT NULL DEFAULT 15,
   minimum_service_fee_etb REAL NOT NULL DEFAULT 100,
-  safety_buffer_percentage REAL NOT NULL DEFAULT 1,
+  safety_buffer_percentage REAL NOT NULL DEFAULT 0,
   chapa_settlement_fee_etb REAL NOT NULL DEFAULT 0,
   card_creation_fee_usd REAL NOT NULL DEFAULT 1,
   bitnob_topup_fee_under_100_usd REAL NOT NULL DEFAULT 1,
   bitnob_topup_fee_percent_100_plus REAL NOT NULL DEFAULT 1,
   card_funding_fee_percentage REAL NOT NULL DEFAULT 0,
   card_withdrawal_fee_percentage REAL NOT NULL DEFAULT 1,
-  rounding_rule_etb REAL NOT NULL DEFAULT 50,
-  customer_fee_display_style TEXT NOT NULL DEFAULT 'hybrid',
+  rounding_rule_etb REAL NOT NULL DEFAULT 0,
+  customer_fee_display_style TEXT NOT NULL DEFAULT 'simple',
   min_deposit_usd REAL NOT NULL DEFAULT 5,
   max_deposit_usd REAL NOT NULL DEFAULT 1000,
   daily_deposit_limit_usd REAL NOT NULL DEFAULT 2000,
@@ -330,19 +332,21 @@ ensureColumn('kyc_submissions', 'reviewed_by', 'TEXT');
 ensureColumn('kyc_submissions', 'reviewed_at', 'TEXT');
 
 ensureColumn('virtual_cards', 'bitnob_customer_id', 'TEXT');
+ensureColumn('virtual_cards', 'card_pin_hash', 'TEXT');
+ensureColumn('virtual_cards', 'card_pin_enabled_at', 'TEXT');
 ensureColumn('virtual_cards', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
 ensureColumn('fee_settings', 'gateway_fee_percentage', 'REAL NOT NULL DEFAULT 2.5');
-ensureColumn('fee_settings', 'service_margin_percentage', 'REAL NOT NULL DEFAULT 4');
+ensureColumn('fee_settings', 'service_margin_percentage', 'REAL NOT NULL DEFAULT 15');
 ensureColumn('fee_settings', 'minimum_service_fee_etb', 'REAL NOT NULL DEFAULT 100');
-ensureColumn('fee_settings', 'safety_buffer_percentage', 'REAL NOT NULL DEFAULT 1');
+ensureColumn('fee_settings', 'safety_buffer_percentage', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'chapa_settlement_fee_etb', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'bitnob_topup_fee_under_100_usd', 'REAL NOT NULL DEFAULT 1');
 ensureColumn('fee_settings', 'bitnob_topup_fee_percent_100_plus', 'REAL NOT NULL DEFAULT 1');
-ensureColumn('fee_settings', 'rounding_rule_etb', 'REAL NOT NULL DEFAULT 50');
-ensureColumn('fee_settings', 'customer_fee_display_style', "TEXT NOT NULL DEFAULT 'hybrid'");
+ensureColumn('fee_settings', 'rounding_rule_etb', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('fee_settings', 'customer_fee_display_style', "TEXT NOT NULL DEFAULT 'simple'");
 ensureColumn('fee_settings', 'min_card_creation_usd', 'REAL NOT NULL DEFAULT 2');
 ensureColumn('audit_logs', 'environment', 'TEXT');
 ensureColumn('audit_logs', 'provider', 'TEXT');
@@ -448,35 +452,18 @@ db.prepare(`
         WHEN card_creation_fee_usd IS NULL OR card_creation_fee_usd IN (3, 7) THEN 1
         ELSE card_creation_fee_usd
       END,
-      gateway_fee_percentage = COALESCE(gateway_fee_percentage, 2.5),
-      service_margin_percentage = CASE
-        WHEN service_margin_percentage IS NULL OR service_margin_percentage = 8 THEN 4
-        ELSE service_margin_percentage
-      END,
-      minimum_service_fee_etb = COALESCE(minimum_service_fee_etb, 100),
-      safety_buffer_percentage = CASE
-        WHEN safety_buffer_percentage IS NULL OR safety_buffer_percentage = 3 THEN 1
-        ELSE safety_buffer_percentage
-      END,
+      gateway_fee_percentage = 2.5,
+      service_margin_percentage = 15,
+      minimum_service_fee_etb = 100,
+      safety_buffer_percentage = 0,
       chapa_settlement_fee_etb = COALESCE(chapa_settlement_fee_etb, 0),
       bitnob_topup_fee_under_100_usd = COALESCE(bitnob_topup_fee_under_100_usd, 1),
       bitnob_topup_fee_percent_100_plus = COALESCE(bitnob_topup_fee_percent_100_plus, 1),
-      rounding_rule_etb = CASE
-        WHEN rounding_rule_etb IS NULL OR rounding_rule_etb <= 0 THEN 50
-        ELSE rounding_rule_etb
-      END,
-      min_card_funding_usd = CASE
-        WHEN min_card_funding_usd IS NULL OR min_card_funding_usd = 2 THEN 1
-        ELSE min_card_funding_usd
-      END,
-      min_card_creation_usd = CASE
-        WHEN min_card_creation_usd IS NULL OR min_card_creation_usd < 2 THEN 2
-        ELSE min_card_creation_usd
-      END,
-      customer_fee_display_style = CASE
-        WHEN customer_fee_display_style IN ('simple', 'detailed', 'hybrid') THEN customer_fee_display_style
-        ELSE 'hybrid'
-      END,
+      rounding_rule_etb = 0,
+      min_card_creation_usd = 2,
+      min_card_funding_usd = 1,
+      max_cards_per_user = 3,
+      customer_fee_display_style = 'simple',
       updated_at = ?
   WHERE key = 'default'
 `).run(now);

@@ -3,6 +3,8 @@ import { config } from './config.js';
 import { generateId, money, nowIso, hmacSha256Hex } from './utils.js';
 
 export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_FIXED_CHARGE_ETB = 100;
+export const DEFAULT_PERCENT_CHARGE = 15;
 const PENDING_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export function getFeeSettings() {
@@ -20,7 +22,8 @@ function safeNumber(value, fallback) {
 }
 
 function roundUpTo(value, nearest) {
-  const step = Math.max(1, safeNumber(nearest, 50));
+  const step = safeNumber(nearest, 0);
+  if (step <= 0) return money(value);
   return money(Math.ceil(Number(value || 0) / step) * step);
 }
 
@@ -36,25 +39,22 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const usd = Number(usdAmount);
   const rate = Math.max(0, safeNumber(settings?.usd_to_etb_rate, 190));
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
-  const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, 4));
-  const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, 100));
-  const safetyBufferPercentage = Math.max(0, safeNumber(settings?.safety_buffer_percentage, 1));
+  const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
+  const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, DEFAULT_FIXED_CHARGE_ETB));
   const settlementFeeEtb = Math.max(0, safeNumber(settings?.chapa_settlement_fee_etb, 0));
-  const roundingRuleEtb = Math.max(1, safeNumber(settings?.rounding_rule_etb, 50));
+  const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));
   const feeDisplayStyle = ['simple', 'detailed', 'hybrid'].includes(settings?.customer_fee_display_style)
     ? settings.customer_fee_display_style
-    : 'hybrid';
+    : 'simple';
 
   const cardAmountEtb = money(usd * rate);
-  const topupFeeUsd = calculateTopupProviderFeeUsd(usd, settings);
-  const providerCostUsd = topupFeeUsd;
-  const providerCostEtb = money(providerCostUsd * rate);
-  const baseCostEtb = money(cardAmountEtb + providerCostEtb);
-  const safetyBufferEtb = money(baseCostEtb * safetyBufferPercentage / 100);
-  const dinkServiceFeeEtb = money(Math.max(baseCostEtb * serviceMarginPercentage / 100, minimumServiceFeeEtb));
-  const requiredBeforeChapaEtb = money(baseCostEtb + safetyBufferEtb + dinkServiceFeeEtb + settlementFeeEtb);
-  const grossDivisor = Math.max(0.01, 1 - gatewayFeePercentage / 100);
-  const grossTotalBeforeRoundEtb = money(requiredBeforeChapaEtb / grossDivisor);
+  const providerCostUsd = 0;
+  const providerCostEtb = 0;
+  const baseCostEtb = cardAmountEtb;
+  const safetyBufferEtb = 0;
+  const dinkServiceFeeEtb = money(minimumServiceFeeEtb + (cardAmountEtb * serviceMarginPercentage / 100));
+  const requiredBeforeChapaEtb = money(baseCostEtb + dinkServiceFeeEtb + settlementFeeEtb);
+  const grossTotalBeforeRoundEtb = money(requiredBeforeChapaEtb + (requiredBeforeChapaEtb * gatewayFeePercentage / 100));
   const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
   const gatewayFeeEtb = money(Math.max(0, totalPayableEtb - requiredBeforeChapaEtb));
   const serviceAndProcessingFeeEtb = money(Math.max(0, totalPayableEtb - cardAmountEtb));
@@ -66,7 +66,7 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     cardAmountEtb,
     exchangeRate: rate,
     etbAmount: cardAmountEtb,
-    serviceFeeEtb: serviceAndProcessingFeeEtb,
+    serviceFeeEtb: dinkServiceFeeEtb,
     serviceAndProcessingFeeEtb,
     gatewayFeeEtb,
     gatewayFeePercentage,
@@ -75,7 +75,7 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     finalUsdCredit: money(usd),
     providerCostUsd,
     providerCostEtb,
-    topupFeeUsd,
+    topupFeeUsd: 0,
     topupFeeEtb: providerCostEtb,
     safetyBufferEtb,
     dinkServiceFeeEtb,

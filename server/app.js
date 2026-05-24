@@ -20,6 +20,7 @@ import {
   fundVirtualCard,
   handleBitnobWebhook,
   revealCardDetails,
+  setCardPin,
   terminateCard,
   toBitnobBaseUnits,
   fromBitnobBaseUnits,
@@ -338,6 +339,61 @@ function isPrivateDevOrigin(origin) {
   } catch {
     return false;
   }
+}
+
+function clearOperationalData(scope = 'all') {
+  const uploadUrls = new Set();
+  const addUrls = (values) => values.filter(Boolean).forEach((value) => uploadUrls.add(value));
+
+  if (['kyc', 'all'].includes(scope)) {
+    for (const row of db.prepare('SELECT front_id_url, back_id_url, selfie_url FROM kyc_submissions').all()) {
+      addUrls([row.front_id_url, row.back_id_url, row.selfie_url]);
+    }
+  }
+
+  if (['deposits', 'all'].includes(scope)) {
+    for (const row of db.prepare('SELECT proof_url FROM deposits').all()) {
+      addUrls([row.proof_url]);
+    }
+  }
+
+  if (['support', 'all'].includes(scope)) {
+    for (const row of db.prepare('SELECT screenshot_url FROM support_tickets').all()) {
+      addUrls([row.screenshot_url]);
+    }
+    for (const row of db.prepare('SELECT attachment_url FROM support_messages').all()) {
+      addUrls([row.attachment_url]);
+    }
+  }
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (scope === 'notifications' || scope === 'all') db.prepare('DELETE FROM notifications').run();
+    if (scope === 'deposits' || scope === 'all') db.prepare('DELETE FROM deposits').run();
+    if (scope === 'cards' || scope === 'all') {
+      db.prepare('DELETE FROM card_funding_requests').run();
+      db.prepare('DELETE FROM virtual_cards').run();
+    }
+    if (scope === 'customers' || scope === 'all') db.prepare('DELETE FROM bitnob_customers').run();
+    if (scope === 'kyc' || scope === 'all') db.prepare('DELETE FROM kyc_submissions').run();
+    if (scope === 'support' || scope === 'all') {
+      db.prepare('DELETE FROM support_messages').run();
+      db.prepare('DELETE FROM support_tickets').run();
+    }
+    if (scope === 'transactions' || scope === 'all') {
+      db.prepare('DELETE FROM wallet_transactions').run();
+      db.prepare('UPDATE wallets SET available_balance = 0, locked_balance = 0, updated_at = ?').run(nowIso());
+    }
+    if (scope === 'audit' || scope === 'all') db.prepare("DELETE FROM audit_logs WHERE action != 'login' AND action != 'login_failed'").run();
+    if (scope === 'webhooks' || scope === 'all') db.prepare('DELETE FROM webhook_events').run();
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+
+  [...uploadUrls].forEach(removeUploadUrl);
+  return uploadUrls.size;
 }
 
 function ensureWallet(userEmail) {
@@ -778,7 +834,7 @@ function invoiceHtml(deposit) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dink Card Invoice ${escapeHtml(deposit.transaction_reference)}</title>
+  <title>Dink Card Chapa Receipt ${escapeHtml(deposit.transaction_reference)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
     .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
@@ -796,8 +852,8 @@ function invoiceHtml(deposit) {
   <section class="invoice">
     <div class="brand">
       <div>
-        <h1>Dink Card Invoice</h1>
-        <p>Card-related service funding receipt</p>
+        <h1>Dink Card Chapa Receipt</h1>
+        <p>Hosted checkout payment receipt</p>
       </div>
       <div>
         <p class="status">${escapeHtml(status)}</p>
@@ -1064,6 +1120,37 @@ export function createApp() {
 
   app.post('/api/auth/logout', (req, res) => {
     clearSessionCookie(res);
+    res.json({ ok: true });
+  });
+
+  app.delete('/api/auth/account', authMiddleware(db), async (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role !== 'user') {
+      return res.status(403).json({ message: 'This account must be removed from the admin side.' });
+    }
+
+    const password = String(req.body?.password || '');
+    const validPassword = await comparePassword(password, user.password_hash);
+    if (!validPassword) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'account_delete_failed', entityType: 'auth', reason: 'invalid_password' });
+      return res.status(401).json({ message: 'Password confirmation failed.' });
+    }
+
+    const uploadUrls = collectUserUploadUrls(user.email);
+    deleteUserCascade(user);
+    uploadUrls.forEach(removeUploadUrl);
+    clearSessionCookie(res);
+
+    writeAudit({
+      actor: user.email,
+      userId: user.email,
+      action: 'account_deleted_by_user',
+      entityType: 'user',
+      entityId: user.id,
+      oldValue: sanitizeUser(user)
+    });
+
     res.json({ ok: true });
   });
 
@@ -2005,6 +2092,31 @@ export function createApp() {
     }
   });
 
+  app.post('/api/admin/system/clear-data', authMiddleware(db), (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+
+    const scope = String(req.body?.scope || 'all');
+    const allowedScopes = new Set(['notifications', 'deposits', 'cards', 'customers', 'kyc', 'support', 'transactions', 'audit', 'webhooks', 'all']);
+    if (!allowedScopes.has(scope)) {
+      return res.status(400).json({ message: 'Unsupported clear-data scope.' });
+    }
+
+    try {
+      const removedUploads = clearOperationalData(scope);
+      writeAudit({
+        actor: req.user.email,
+        userId: null,
+        action: 'system_data_cleared',
+        entityType: 'system',
+        entityId: scope,
+        newValue: { scope, removedUploads }
+      });
+      res.json({ ok: true, scope, removedUploads });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not clear data.' });
+    }
+  });
+
   app.delete('/api/admin/users/:id', authMiddleware(db), (req, res) => {
     if (!requireSuperadmin(req, res)) return;
 
@@ -2141,7 +2253,16 @@ export function createApp() {
 
   app.post('/api/cards/:id/status', authMiddleware(db), async (req, res) => {
     try {
-      await changeCardStatus(req.user, req.params.id, req.body.status);
+      await changeCardStatus(req.user, req.params.id, req.body.status, req.body.pin);
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.post('/api/cards/:id/pin', authMiddleware(db), async (req, res) => {
+    try {
+      await setCardPin(req.user, req.params.id, req.body.pin);
       res.json({ ok: true });
     } catch (error) {
       res.status(400).json({ message: error.message });
@@ -2159,7 +2280,7 @@ export function createApp() {
 
   app.post('/api/cards/:id/reveal', authMiddleware(db), async (req, res) => {
     try {
-      const details = await revealCardDetails(req.user, req.params.id, req.body.password);
+      const details = await revealCardDetails(req.user, req.params.id, req.body.pin);
       res.json(details);
     } catch (error) {
       res.status(400).json({ message: error.message });

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, Snowflake, Trash2 } from 'lucide-react';
+import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, Shield, Snowflake, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/client';
@@ -21,7 +21,9 @@ export default function CardsPage() {
   const { data: cards } = useCards(user?.email);
   const [selectedCard, setSelectedCard] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [secureDetails, setSecureDetails] = useState(null);
 
   const refreshCards = () => {
@@ -29,8 +31,12 @@ export default function CardsPage() {
   };
 
   const updateStatus = useMutation({
-    mutationFn: ({ cardId, status }) => apiClient.cards.updateStatus(cardId, status),
-    onSuccess: refreshCards,
+    mutationFn: ({ cardId, status, pinCode }) => apiClient.cards.updateStatus(cardId, status, pinCode),
+    onSuccess: () => {
+      refreshCards();
+      setConfirmDialog(null);
+      setPin('');
+    },
     onError: (error) => toast.error(error.message || 'Card update failed')
   });
 
@@ -45,14 +51,26 @@ export default function CardsPage() {
   });
 
   const revealCard = useMutation({
-    mutationFn: () => apiClient.cards.reveal(selectedCard.id, password),
+    mutationFn: () => apiClient.cards.reveal(selectedCard.id, pin),
     onSuccess: (details) => {
       setSecureDetails(details);
       setConfirmDialog(null);
-      setPassword('');
+      setPin('');
       toast.success('Card details revealed');
     },
     onError: (error) => toast.error(error.message || 'Could not reveal card details')
+  });
+
+  const setCardPin = useMutation({
+    mutationFn: () => apiClient.cards.setPin(selectedCard.id, newPin),
+    onSuccess: () => {
+      refreshCards();
+      setConfirmDialog(null);
+      setNewPin('');
+      setConfirmPin('');
+      toast.success('Card PIN saved');
+    },
+    onError: (error) => toast.error(error.message || 'Could not save card PIN')
   });
 
   const copyToClipboard = (text, label) => {
@@ -130,8 +148,13 @@ export default function CardsPage() {
               />
 
               <div className="grid grid-cols-2 gap-2">
+                {!selectedCard.card_pin_enabled_at && (
+                  <Button variant="outline" className="col-span-2" onClick={() => setConfirmDialog('set-pin')}>
+                    <Shield className="w-4 h-4 mr-2" /> Create 4-digit card PIN
+                  </Button>
+                )}
                 {!secureDetails ? (
-                  <Button variant="outline" className="col-span-2" onClick={() => setConfirmDialog('reveal')}>
+                  <Button variant="outline" className="col-span-2" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'reveal' : 'set-pin')}>
                     <Eye className="w-4 h-4 mr-2" /> Reveal Details
                   </Button>
                 ) : (
@@ -152,11 +175,11 @@ export default function CardsPage() {
                 </Link>
 
                 {selectedCard.status === 'active' ? (
-                  <Button variant="outline" onClick={() => updateStatus.mutate({ cardId: selectedCard.id, status: 'frozen' })}>
+                  <Button variant="outline" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'freeze' : 'set-pin')}>
                     <Snowflake className="w-4 h-4 mr-2" /> Freeze
                   </Button>
                 ) : selectedCard.status === 'frozen' ? (
-                  <Button variant="outline" onClick={() => updateStatus.mutate({ cardId: selectedCard.id, status: 'active' })}>
+                  <Button variant="outline" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'unfreeze' : 'set-pin')}>
                     <Play className="w-4 h-4 mr-2" /> Unfreeze
                   </Button>
                 ) : null}
@@ -179,14 +202,53 @@ export default function CardsPage() {
       <Dialog open={confirmDialog === 'reveal'} onOpenChange={() => setConfirmDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm your password</DialogTitle>
-            <DialogDescription>We verify your password before fetching sensitive card details from the provider.</DialogDescription>
+            <DialogTitle>Enter card PIN</DialogTitle>
+            <DialogDescription>Use your 4-digit card PIN before fetching sensitive card details from Bitnob.</DialogDescription>
           </DialogHeader>
-          <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Account password" />
+          <Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="4-digit card PIN" maxLength={4} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
-            <Button onClick={() => revealCard.mutate()} className="bg-primary text-primary-foreground" disabled={!password || revealCard.isPending}>
+            <Button onClick={() => revealCard.mutate()} className="bg-primary text-primary-foreground" disabled={!pin || revealCard.isPending}>
               {revealCard.isPending ? 'Checking...' : 'Reveal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === 'set-pin'} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create card PIN</DialogTitle>
+            <DialogDescription>This 4-digit PIN is used to reveal, lock, and unlock the card.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Enter 4-digit PIN" maxLength={4} />
+            <Input type="password" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} placeholder="Confirm 4-digit PIN" maxLength={4} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
+            <Button onClick={() => setCardPin.mutate()} className="bg-primary text-primary-foreground" disabled={!/^\d{4}$/.test(newPin) || newPin !== confirmPin || setCardPin.isPending}>
+              {setCardPin.isPending ? 'Saving...' : 'Save PIN'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmDialog === 'freeze' || confirmDialog === 'unfreeze'} onOpenChange={() => setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{confirmDialog === 'freeze' ? 'Lock card' : 'Unlock card'}</DialogTitle>
+            <DialogDescription>Enter your 4-digit card PIN to continue.</DialogDescription>
+          </DialogHeader>
+          <Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="4-digit card PIN" maxLength={4} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
+            <Button
+              onClick={() => updateStatus.mutate({ cardId: selectedCard.id, status: confirmDialog === 'freeze' ? 'frozen' : 'active', pinCode: pin })}
+              className="bg-primary text-primary-foreground"
+              disabled={!pin || updateStatus.isPending}
+            >
+              {updateStatus.isPending ? 'Updating...' : confirmDialog === 'freeze' ? 'Lock card' : 'Unlock card'}
             </Button>
           </DialogFooter>
         </DialogContent>
