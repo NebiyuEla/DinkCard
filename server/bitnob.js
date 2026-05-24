@@ -5,8 +5,9 @@ import { config } from './config.js';
 import { debitWallet, creditWallet, getFeeSettings, calculateTopupProviderFeeUsd } from './payments.js';
 import { generateId, money, nowIso, hmacSha512Hex } from './utils.js';
 
-// Bitnob virtual-card docs use card units where 5,000,000 represents $50.00.
-const BITNOB_AMOUNT_SCALE = 100_000;
+// Bitnob virtual-card docs show balance_amount 5,000,000 with display_amount 5,
+// so virtual-card amounts use 1,000,000 base units for each 1 USD.
+const BITNOB_AMOUNT_SCALE = 1_000_000;
 
 function toBitnobAmount(amountUsd) {
   return Math.round(Number(amountUsd || 0) * BITNOB_AMOUNT_SCALE);
@@ -187,6 +188,29 @@ function getExistingBitnobCustomer(user, kyc) {
   `).get(config.bitnob.env, user.email, kyc.email || user.email);
 }
 
+function parseApprovedKycProfile(user, kyc) {
+  const firstName = String(kyc.first_name || user.full_name?.split(' ')[0] || '').trim();
+  const lastName = String(
+    kyc.last_name
+      || user.full_name?.split(' ').slice(1).join(' ')
+      || ''
+  ).trim();
+  const streetAddress = String(kyc.street_address || kyc.address || '').trim();
+  const addressParts = [streetAddress, kyc.city, kyc.state, kyc.postal_code]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+  return {
+    firstName: firstName || 'Dink',
+    lastName: lastName || 'Card',
+    streetAddress,
+    address: addressParts.join(', '),
+    city: String(kyc.city || 'Addis Ababa').trim() || 'Addis Ababa',
+    state: String(kyc.state || 'Addis Ababa').trim() || 'Addis Ababa',
+    postalCode: String(kyc.postal_code || '1000').trim() || '1000'
+  };
+}
+
 function normalizeEthiopianPhone(phoneValue) {
   let digits = String(phoneValue || '').trim().replace(/\D/g, '');
   if (digits.startsWith('00251')) digits = digits.slice(5);
@@ -198,13 +222,11 @@ function normalizeEthiopianPhone(phoneValue) {
 async function ensureBitnobCustomerForCard(user, kyc) {
   const existing = getExistingBitnobCustomer(user, kyc);
   if (existing?.bitnob_customer_id) return existing;
-
-  const legalName = String(kyc.legal_name || user.full_name || user.email || '').trim();
-  const [firstName, ...lastParts] = legalName.split(/\s+/).filter(Boolean);
+  const profile = parseApprovedKycProfile(user, kyc);
   const response = await bitnobRequest('POST', '/api/customers', {
     customer_type: 'individual',
-    first_name: firstName || 'Dink',
-    last_name: lastParts.join(' ') || 'Card',
+    first_name: profile.firstName,
+    last_name: profile.lastName,
     email: kyc.email || user.email,
     date_of_birth: kyc.date_of_birth || undefined,
     id_type: kyc.id_type || undefined,
@@ -213,8 +235,10 @@ async function ensureBitnobCustomerForCard(user, kyc) {
     dial_code: '+251',
     country: 'ETH',
     country_code: 'ETH',
-    address: kyc.address || undefined,
-    city: kyc.city || 'Addis Ababa'
+    address: profile.address || undefined,
+    city: profile.city,
+    state: profile.state,
+    postal_code: profile.postalCode
   });
   const customer = response?.data?.customer || response?.data || response?.customer || {};
   const bitnobCustomerId = customer.id || customer.customer_id || customer.customerId;
@@ -232,16 +256,16 @@ async function ensureBitnobCustomerForCard(user, kyc) {
     id,
     user.email,
     bitnobCustomerId,
-    firstName || 'Dink',
-    lastParts.join(' ') || 'Card',
+    profile.firstName,
+    profile.lastName,
     kyc.email || user.email,
     normalizeEthiopianPhone(kyc.phone || user.phone) || '',
     kyc.date_of_birth || '',
     kyc.id_type || '',
     kyc.id_number || '',
     kyc.country || 'ETH',
-    kyc.address || '',
-    kyc.city || '',
+    profile.address || '',
+    profile.city || '',
     customer.status || 'active',
     config.bitnob.env,
     JSON.stringify(response),
@@ -285,6 +309,7 @@ export async function createVirtualCardForUser(user, payload) {
   const fundingFee = 0;
   const totalDeduction = money(creationFee + fundingAmount);
   const bitnobCustomer = await ensureBitnobCustomerForCard(user, kyc);
+  const profile = parseApprovedKycProfile(user, kyc);
   debitWallet(
     user.email,
     totalDeduction,
@@ -298,9 +323,10 @@ export async function createVirtualCardForUser(user, payload) {
       amount: toBitnobAmount(fundingAmount),
       card_type: 'virtual',
       currency: 'USD',
-      name: kyc.legal_name,
+      name: `${profile.firstName} ${profile.lastName}`.trim(),
       webhook_url: config.bitnob.webhookUrl,
-      customer_id: bitnobCustomer.bitnob_customer_id
+      customer_id: bitnobCustomer.bitnob_customer_id,
+      contactless_payment: true
     });
 
     const card = getBitnobCard(response);

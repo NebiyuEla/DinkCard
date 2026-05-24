@@ -149,6 +149,7 @@ export const apiClient = {
       setBalance: (id, payload) => request(`/api/admin/users/${id}/set-balance`, { method: 'POST', body: JSON.stringify(payload) }),
       passKyc: (id, payload) => request(`/api/admin/users/${id}/pass-kyc`, { method: 'POST', body: JSON.stringify(payload) }),
       createManualCard: (id, payload) => request(`/api/admin/users/${id}/manual-card`, { method: 'POST', body: JSON.stringify(payload) }),
+      createStaff: (payload) => request('/api/admin/users/create-staff', { method: 'POST', body: JSON.stringify(payload) }),
       delete: (id, reason) => request(`/api/admin/users/${id}`, { method: 'DELETE', body: JSON.stringify({ reason }) })
     },
     cards: {

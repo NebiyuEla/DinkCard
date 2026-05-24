@@ -21,7 +21,7 @@ const fieldMap = {
   User: ['id', 'email', 'username', 'full_name', 'phone', 'role', 'account_status', 'restricted_reason', 'restricted_by', 'restricted_at', 'terms_accepted_version', 'created_at', 'updated_at'],
   Wallet: ['id', 'user_id', 'currency', 'available_balance', 'locked_balance', 'status', 'created_at', 'updated_at'],
   WalletTransaction: ['id', 'user_id', 'wallet_id', 'type', 'amount', 'currency', 'balance_before', 'balance_after', 'status', 'reference', 'description', 'metadata', 'created_at'],
-  KYCSubmission: ['id', 'user_id', 'legal_name', 'date_of_birth', 'gender', 'phone', 'email', 'address', 'city', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url', 'level', 'status', 'rejection_reason', 'resubmission_scope', 'resubmission_fields', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
+  KYCSubmission: ['id', 'user_id', 'first_name', 'last_name', 'legal_name', 'date_of_birth', 'gender', 'phone', 'email', 'address', 'street_address', 'city', 'state', 'postal_code', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url', 'level', 'status', 'rejection_reason', 'resubmission_scope', 'resubmission_fields', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
   VirtualCard: ['id', 'user_id', 'provider', 'provider_card_id', 'customer_reference', 'card_nickname', 'card_type', 'brand', 'currency', 'last_four', 'expiry_month', 'expiry_year', 'balance', 'status', 'billing_address', 'masked_pan', 'card_pin_enabled_at', 'meta', 'created_at', 'updated_at'],
   Deposit: ['id', 'user_id', 'payment_method', 'requested_usd_amount', 'exchange_rate', 'etb_amount', 'service_fee_etb', 'gateway_fee_etb', 'total_payable_etb', 'final_usd_credit', 'proof_url', 'sender_name', 'sender_phone', 'transaction_reference', 'status', 'rejection_reason', 'approved_by', 'approved_at', 'admin_note', 'promo_code', 'provider_reference', 'provider_status', 'provider_payload', 'source', 'verified_at', 'checkout_url', 'created_at', 'updated_at'],
   Notification: ['id', 'user_id', 'title', 'message', 'type', 'read', 'link', 'created_at'],
@@ -171,12 +171,13 @@ export function createEntity(entity, data, user) {
 
   if (entity === 'KYCSubmission') {
     if (user.role !== 'user') throw new Error('Forbidden');
-    payload = pick(entity, data, ['legal_name', 'date_of_birth', 'gender', 'phone', 'address', 'city', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url']);
+    payload = pick(entity, data, ['first_name', 'last_name', 'legal_name', 'date_of_birth', 'gender', 'phone', 'address', 'street_address', 'city', 'state', 'postal_code', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url']);
+    payload.legal_name = `${String(payload.first_name || '').trim()} ${String(payload.last_name || '').trim()}`.trim() || payload.legal_name;
     payload.user_id = user.email;
     payload.email = user.email;
     payload.status = 'pending';
     payload.level = 2;
-    requireFields(payload, ['legal_name', 'date_of_birth', 'phone', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before submitting.');
+    requireFields(payload, ['first_name', 'last_name', 'date_of_birth', 'phone', 'street_address', 'city', 'state', 'postal_code', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before submitting.');
   }
 
   if (entity === 'FeeSettings') {
@@ -274,7 +275,8 @@ export function updateEntity(entity, id, data, user) {
     if (!['rejected', 'resubmit_required'].includes(existing.status)) {
       throw new Error('Only rejected KYC submissions can be resubmitted.');
     }
-    payload = pick(entity, data, ['legal_name', 'date_of_birth', 'gender', 'phone', 'address', 'city', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url']);
+    payload = pick(entity, data, ['first_name', 'last_name', 'legal_name', 'date_of_birth', 'gender', 'phone', 'address', 'street_address', 'city', 'state', 'postal_code', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url']);
+    payload.legal_name = `${String(payload.first_name || '').trim()} ${String(payload.last_name || '').trim()}`.trim() || payload.legal_name;
     payload.email = user.email;
     payload.status = 'pending';
     payload.level = 2;
@@ -283,7 +285,7 @@ export function updateEntity(entity, id, data, user) {
     payload.resubmission_fields = null;
     payload.reviewed_by = null;
     payload.reviewed_at = null;
-    requireFields(payload, ['legal_name', 'date_of_birth', 'phone', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before resubmitting.');
+    requireFields(payload, ['first_name', 'last_name', 'date_of_birth', 'phone', 'street_address', 'city', 'state', 'postal_code', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before resubmitting.');
   }
   if (entity === 'PaymentMethod' && !isOwner(user)) throw new Error('Owner access required');
   if (entity === 'AuditLog') throw new Error('Audit logs are immutable');

@@ -94,7 +94,7 @@ function writeAudit({
 }
 
 function hasAnyAdminRole(user) {
-  return ['admin', 'superadmin'].includes(user?.role);
+  return ['support', 'admin', 'superadmin'].includes(user?.role);
 }
 
 function requireAdmin(req, res) {
@@ -117,6 +117,21 @@ function getUploadExtension(file) {
   if (file.mimetype === 'application/pdf') return '.pdf';
   if (file.mimetype?.startsWith('image/')) return '.jpg';
   return '.upload';
+}
+
+function normalizeUsername(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '');
+}
+
+function normalizeEthiopianUserPhone(value) {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('00251')) digits = digits.slice(5);
+  if (digits.startsWith('251')) digits = digits.slice(3);
+  digits = digits.replace(/^0+/, '');
+  return digits.slice(0, 9);
 }
 
 const uploadStorage = multer.diskStorage({
@@ -485,6 +500,12 @@ function findAssetBalance(payload, asset = 'USDC') {
 
 function buildBitnobCustomerPayload(payload = {}) {
   const { phoneNumber, dialCode } = normalizeBitnobPhone(payload.phone || payload.phone_number);
+  const addressParts = [
+    payload.street_address,
+    payload.address,
+    payload.state,
+    payload.postal_code
+  ].filter((value) => String(value || '').trim());
   return compactPayload({
     customer_type: payload.customer_type || 'individual',
     first_name: payload.first_name,
@@ -497,7 +518,7 @@ function buildBitnobCustomerPayload(payload = {}) {
     dial_code: dialCode,
     country: payload.country || 'ETH',
     country_code: payload.country_code || payload.country || 'ETH',
-    address: payload.address,
+    address: addressParts.join(', ') || payload.address,
     city: payload.city
   });
 }
@@ -640,7 +661,10 @@ function kycToBitnobCustomerPayload(kyc, user) {
     phone_number: kyc?.phone || user?.phone || '',
     dial_code: dialCodeForCountry(kyc?.country),
     country: normalizeCountryCode(kyc?.country),
-    address: kyc?.address || '',
+    street_address: kyc?.street_address || '',
+    state: kyc?.state || '',
+    postal_code: kyc?.postal_code || '',
+    address: kyc?.street_address || kyc?.address || '',
     city: kyc?.city || 'Addis Ababa'
   };
   const required = ['first_name', 'last_name', 'date_of_birth', 'id_type', 'id_number', 'email', 'country'];
@@ -1175,6 +1199,27 @@ export function createApp() {
     const updates = [];
     const values = [];
 
+    if (typeof req.body.full_name === 'string') {
+      const fullName = String(req.body.full_name).trim();
+      if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
+      updates.push('full_name = ?');
+      values.push(fullName);
+    }
+
+    if (typeof req.body.phone === 'string') {
+      updates.push('phone = ?');
+      values.push(normalizeEthiopianUserPhone(req.body.phone));
+    }
+
+    if (typeof req.body.username === 'string') {
+      const username = normalizeUsername(req.body.username);
+      if (!username) return res.status(400).json({ message: 'Enter a valid username.' });
+      const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? AND id != ?').get(username, req.user.id);
+      if (existing) return res.status(409).json({ message: 'That username is already in use.' });
+      updates.push('username = ?');
+      values.push(username);
+    }
+
     if (req.body.terms_accepted_version) {
       updates.push('terms_accepted_version = ?');
       values.push(req.body.terms_accepted_version);
@@ -1631,6 +1676,7 @@ export function createApp() {
         amount: toBitnobBaseUnits(fundingAmount),
         customer_id: customer.bitnob_customer_id,
         webhook_url: config.bitnob.webhookUrl,
+        contactless_payment: req.body.contactless_payment !== false,
         card_limits: req.body.card_limits || req.body.cardLimits || undefined
       });
       const card = providerCardToDb({ card: extractProviderData(provider), customer, fallbackUserId: customer.user_id || customer.email, nickname: req.body.nickname || 'Virtual Card', providerPayload: provider });
@@ -1862,6 +1908,77 @@ export function createApp() {
     });
 
     res.json(sanitizeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)));
+  });
+
+  app.post('/api/admin/users/create-staff', authMiddleware(db), async (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+
+    try {
+      const fullName = String(req.body.fullName || req.body.full_name || '').trim();
+      const email = String(req.body.email || '').trim().toLowerCase();
+      const username = normalizeUsername(req.body.username);
+      const password = String(req.body.password || '');
+      const role = String(req.body.role || '').trim().toLowerCase();
+
+      if (!fullName || !email || !username || !password) {
+        return res.status(400).json({ message: 'Full name, email, username, and password are required.' });
+      }
+      if (!['admin', 'support'].includes(role)) {
+        return res.status(400).json({ message: 'Role must be admin or support.' });
+      }
+      if (password.length < 8) {
+        return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: 'Enter a valid email address.' });
+      }
+
+      const duplicate = db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(email, username);
+      if (duplicate) {
+        return res.status(409).json({ message: 'A user with that email or username already exists.' });
+      }
+
+      const now = nowIso();
+      const userId = generateId('usr');
+      const passwordHash = await hashPassword(password);
+
+      db.prepare(`
+        INSERT INTO users (id, email, username, password_hash, full_name, phone, role, terms_accepted_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        userId,
+        email,
+        username,
+        passwordHash,
+        fullName,
+        normalizeEthiopianUserPhone(req.body.phone || ''),
+        role,
+        config.termsVersion,
+        now,
+        now
+      );
+
+      db.prepare(`
+        INSERT INTO wallets (id, user_id, currency, available_balance, locked_balance, status, created_at, updated_at)
+        VALUES (?, ?, 'USD', 0, 0, 'active', ?, ?)
+      `).run(generateId('wal'), email, now, now);
+
+      const created = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+      writeAudit({
+        actor: req.user.email,
+        userId: created.email,
+        action: 'staff_account_created',
+        entityType: 'user',
+        entityId: created.id,
+        newValue: { role: created.role, username: created.username },
+        reason: req.body.reason || null,
+        req
+      });
+
+      res.status(201).json(sanitizeUser(created));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not create staff account.' });
+    }
   });
 
   app.post('/api/admin/users/:id/add-money', authMiddleware(db), (req, res) => {

@@ -15,15 +15,37 @@ import { motion } from 'framer-motion';
 
 const FIX_LABELS = {
   personal_info: 'Personal information',
+  first_name: 'First name',
+  last_name: 'Last name',
   date_of_birth: 'Date of birth',
   phone: 'Phone number',
   address: 'Address or city',
+  street_address: 'Street address',
+  state: 'State / region',
+  postal_code: 'Postal code',
   id_type: 'ID type',
   id_number: 'ID number',
   front_id: 'Front ID upload',
   back_id: 'Back ID upload',
   selfie: 'Selfie upload'
 };
+
+const ETHIOPIAN_STATES = [
+  'Addis Ababa',
+  'Afar',
+  'Amhara',
+  'Benishangul-Gumuz',
+  'Central Ethiopia',
+  'Dire Dawa',
+  'Gambela',
+  'Harari',
+  'Oromia',
+  'Sidama',
+  'Somali',
+  'South Ethiopia',
+  'South West Ethiopia Peoples',
+  'Tigray'
+];
 
 function parseFixFields(value) {
   if (!value) return [];
@@ -49,8 +71,8 @@ export default function KYCPage() {
   const { data: kyc, isLoading } = useKYCStatus(user?.email);
 
   const [form, setForm] = useState({
-    legal_name: '', date_of_birth: '', gender: '', phone: '', email: '',
-    address: '', city: '', country: 'Ethiopia', id_type: '', id_number: ''
+    first_name: '', last_name: '', legal_name: '', date_of_birth: '', gender: '', phone: '', email: '',
+    street_address: '', address: '', city: 'Addis Ababa', state: 'Addis Ababa', postal_code: '1000', country: 'Ethiopia', id_type: '', id_number: ''
   });
   const [frontIdUrl, setFrontIdUrl] = useState('');
   const [backIdUrl, setBackIdUrl] = useState('');
@@ -63,6 +85,8 @@ export default function KYCPage() {
     if (!user || kyc?.id || resubmitting) return;
     setForm(prev => ({
       ...prev,
+      first_name: prev.first_name || user.full_name?.split(' ')[0] || '',
+      last_name: prev.last_name || user.full_name?.split(' ').slice(1).join(' ') || '',
       legal_name: prev.legal_name || user.full_name || '',
       email: prev.email || user.email || '',
       phone: prev.phone || normalizeEtPhone(user.phone || '') || ''
@@ -86,24 +110,34 @@ export default function KYCPage() {
     const fields = parseFixFields(kyc?.resubmission_fields);
     const completeRedo = kyc?.resubmission_scope === 'complete';
     setForm(completeRedo ? {
+      first_name: '',
+      last_name: '',
       legal_name: '',
       date_of_birth: '',
       gender: '',
       phone: '',
       email: '',
+      street_address: '',
       address: '',
-      city: '',
+      city: 'Addis Ababa',
+      state: 'Addis Ababa',
+      postal_code: '1000',
       country: 'Ethiopia',
       id_type: '',
       id_number: ''
     } : {
+      first_name: kyc?.first_name || '',
+      last_name: kyc?.last_name || '',
       legal_name: kyc?.legal_name || '',
       date_of_birth: kyc?.date_of_birth || '',
       gender: kyc?.gender || '',
       phone: kyc?.phone || '',
       email: kyc?.email || user?.email || '',
+      street_address: kyc?.street_address || '',
       address: kyc?.address || '',
-      city: kyc?.city || '',
+      city: kyc?.city || 'Addis Ababa',
+      state: kyc?.state || 'Addis Ababa',
+      postal_code: kyc?.postal_code || '1000',
       country: kyc?.country || 'Ethiopia',
       id_type: kyc?.id_type || '',
       id_number: kyc?.id_number || ''
@@ -120,6 +154,7 @@ export default function KYCPage() {
       const data = {
         user_id: user.email,
         ...form,
+        legal_name: `${String(form.first_name || '').trim()} ${String(form.last_name || '').trim()}`.trim(),
         phone: normalizeEtPhone(form.phone),
         front_id_url: frontIdUrl,
         back_id_url: backIdUrl,
@@ -145,9 +180,13 @@ export default function KYCPage() {
   });
 
   const requiredMissing = [
-    !form.legal_name && 'Full legal name',
+    !form.first_name && 'First name',
+    !form.last_name && 'Last name',
     !form.date_of_birth && 'Date of birth',
     !form.phone && 'Phone',
+    !form.street_address && 'Street address',
+    !form.state && 'State / region',
+    !form.postal_code && 'Postal code',
     !form.id_type && 'ID type',
     !form.id_number && 'ID number',
     !frontIdUrl && 'Front of ID',
@@ -256,7 +295,8 @@ export default function KYCPage() {
       <div className="bg-card border border-border rounded-xl p-6 space-y-5">
         <h3 className="font-semibold">Personal Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div><Label className="text-sm">Full Legal Name</Label><Input value={form.legal_name} onChange={e => setForm({...form, legal_name: e.target.value})} className="mt-1.5" /></div>
+          <div><Label className="text-sm">First Name</Label><Input value={form.first_name} onChange={e => setForm({...form, first_name: e.target.value, legal_name: `${e.target.value} ${form.last_name}`.trim()})} className="mt-1.5" /></div>
+          <div><Label className="text-sm">Last Name</Label><Input value={form.last_name} onChange={e => setForm({...form, last_name: e.target.value, legal_name: `${form.first_name} ${e.target.value}`.trim()})} className="mt-1.5" /></div>
           <div><Label className="text-sm">Date of Birth</Label><Input type="date" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} className="mt-1.5" /></div>
           <div>
             <Label className="text-sm">Gender</Label>
@@ -269,10 +309,28 @@ export default function KYCPage() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-sm">Phone</Label><Input value={form.phone} onChange={e => setForm({...form, phone: normalizeEtPhone(e.target.value)})} placeholder="9..." className="mt-1.5" /></div>
+          <div>
+            <Label className="text-sm">Phone</Label>
+            <div className="mt-1.5 flex overflow-hidden rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
+              <span className="flex items-center border-r border-input px-3 text-sm text-muted-foreground">+251</span>
+              <Input value={form.phone} onChange={e => setForm({...form, phone: normalizeEtPhone(e.target.value)})} placeholder="9XXXXXXXX" className="border-0 focus-visible:ring-0" />
+            </div>
+          </div>
           <div><Label className="text-sm">Email</Label><Input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="mt-1.5" /></div>
-          <div><Label className="text-sm">Address</Label><Input value={form.address} onChange={e => setForm({...form, address: e.target.value})} className="mt-1.5" /></div>
+          <div className="md:col-span-2"><Label className="text-sm">Street Address</Label><Input value={form.street_address} onChange={e => setForm({...form, street_address: e.target.value, address: e.target.value})} className="mt-1.5" /></div>
           <div><Label className="text-sm">City</Label><Input value={form.city} onChange={e => setForm({...form, city: e.target.value})} className="mt-1.5" /></div>
+          <div>
+            <Label className="text-sm">State / Region</Label>
+            <Select value={form.state} onValueChange={v => setForm({...form, state: v})}>
+              <SelectTrigger className="mt-1.5"><SelectValue placeholder="Select state" /></SelectTrigger>
+              <SelectContent>
+                {ETHIOPIAN_STATES.map((state) => (
+                  <SelectItem key={state} value={state}>{state}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label className="text-sm">Postal Code</Label><Input value={form.postal_code} onChange={e => setForm({...form, postal_code: e.target.value})} className="mt-1.5" /></div>
           <div><Label className="text-sm">Country</Label><Input value={form.country} disabled className="mt-1.5" /></div>
         </div>
       </div>

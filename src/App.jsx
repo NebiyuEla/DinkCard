@@ -20,6 +20,7 @@ import Transactions from './pages/Transactions';
 import KYCPage from './pages/KYCPage';
 import SupportPage from './pages/SupportPage';
 import NotificationsPage from './pages/NotificationsPage';
+import AccountPage from './pages/AccountPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminKYC from './pages/admin/AdminKYC';
@@ -146,10 +147,11 @@ function AppRoutes() {
           <Route path="/kyc" element={<KYCPage />} />
           <Route path="/support" element={<SupportPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
+          <Route path="/account" element={<AccountPage />} />
         </Route>
       </Route>
 
-      <Route element={<RequireAuth roles={['admin', 'superadmin']} />}>
+      <Route element={<RequireAuth roles={['support', 'admin', 'superadmin']} />}>
         <Route path="/admin" element={<AdminDashboard />}>
           <Route path="users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
           <Route path="kyc" element={<AdminKYC />} />

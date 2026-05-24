@@ -108,16 +108,17 @@ try {
   const card = db.prepare('SELECT * FROM virtual_cards WHERE user_id = ?').get(user.email);
   const walletAfterCreate = db.prepare('SELECT available_balance FROM wallets WHERE user_id = ?').get(user.email).available_balance;
 
-  if (createBody.amount !== 2000000) throw new Error(`Expected create amount 2000000, got ${createBody.amount}`);
+  if (createBody.amount !== 20000000) throw new Error(`Expected create amount 20000000, got ${createBody.amount}`);
   if (createBody.name !== 'Test User') throw new Error('Expected KYC legal name on card payload');
   if (createBody.customer_id !== 'provider-customer-1') throw new Error('Expected card payload to use linked Bitnob customer ID');
+  if (createBody.contactless_payment !== true) throw new Error('Expected contactless payment to be enabled');
   if (walletAfterCreate !== 79) throw new Error(`Expected wallet 79, got ${walletAfterCreate}`);
 
   db.prepare("UPDATE virtual_cards SET status = 'active', balance = 20 WHERE id = ?").run(card.id);
   await fundVirtualCard(user, card.id, 5);
   const request = db.prepare('SELECT * FROM card_funding_requests WHERE card_id = ?').get(card.id);
 
-  if (fundBody.amount !== 500000) throw new Error(`Expected fund amount 500000, got ${fundBody.amount}`);
+  if (fundBody.amount !== 5000000) throw new Error(`Expected fund amount 5000000, got ${fundBody.amount}`);
   if (request.fee !== 1) throw new Error(`Expected top-up fee 1, got ${request.fee}`);
   if (request.total_wallet_deduction !== 6) throw new Error(`Expected funding deduction 6, got ${request.total_wallet_deduction}`);
 

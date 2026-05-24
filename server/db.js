@@ -67,13 +67,18 @@ CREATE TABLE IF NOT EXISTS wallet_transactions (
 CREATE TABLE IF NOT EXISTS kyc_submissions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
   legal_name TEXT,
   date_of_birth TEXT,
   gender TEXT,
   phone TEXT,
   email TEXT,
   address TEXT,
+  street_address TEXT,
   city TEXT,
+  state TEXT,
+  postal_code TEXT,
   country TEXT DEFAULT 'Ethiopia',
   id_type TEXT,
   id_number TEXT,
@@ -317,7 +322,12 @@ ensureColumn('kyc_submissions', 'gender', 'TEXT');
 ensureColumn('kyc_submissions', 'phone', 'TEXT');
 ensureColumn('kyc_submissions', 'email', 'TEXT');
 ensureColumn('kyc_submissions', 'address', 'TEXT');
+ensureColumn('kyc_submissions', 'first_name', 'TEXT');
+ensureColumn('kyc_submissions', 'last_name', 'TEXT');
+ensureColumn('kyc_submissions', 'street_address', 'TEXT');
 ensureColumn('kyc_submissions', 'city', 'TEXT');
+ensureColumn('kyc_submissions', 'state', 'TEXT');
+ensureColumn('kyc_submissions', 'postal_code', 'TEXT');
 ensureColumn('kyc_submissions', 'country', "TEXT DEFAULT 'Ethiopia'");
 ensureColumn('kyc_submissions', 'id_type', 'TEXT');
 ensureColumn('kyc_submissions', 'id_number', 'TEXT');

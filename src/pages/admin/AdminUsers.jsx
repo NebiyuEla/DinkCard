@@ -137,6 +137,8 @@ export default function AdminUsers() {
   const [reason, setReason] = useState('');
   const [manualAmount, setManualAmount] = useState('');
   const [manualCard, setManualCard] = useState({ nickname: 'Virtual Card', balance: '', lastFour: '' });
+  const [staffDialogOpen, setStaffDialogOpen] = useState(false);
+  const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support' });
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
@@ -183,6 +185,17 @@ export default function AdminUsers() {
     onError: (error) => toast.error(error.message || 'User action failed')
   });
 
+  const createStaff = useMutation({
+    mutationFn: () => apiClient.admin.users.createStaff(staffForm),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('Staff account created.');
+      setStaffDialogOpen(false);
+      setStaffForm({ fullName: '', email: '', username: '', password: '', role: 'support' });
+    },
+    onError: (error) => toast.error(error.message || 'Could not create staff account.')
+  });
+
   const openAction = (user, action) => {
     setPendingAction({ user, action });
     setReason('');
@@ -197,7 +210,12 @@ export default function AdminUsers() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold">Users ({users?.length || 0})</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-lg font-bold">Users ({users?.length || 0})</h2>
+        <Button type="button" onClick={() => setStaffDialogOpen(true)}>
+          <UserCog className="mr-2 h-4 w-4" />Add admin or support
+        </Button>
+      </div>
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
@@ -332,6 +350,58 @@ export default function AdminUsers() {
               disabled={reasonMissing || amountMissing || cardBalanceInvalid || userAction.isPending}
             >
               {userAction.isPending ? 'Processing...' : actionCopy.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={staffDialogOpen} onOpenChange={setStaffDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create staff account</DialogTitle>
+            <DialogDescription>Create a dedicated login for admin or support access.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="space-y-1.5">
+              <Label>Full name</Label>
+              <Input value={staffForm.fullName} onChange={(event) => setStaffForm((current) => ({ ...current, fullName: event.target.value }))} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={staffForm.email} onChange={(event) => setStaffForm((current) => ({ ...current, email: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Username</Label>
+                <Input value={staffForm.username} onChange={(event) => setStaffForm((current) => ({ ...current, username: event.target.value }))} />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Password</Label>
+                <Input type="password" value={staffForm.password} onChange={(event) => setStaffForm((current) => ({ ...current, password: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Role</Label>
+                <select
+                  value={staffForm.role}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, role: event.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="support">Support</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setStaffDialogOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => createStaff.mutate()}
+              disabled={!staffForm.fullName || !staffForm.email || !staffForm.username || !staffForm.password || createStaff.isPending}
+            >
+              {createStaff.isPending ? 'Creating...' : 'Create account'}
             </Button>
           </DialogFooter>
         </DialogContent>

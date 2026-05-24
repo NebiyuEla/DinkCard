@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Settings,
   ShieldCheck,
+  UserRound,
   Wallet
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -26,7 +27,8 @@ const navItems = [
   { label: 'Transactions', path: '/transactions', icon: ArrowDownUp },
   { label: 'KYC Verification', path: '/kyc', icon: ShieldCheck },
   { label: 'Support', path: '/support', icon: HeadphonesIcon },
-  { label: 'Notifications', path: '/notifications', icon: Bell }
+  { label: 'Notifications', path: '/notifications', icon: Bell },
+  { label: 'Account', path: '/account', icon: UserRound }
 ];
 
 const mobileNavItems = [
@@ -44,7 +46,7 @@ function isPathActive(pathname, itemPath) {
 export default function Sidebar({ user, unreadCount = 0 }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const isAdmin = ['admin', 'superadmin'].includes(user?.role);
+  const isAdmin = ['support', 'admin', 'superadmin'].includes(user?.role);
 
   return (
     <>
