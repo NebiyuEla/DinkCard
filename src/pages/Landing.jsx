@@ -73,25 +73,25 @@ export default function Landing() {
         </div>
       </nav>
 
-      <section className="px-4 pb-16 pt-28">
+      <section className="px-4 pb-12 pt-24 sm:pb-14 sm:pt-28">
         <motion.div
-          className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]"
+          className="mx-auto flex max-w-5xl flex-col items-center gap-8 text-center"
           initial="hidden"
           animate="visible"
           variants={stagger}
         >
-          <div>
+          <div className="mx-auto max-w-3xl">
             <motion.div variants={fadeUp} className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
               <Zap className="h-3.5 w-3.5" />
               Built for Ethiopian users
             </motion.div>
-            <motion.h1 variants={fadeUp} className="max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            <motion.h1 variants={fadeUp} className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Simple virtual card access from Ethiopia
             </motion.h1>
-            <motion.p variants={fadeUp} className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+            <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
               Pay in ETB, complete verification, and manage supported virtual card services with a clean and reliable flow.
             </motion.p>
-            <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <motion.div variants={fadeUp} className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/register">
                 <Button size="lg" className="h-12 px-8 text-base">
                   Create Account <ArrowRight className="ml-2 h-4 w-4" />
@@ -115,7 +115,7 @@ export default function Landing() {
                 <span className="text-sm font-bold tracking-[0.24em] text-primary">DINK</span>
               </div>
               <div className="mt-10">
-                <p className="font-mono text-lg tracking-[0.22em] text-foreground/75">•••• •••• •••• 4242</p>
+                <p className="font-mono text-lg tracking-[0.22em] text-foreground/75">**** **** **** 4242</p>
               </div>
               <div className="mt-10 flex items-end justify-between">
                 <div>
@@ -132,9 +132,9 @@ export default function Landing() {
         </motion.div>
       </section>
 
-      <section id="how-it-works" className="border-t border-border px-4 py-16">
+      <section id="how-it-works" className="border-t border-border px-4 py-12 sm:py-14">
         <div className="mx-auto max-w-6xl">
-          <motion.div className="mb-10 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
+          <motion.div className="mb-8 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">How It Works</h2>
             <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Start with verification, fund in ETB, and request your card through a simple guided flow.</p>
           </motion.div>
@@ -161,9 +161,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="px-4 py-16">
+      <section className="px-4 py-12 sm:py-14">
         <div className="mx-auto max-w-6xl">
-          <motion.div className="mb-10 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
+          <motion.div className="mb-8 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">Supported Online Uses</h2>
             <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Merchant acceptance is not guaranteed and depends on provider, network, region, and merchant rules.</p>
           </motion.div>
@@ -183,9 +183,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="border-y border-border px-4 py-16">
+      <section className="border-y border-border px-4 py-12 sm:py-14">
         <div className="mx-auto max-w-6xl">
-          <motion.div className="mb-10 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
+          <motion.div className="mb-8 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">Security First</h2>
             <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Clear checks, protected data, and transparent payment flow.</p>
           </motion.div>
@@ -211,9 +211,9 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="px-4 py-16">
+      <section className="px-4 py-12 sm:py-14">
         <div className="mx-auto max-w-3xl">
-          <motion.div className="mb-10 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
+          <motion.div className="mb-8 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">Frequently Asked Questions</h2>
           </motion.div>
           <motion.div className="space-y-4" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={stagger}>
@@ -230,7 +230,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="px-4 pb-16 pt-4">
+      <section className="px-4 pb-14 pt-2 sm:pb-16">
         <div className="mx-auto max-w-3xl text-center">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">Ready to Get Started?</h2>
@@ -256,7 +256,7 @@ export default function Landing() {
             <LegalLinks />
             <p className="max-w-2xl text-center text-xs text-muted-foreground">{footerDisclaimer}</p>
           </div>
-          <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} Dink Card</p>
+          <p className="text-xs text-muted-foreground">(c) {new Date().getFullYear()} Dink Card</p>
         </div>
       </footer>
     </div>

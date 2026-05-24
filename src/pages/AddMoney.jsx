@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle, Copy, DollarSign, ExternalLink, WalletCards } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ export default function AddMoney() {
   const [acceptedNotice, setAcceptedNotice] = useState(false);
   const [showFeeDetails, setShowFeeDetails] = useState(false);
   const [generatedUsdcDeposit, setGeneratedUsdcDeposit] = useState(null);
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const rate = settings?.usd_to_etb_rate || 190;
   const amount = useMemo(() => {
@@ -57,6 +59,38 @@ export default function AddMoney() {
   const activeUsdcDeposit = generatedUsdcDeposit
     || deposits?.find((deposit) => deposit.payment_method === 'usdc' && ['pending_transfer', 'awaiting_review'].includes(deposit.status))
     || null;
+
+  useEffect(() => {
+    if (activeUsdcDeposit) {
+      setPaymentMethod('usdc');
+    }
+  }, [activeUsdcDeposit]);
+
+  useEffect(() => {
+    let ignore = false;
+    const address = String(activeUsdcDeposit?.payment_address || '').trim();
+    if (!address) {
+      setQrCodeUrl('');
+      return undefined;
+    }
+
+    QRCode.toDataURL(address, {
+      margin: 1,
+      width: 220,
+      color: {
+        dark: '#0f172a',
+        light: '#ffffff'
+      }
+    }).then((url) => {
+      if (!ignore) setQrCodeUrl(url);
+    }).catch(() => {
+      if (!ignore) setQrCodeUrl('');
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeUsdcDeposit?.payment_address]);
 
   useEffect(() => {
     if (!selectedNetwork && usdcNetworksQuery.data?.networks?.length) {
@@ -303,7 +337,7 @@ export default function AddMoney() {
               </div>
 
               {activeUsdcDeposit && (
-                <div className="space-y-3 rounded-2xl border border-border bg-secondary/20 p-4 text-sm">
+                <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold">USDC deposit address</p>
@@ -328,13 +362,22 @@ export default function AddMoney() {
                       </div>
                     </div>
                   </div>
-                  <div className="rounded-xl bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Deposit address</p>
-                    <div className="mt-1 flex items-start justify-between gap-2">
-                      <p className="min-w-0 break-all font-mono text-xs">{activeUsdcDeposit.payment_address}</p>
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(activeUsdcDeposit.payment_address, 'Address')}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
+                  <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
+                    <div className="rounded-xl bg-card p-3">
+                      <p className="text-xs text-muted-foreground">Deposit address</p>
+                      <div className="mt-1 flex items-start justify-between gap-2">
+                        <p className="min-w-0 break-all font-mono text-xs">{activeUsdcDeposit.payment_address || 'Address not available yet'}</p>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(activeUsdcDeposit.payment_address, 'Address')} disabled={!activeUsdcDeposit.payment_address}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-center rounded-xl bg-card p-3">
+                      {qrCodeUrl ? (
+                        <img src={qrCodeUrl} alt="USDC deposit address QR code" className="h-[180px] w-[180px] rounded-lg border border-border bg-white p-2" />
+                      ) : (
+                        <div className="text-center text-xs text-muted-foreground">QR code will appear when the address is ready.</div>
+                      )}
                     </div>
                   </div>
                   {activeUsdcDeposit.status !== 'awaiting_review' && (
