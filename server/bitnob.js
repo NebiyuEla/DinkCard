@@ -23,15 +23,14 @@ function getBitnobCard(response) {
 
 function getEffectiveMinCardFunding(settings) {
   const raw = Number(settings?.min_card_funding_usd);
-  if (!Number.isFinite(raw) || raw <= 0) return 1;
-  // Older deployments used 2 as the default floor even though our current product floor is 1.
-  return raw === 2 ? 1 : raw;
+  if (!Number.isFinite(raw) || raw <= 0) return 3;
+  return Math.max(3, raw);
 }
 
 function getEffectiveMinCardCreation(settings) {
   const raw = Number(settings?.min_card_creation_usd);
-  if (!Number.isFinite(raw) || raw <= 0) return 2;
-  return Math.max(2, raw);
+  if (!Number.isFinite(raw) || raw <= 0) return 3;
+  return Math.max(3, raw);
 }
 
 function signBitnob(body = '') {
@@ -94,9 +93,10 @@ export async function bitnobRequest(method, requestPath, payload) {
       throw new Error('Card service is not active for this account yet. Please contact the administrator.');
     }
     if (errorCode === 'COMPANY_INSUFFICIENT_BALANCE') {
-      const required = data?.extensions?.metadata?.required;
-      const available = data?.extensions?.metadata?.available;
-      throw new Error(`Insufficient company wallet balance.${required ? ` Required: ${required} USDC.` : ''}${available ? ` Available: ${available} USDC.` : ''}`);
+      const error = new Error('Card service is temporarily unavailable. Please try again later or contact support.');
+      error.providerResponse = data;
+      error.providerStatus = response.status;
+      throw error;
     }
     const error = new Error(message);
     error.providerResponse = data;

@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CreditCard, DollarSign } from 'lucide-react';
+import { ArrowLeft, AlertCircle, CreditCard, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
-import { useCards, useCurrentUser, useFeeSettings, useWallet } from '@/hooks/useAppData';
+import { useCards, useCurrentUser, useFeeSettings, useKYCStatus, useWallet } from '@/hooks/useAppData';
 import { calculateCardFundingFees, getEffectiveMinCardFunding } from '@/lib/feeCalculator';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -22,6 +22,7 @@ export default function FundCard() {
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: cards } = useCards(user?.email);
+  const { data: kyc } = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
 
   const preselectedId = cardId || new URLSearchParams(window.location.search).get('cardId') || '';
@@ -30,6 +31,7 @@ export default function FundCard() {
   const [acceptedNotice, setAcceptedNotice] = useState(false);
 
   const balance = wallet?.available_balance || 0;
+  const kycApproved = kyc?.status === 'approved';
   const fundableCards = cards?.filter((card) => ['active', 'frozen'].includes(card.status)) || [];
   const selectedCard = fundableCards.find((card) => card.id === selectedCardId);
   const fundAmount = parseFloat(amount) || 0;
@@ -49,7 +51,7 @@ export default function FundCard() {
     }
     return Math.floor(low * 100) / 100;
   }, [balance, settings]);
-  const canFund = selectedCard && fundAmount >= minFunding && fundAmount <= maxFunding && fees.totalDeduction <= balance && acceptedNotice;
+  const canFund = kycApproved && selectedCard && fundAmount >= minFunding && fundAmount <= maxFunding && fees.totalDeduction <= balance && acceptedNotice;
 
   const fundCard = useMutation({
     mutationFn: async () => apiClient.cards.fund(selectedCard.id, fundAmount),
@@ -70,6 +72,17 @@ export default function FundCard() {
           <p className="text-sm text-muted-foreground">Use available service balance for card funding.</p>
         </div>
       </div>
+
+      {!kycApproved && (
+        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex gap-3">
+          <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-yellow-500">KYC Required</p>
+            <p className="text-xs text-muted-foreground">Complete and get your KYC approved before funding cards.</p>
+            <Link to="/kyc"><Button size="sm" variant="outline" className="mt-2">Complete KYC</Button></Link>
+          </div>
+        </div>
+      )}
 
       <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm">
         <div>
@@ -136,21 +149,17 @@ export default function FundCard() {
                 <p className="font-mono font-semibold">${fees.fundingFee.toFixed(2)}</p>
               </div>
             </div>
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold">You will use</span>
-                <span className={`font-mono text-lg font-bold text-right ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>
-              </div>
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-right">
+              <span className={`font-mono text-lg font-bold ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>
             </div>
           </div>
         </div>
       )}
 
       <div className="bg-secondary/40 rounded-xl p-4 text-xs text-muted-foreground space-y-3">
-        <p>All payments and card requests are subject to verification, provider approval, service availability, and compliance review.</p>
-        <label className="flex items-start gap-3 rounded-lg border border-border p-3">
-          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5" />
-          <span>{checkoutAgreement}</span>
+        <label className="flex items-start gap-3 rounded-xl border-2 border-primary/25 bg-card p-3 text-sm text-foreground">
+          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5 h-6 w-6 border-primary bg-background" />
+          <span className="leading-5">{checkoutAgreement}</span>
         </label>
         <LegalLinks />
       </div>

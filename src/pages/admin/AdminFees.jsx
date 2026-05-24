@@ -72,9 +72,7 @@ export default function AdminFees() {
     { key: 'min_deposit_usd', label: 'Min Deposit', suffix: 'USD' },
     { key: 'max_deposit_usd', label: 'Max Deposit', suffix: 'USD' },
     { key: 'daily_deposit_limit_usd', label: 'Daily Deposit Limit', suffix: 'USD' },
-    { key: 'monthly_deposit_limit_usd', label: 'Monthly Deposit Limit', suffix: 'USD' },
-    { key: 'kyc_level1_deposit_limit', label: 'KYC Level 1 Limit', suffix: 'USD' },
-    { key: 'kyc_level2_deposit_limit', label: 'KYC Level 2 Limit', suffix: 'USD' }
+    { key: 'monthly_deposit_limit_usd', label: 'Monthly Deposit Limit', suffix: 'USD' }
   ];
 
   const updateNumber = (key, value) => {

@@ -229,8 +229,8 @@ function normalizeFeeSettings(payload) {
     card_funding_fee_percentage: 0,
     rounding_rule_etb: Number.isFinite(Number(payload.rounding_rule_etb)) && Number(payload.rounding_rule_etb) >= 0 ? Number(payload.rounding_rule_etb) : 0,
     customer_fee_display_style: 'simple',
-    min_card_creation_usd: 2,
-    min_card_funding_usd: 1,
+    min_card_creation_usd: 3,
+    min_card_funding_usd: 3,
     max_cards_per_user: 3
   };
 }

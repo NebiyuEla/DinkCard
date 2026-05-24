@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle, DollarSign, ExternalLink, Info } from 'lucide-react';
+import { ArrowLeft, CheckCircle, DollarSign, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -159,7 +159,7 @@ export default function AddMoney() {
               <span className="text-muted-foreground">Gateway fee (%)</span>
               <span className="font-mono font-semibold text-right">{fees.gatewayFeePercentage.toFixed(2)}%</span>
             </div>
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold">Total payable</span>
                 <span className="font-mono text-lg font-bold text-primary text-right">{fees.totalPayableEtb.toLocaleString()} ETB</span>
@@ -192,13 +192,9 @@ export default function AddMoney() {
             </p>
           </div>
         )}
-        <div className="bg-secondary/40 rounded-lg p-3 text-xs text-muted-foreground flex gap-2">
-          <Info className="w-4 h-4 shrink-0" />
-          <span>Funds added to your account are used for supported card-related service requests. All funding requests may be reviewed according to platform rules, partner provider requirements, and applicable compliance standards.</span>
-        </div>
-        <label className="flex items-start gap-3 rounded-lg border border-border p-3 text-xs text-muted-foreground">
-          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5" />
-          <span>{checkoutAgreement}</span>
+        <label className="flex items-start gap-3 rounded-xl border-2 border-primary/25 bg-card p-3 text-sm text-foreground">
+          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5 h-6 w-6 border-primary bg-background" />
+          <span className="leading-5">{checkoutAgreement}</span>
         </label>
         <LegalLinks />
         <Button

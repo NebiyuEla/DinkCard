@@ -17,15 +17,15 @@ function safeNumber(value, fallback) {
 }
 
 export function getEffectiveMinCardFunding(settings = {}) {
-  const raw = safeNumber(settings.min_card_funding_usd, 1);
-  if (raw <= 0) return 1;
-  return raw === 2 ? 1 : raw;
+  const raw = safeNumber(settings.min_card_funding_usd, 3);
+  if (raw <= 0) return 3;
+  return Math.max(3, raw);
 }
 
 export function getEffectiveMinCardCreation(settings = {}) {
-  const raw = safeNumber(settings.min_card_creation_usd, 2);
-  if (raw <= 0) return 2;
-  return Math.max(2, raw);
+  const raw = safeNumber(settings.min_card_creation_usd, 3);
+  if (raw <= 0) return 3;
+  return Math.max(3, raw);
 }
 
 function roundUpTo(value, nearest) {
@@ -135,10 +135,10 @@ export const DEFAULT_SETTINGS = {
   max_deposit_usd: 1000,
   daily_deposit_limit_usd: 2000,
   monthly_deposit_limit_usd: 10000,
-  min_card_creation_usd: 2,
-  min_card_funding_usd: 1,
+  min_card_creation_usd: 3,
+  min_card_funding_usd: 3,
   max_card_funding_usd: 500,
   max_cards_per_user: 3,
-  kyc_level1_deposit_limit: 100,
-  kyc_level2_deposit_limit: 1000
+  kyc_level1_deposit_limit: 0,
+  kyc_level2_deposit_limit: 0
 };

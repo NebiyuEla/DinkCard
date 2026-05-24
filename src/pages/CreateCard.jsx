@@ -25,7 +25,7 @@ export default function CreateCard() {
   const { data: kyc } = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
 
-  const [fundingAmount, setFundingAmount] = useState('5');
+  const [fundingAmount, setFundingAmount] = useState('3');
   const [acceptedNotice, setAcceptedNotice] = useState(false);
 
   const balance = wallet?.available_balance || 0;
@@ -117,35 +117,10 @@ export default function CreateCard() {
       </div>
 
       {/* Card total */}
-      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-3 shadow-sm">
-        <h3 className="font-semibold text-sm">Card Total</h3>
-        <div className="space-y-3 text-sm">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-secondary/35 p-3">
-              <p className="text-xs text-muted-foreground">Card cost</p>
-              <p className="font-mono font-semibold">${fees.bitnobFee.toFixed(2)}</p>
-            </div>
-            <div className="rounded-xl bg-secondary/35 p-3">
-              <p className="text-xs text-muted-foreground">Initial funding</p>
-              <p className="font-mono font-semibold">${fees.fundingAmount.toFixed(2)}</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-semibold">You will use</span>
-              <span className={`font-mono text-lg font-bold text-right ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>
-                ${fees.totalDeduction.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div className="bg-secondary/40 rounded-xl p-4 text-xs text-muted-foreground space-y-3">
-        <p>Cards are processed through our infrastructure partner. Merchant acceptance is not guaranteed.</p>
-        <label className="flex items-start gap-3 rounded-lg border border-border p-3">
-          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5" />
-          <span>{checkoutAgreement}</span>
+        <label className="flex items-start gap-3 rounded-xl border-2 border-primary/25 bg-card p-3 text-sm text-foreground">
+          <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5 h-6 w-6 border-primary bg-background" />
+          <span className="leading-5">{checkoutAgreement}</span>
         </label>
         <LegalLinks />
       </div>

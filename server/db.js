@@ -239,12 +239,12 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   max_deposit_usd REAL NOT NULL DEFAULT 1000,
   daily_deposit_limit_usd REAL NOT NULL DEFAULT 2000,
   monthly_deposit_limit_usd REAL NOT NULL DEFAULT 10000,
-  min_card_creation_usd REAL NOT NULL DEFAULT 2,
-  min_card_funding_usd REAL NOT NULL DEFAULT 1,
+  min_card_creation_usd REAL NOT NULL DEFAULT 3,
+  min_card_funding_usd REAL NOT NULL DEFAULT 3,
   max_card_funding_usd REAL NOT NULL DEFAULT 500,
   max_cards_per_user INTEGER NOT NULL DEFAULT 3,
-  kyc_level1_deposit_limit REAL NOT NULL DEFAULT 100,
-  kyc_level2_deposit_limit REAL NOT NULL DEFAULT 1000,
+  kyc_level1_deposit_limit REAL NOT NULL DEFAULT 0,
+  kyc_level2_deposit_limit REAL NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -361,7 +361,8 @@ ensureColumn('fee_settings', 'bitnob_topup_fee_under_100_usd', 'REAL NOT NULL DE
 ensureColumn('fee_settings', 'bitnob_topup_fee_percent_100_plus', 'REAL NOT NULL DEFAULT 1');
 ensureColumn('fee_settings', 'rounding_rule_etb', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'customer_fee_display_style', "TEXT NOT NULL DEFAULT 'simple'");
-ensureColumn('fee_settings', 'min_card_creation_usd', 'REAL NOT NULL DEFAULT 2');
+ensureColumn('fee_settings', 'min_card_creation_usd', 'REAL NOT NULL DEFAULT 3');
+ensureColumn('fee_settings', 'min_card_funding_usd', 'REAL NOT NULL DEFAULT 3');
 ensureColumn('audit_logs', 'environment', 'TEXT');
 ensureColumn('audit_logs', 'provider', 'TEXT');
 ensureColumn('audit_logs', 'provider_status', 'TEXT');
@@ -478,8 +479,8 @@ db.prepare(`
       bitnob_topup_fee_under_100_usd = COALESCE(bitnob_topup_fee_under_100_usd, 1),
       bitnob_topup_fee_percent_100_plus = COALESCE(bitnob_topup_fee_percent_100_plus, 1),
       rounding_rule_etb = 0,
-      min_card_creation_usd = 2,
-      min_card_funding_usd = 1,
+      min_card_creation_usd = 3,
+      min_card_funding_usd = 3,
       max_cards_per_user = 3,
       customer_fee_display_style = 'simple',
       updated_at = ?

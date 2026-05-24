@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Compass, KeyRound, LogOut, Orbit, ShieldCheck, Sparkles, Star, Trash2, UserRound } from 'lucide-react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 function buildProfileTheme(seed) {
@@ -21,16 +22,6 @@ function buildProfileTheme(seed) {
     bg: `linear-gradient(135deg, hsl(${hue} 70% 20%), hsl(${(hue + 42) % 360} 80% 36%))`,
     glow: `hsla(${(hue + 42) % 360}, 90%, 60%, 0.22)`
   };
-}
-
-const PROFILE_ICONS = [Sparkles, Star, Orbit, Compass];
-
-function pickProfileIcon(seed) {
-  let hash = 0;
-  for (const char of String(seed || 'dink-card')) {
-    hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
-  }
-  return PROFILE_ICONS[hash % PROFILE_ICONS.length];
 }
 
 function maskIdNumber(value) {
@@ -92,7 +83,6 @@ export default function AccountPage() {
   }, [form.first_name, form.last_name, user?.full_name, user?.email]);
 
   const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
-  const ProfileIcon = useMemo(() => pickProfileIcon(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const kycLocked = kyc?.status === 'approved';
 
@@ -172,27 +162,26 @@ export default function AccountPage() {
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
-        <div className="rounded-3xl border border-border bg-card p-5">
+      <div className="grid items-start gap-5 lg:grid-cols-[320px_1fr]">
+        <div className="self-start rounded-3xl border border-border bg-card p-5">
           <div
             className="relative overflow-hidden rounded-[28px] p-5 text-white"
             style={{ backgroundImage: profileTheme.bg, boxShadow: `0 18px 40px ${profileTheme.glow}` }}
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/12 text-2xl font-bold backdrop-blur">
-                <div className="flex flex-col items-center justify-center gap-1">
-                  <ProfileIcon className="h-5 w-5" />
-                  <span className="text-sm">{initials}</span>
-                </div>
-              </div>
+              <Avatar className="h-16 w-16 rounded-2xl border border-white/20 bg-white/12 backdrop-blur">
+                <AvatarFallback className="rounded-2xl bg-transparent text-lg font-bold text-white">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
               <div className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
                 {twoFactorEnabled ? '2FA Active' : '2FA Off'}
               </div>
             </div>
-            <div className="mt-8">
+            <div className="mt-6">
               <p className="text-lg font-semibold">{`${form.first_name} ${form.last_name}`.trim() || user?.full_name || 'Dink Card User'}</p>
               <p className="mt-1 text-sm text-white/80">@{form.username || user?.username || 'set-username'}</p>
-              <p className="mt-4 text-xs text-white/70">{user?.email}</p>
+              <p className="mt-3 text-xs text-white/70">{user?.email}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
