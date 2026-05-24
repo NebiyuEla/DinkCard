@@ -51,7 +51,7 @@ export default function AddMoney() {
   const usdcNetworksQuery = useQuery({
     queryKey: ['usdc-networks'],
     queryFn: () => apiClient.payments.getUsdcNetworks(),
-    enabled: paymentMethod === 'usdc' && kyc?.status === 'approved'
+    enabled: kyc?.status === 'approved'
   });
 
   const latestDeposit = deposits?.[0];
@@ -59,12 +59,20 @@ export default function AddMoney() {
   const activeUsdcDeposit = generatedUsdcDeposit
     || deposits?.find((deposit) => deposit.payment_method === 'usdc' && ['pending_transfer', 'awaiting_review'].includes(deposit.status))
     || null;
+  const availableUsdcNetworks = usdcNetworksQuery.data?.networks || [];
+  const usdcFeatureAvailable = !!activeUsdcDeposit || availableUsdcNetworks.length > 0;
 
   useEffect(() => {
     if (activeUsdcDeposit) {
       setPaymentMethod('usdc');
     }
   }, [activeUsdcDeposit]);
+
+  useEffect(() => {
+    if (paymentMethod === 'usdc' && !activeUsdcDeposit && usdcNetworksQuery.isError) {
+      setPaymentMethod('chapa');
+    }
+  }, [activeUsdcDeposit, paymentMethod, usdcNetworksQuery.isError]);
 
   useEffect(() => {
     let ignore = false;
@@ -93,10 +101,10 @@ export default function AddMoney() {
   }, [activeUsdcDeposit?.payment_address]);
 
   useEffect(() => {
-    if (!selectedNetwork && usdcNetworksQuery.data?.networks?.length) {
-      setSelectedNetwork(usdcNetworksQuery.data.networks[0].value);
+    if (!selectedNetwork && availableUsdcNetworks.length) {
+      setSelectedNetwork(availableUsdcNetworks[0].value);
     }
-  }, [selectedNetwork, usdcNetworksQuery.data]);
+  }, [selectedNetwork, availableUsdcNetworks]);
 
   useEffect(() => {
     const txRef = new URLSearchParams(window.location.search).get('tx_ref');
@@ -197,14 +205,21 @@ export default function AddMoney() {
         <div className="space-y-4 sm:space-y-5">
           <div>
             <Label className="text-sm font-medium">Funding method</Label>
-            <div className="mt-1.5 grid grid-cols-2 gap-2">
+            <div className={`mt-1.5 grid gap-2 ${usdcFeatureAvailable ? 'grid-cols-2' : 'grid-cols-1'}`}>
               <Button type="button" variant={paymentMethod === 'chapa' ? 'default' : 'outline'} className={paymentMethod === 'chapa' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setPaymentMethod('chapa')}>
                 Pay in ETB
               </Button>
-              <Button type="button" variant={paymentMethod === 'usdc' ? 'default' : 'outline'} className={paymentMethod === 'usdc' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setPaymentMethod('usdc')}>
-                Pay with USDC
-              </Button>
+              {usdcFeatureAvailable && (
+                <Button type="button" variant={paymentMethod === 'usdc' ? 'default' : 'outline'} className={paymentMethod === 'usdc' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setPaymentMethod('usdc')}>
+                  Pay with USDC
+                </Button>
+              )}
             </div>
+            {!usdcFeatureAvailable && kycApproved && usdcNetworksQuery.isError && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                USDC funding is not available on your current Bitnob account or environment right now.
+              </p>
+            )}
           </div>
 
           <div>
@@ -307,7 +322,7 @@ export default function AddMoney() {
                     <SelectValue placeholder={usdcNetworksQuery.isLoading ? 'Loading networks...' : 'Choose a network'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {(usdcNetworksQuery.data?.networks || []).map((network) => (
+                    {availableUsdcNetworks.map((network) => (
                       <SelectItem key={network.value} value={network.value}>{network.label}</SelectItem>
                     ))}
                   </SelectContent>
