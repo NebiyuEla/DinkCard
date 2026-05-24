@@ -30,9 +30,9 @@ export function calculateTopupProviderFeeUsd(usdAmount, settings = {}) {
 export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const rate = Math.max(0, safeNumber(exchangeRate || settings?.usd_to_etb_rate, 190));
-  const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, 8));
+  const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, 4));
   const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, 100));
-  const safetyBufferPercentage = Math.max(0, safeNumber(settings?.safety_buffer_percentage, 3));
+  const safetyBufferPercentage = Math.max(0, safeNumber(settings?.safety_buffer_percentage, 1));
   const settlementFeeEtb = Math.max(0, safeNumber(settings?.chapa_settlement_fee_etb, 0));
   const roundingRuleEtb = Math.max(1, safeNumber(settings?.rounding_rule_etb, 50));
   const feeDisplayStyle = ['simple', 'detailed', 'hybrid'].includes(settings?.customer_fee_display_style)
@@ -106,9 +106,9 @@ export const DEFAULT_SETTINGS = {
   gateway_fee_percentage: 2.5,
   deposit_fee_percentage: 0,
   deposit_fixed_fee_etb: 0,
-  service_margin_percentage: 8,
+  service_margin_percentage: 4,
   minimum_service_fee_etb: 100,
-  safety_buffer_percentage: 3,
+  safety_buffer_percentage: 1,
   chapa_settlement_fee_etb: 0,
   card_creation_fee_usd: 1,
   bitnob_topup_fee_under_100_usd: 1,

@@ -62,16 +62,16 @@ export default function FundCard() {
   });
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="w-full max-w-2xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-0 px-1 sm:px-0">
       <div className="flex items-center gap-3">
         <Link to="/cards"><Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button></Link>
         <div>
-          <h1 className="text-2xl font-bold">Fund Card</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Fund Card</h1>
           <p className="text-sm text-muted-foreground">Use available service balance for card funding.</p>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm">
         <div>
           <Label className="text-sm font-medium">Select Card</Label>
           <Select value={selectedCardId} onValueChange={setSelectedCardId}>
@@ -109,26 +109,42 @@ export default function FundCard() {
               Max
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Available service balance: ${balance.toFixed(2)} | Max: ${maxFunding.toFixed(2)}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-lg bg-secondary/40 p-2">
+              <p className="text-muted-foreground">Available</p>
+              <p className="font-mono font-semibold">${balance.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-secondary/40 p-2">
+              <p className="text-muted-foreground">Max</p>
+              <p className="font-mono font-semibold">${maxFunding.toFixed(2)}</p>
+            </div>
+          </div>
         </div>
       </div>
 
       {fundAmount > 0 && (
-        <div className="bg-card border border-border rounded-xl p-6 space-y-3">
+        <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-3 shadow-sm">
           <h3 className="font-semibold text-sm">Card Funding</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Funding Amount</span><span className="font-mono">${fees.amount.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Card top-up cost</span><span className="font-mono">${fees.fundingFee.toFixed(2)}</span></div>
-            <div className="flex justify-between font-semibold pt-2 border-t border-border">
-              <span>Total Deduction</span>
-              <span className={`font-mono ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>
-            </div>
-            {selectedCard && (
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>Estimated Card Balance</span>
-                <span className="font-mono">${((selectedCard.balance || 0) + fundAmount).toFixed(2)}</span>
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-secondary/35 p-3">
+                <p className="text-xs text-muted-foreground">Funding</p>
+                <p className="font-mono font-semibold">${fees.amount.toFixed(2)}</p>
               </div>
-            )}
+              <div className="rounded-xl bg-secondary/35 p-3">
+                <p className="text-xs text-muted-foreground">Top-up cost</p>
+                <p className="font-mono font-semibold">${fees.fundingFee.toFixed(2)}</p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold">Total deduction</span>
+                <span className={`font-mono text-lg font-bold text-right ${fees.totalDeduction > balance ? 'text-destructive' : 'text-primary'}`}>${fees.totalDeduction.toFixed(2)}</span>
+              </div>
+              {selectedCard && (
+                <p className="mt-1 text-xs text-muted-foreground">Estimated card balance: ${((selectedCard.balance || 0) + fundAmount).toFixed(2)}</p>
+              )}
+            </div>
           </div>
         </div>
       )}

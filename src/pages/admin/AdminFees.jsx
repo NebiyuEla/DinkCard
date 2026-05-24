@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import { DEFAULT_SETTINGS } from '@/lib/feeCalculator';
+import { calculateDepositFees, DEFAULT_SETTINGS } from '@/lib/feeCalculator';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ export default function AdminFees() {
   });
 
   const [form, setForm] = useState(DEFAULT_SETTINGS);
+  const preview = calculateDepositFees(50, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
 
   useEffect(() => {
     if (existingSettings) {
@@ -104,6 +105,24 @@ export default function AdminFees() {
           <p className="text-muted-foreground mt-1">
             The checkout shows one clean service & processing fee. Behind the scenes it uses Chapa gross-up, provider costs, service margin, safety buffer, and ETB rounding.
           </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">$50 preview</p>
+              <p className="font-mono font-semibold">{preview.totalPayableEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Visible fee</p>
+              <p className="font-mono font-semibold">{preview.serviceAndProcessingFeeEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Chapa covered</p>
+              <p className="font-mono font-semibold">{preview.gatewayFeeEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Rate</p>
+              <p className="font-mono font-semibold">{preview.exchangeRate.toLocaleString()} ETB</p>
+            </div>
+          </div>
         </div>
 
         <div className="mb-6">

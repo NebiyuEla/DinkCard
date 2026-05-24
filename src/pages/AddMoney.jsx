@@ -67,13 +67,13 @@ export default function AddMoney() {
   const kycApproved = kyc?.status === 'approved';
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="w-full max-w-2xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-0 px-1 sm:px-0">
       <div className="flex items-center gap-3">
         <Link to="/dashboard">
           <Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold">Add Funds</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Add Funds</h1>
           <p className="text-sm text-muted-foreground">Pay in ETB for supported virtual card-related services.</p>
         </div>
       </div>
@@ -90,7 +90,7 @@ export default function AddMoney() {
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-xl p-6 space-y-5">
+      <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-sm">
         <div>
           <Label className="text-sm font-medium">Card amount in USD</Label>
           <div className="relative mt-1.5">
@@ -111,10 +111,27 @@ export default function AddMoney() {
         </div>
         {fees && (
           <div className="space-y-3 border-t border-border pt-4 text-sm">
-            <div className="flex justify-between"><span className="text-muted-foreground">Card amount</span><span className="font-mono">${fees.cardAmountUsd.toFixed(2)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Exchange rate used</span><span className="font-mono">1 USD = {fees.exchangeRate.toLocaleString()} ETB</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Service & processing fee</span><span className="font-mono">{fees.serviceAndProcessingFeeEtb.toLocaleString()} ETB</span></div>
-            <div className="flex justify-between font-semibold pt-2 border-t border-border"><span>Total payable</span><span className="font-mono text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl bg-secondary/35 p-3">
+                <p className="text-xs text-muted-foreground">Card amount</p>
+                <p className="font-mono font-semibold">${fees.cardAmountUsd.toFixed(2)}</p>
+              </div>
+              <div className="rounded-xl bg-secondary/35 p-3">
+                <p className="text-xs text-muted-foreground">Exchange rate</p>
+                <p className="font-mono font-semibold">1 USD = {fees.exchangeRate.toLocaleString()} ETB</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+              <span className="text-muted-foreground">Service & processing fee</span>
+              <span className="font-mono font-semibold text-right">{fees.serviceAndProcessingFeeEtb.toLocaleString()} ETB</span>
+            </div>
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold">Total payable</span>
+                <span className="font-mono text-lg font-bold text-primary text-right">{fees.totalPayableEtb.toLocaleString()} ETB</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} available service balance.</p>
+            </div>
 
             {displayStyle === 'hybrid' && (
               <button
@@ -140,7 +157,6 @@ export default function AddMoney() {
             <p className="text-xs text-muted-foreground">
               The total includes card processing, payment gateway cost, exchange-rate protection, and Dink Card service fee.
             </p>
-            <div className="flex justify-between"><span className="text-muted-foreground">Expected service balance</span><span className="font-mono font-semibold text-primary">${fees.finalUsdCredit.toFixed(2)}</span></div>
           </div>
         )}
         <div className="bg-secondary/40 rounded-lg p-3 text-xs text-muted-foreground flex gap-2">
