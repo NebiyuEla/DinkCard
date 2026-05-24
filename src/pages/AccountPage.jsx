@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getSeededAvatarDataUrl } from '@/lib/avatarSeed';
 import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -83,6 +84,10 @@ export default function AccountPage() {
   }, [form.first_name, form.last_name, user?.full_name, user?.email]);
 
   const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
+  const avatarUrl = useMemo(
+    () => getSeededAvatarDataUrl(user?.id || user?.email || form.username || `${form.first_name}${form.last_name}`),
+    [user?.id, user?.email, form.username, form.first_name, form.last_name]
+  );
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const kycLocked = kyc?.status === 'approved';
 
@@ -170,6 +175,7 @@ export default function AccountPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <Avatar className="h-16 w-16 rounded-2xl border border-white/20 bg-white/12 backdrop-blur">
+                <AvatarImage src={avatarUrl} alt="Profile avatar" className="rounded-2xl object-cover" />
                 <AvatarFallback className="rounded-2xl bg-transparent text-lg font-bold text-white">
                   {initials}
                 </AvatarFallback>

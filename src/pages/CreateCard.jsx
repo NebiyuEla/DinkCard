@@ -114,9 +114,26 @@ export default function CreateCard() {
             </div>
           </div>
         </div>
+
+        <div className="rounded-xl border border-border bg-secondary/25 p-4">
+          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Simple deduction</p>
+          <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+            <div className="rounded-lg bg-background/80 px-3 py-2">
+              <p className="text-muted-foreground">Card balance</p>
+              <p className="font-mono font-semibold">${amount.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-background/80 px-3 py-2">
+              <p className="text-muted-foreground">Card fee</p>
+              <p className="font-mono font-semibold">${bitnobFee.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-background/80 px-3 py-2">
+              <p className="text-muted-foreground">Total deducted</p>
+              <p className="font-mono font-semibold text-primary">${fees.totalDeduction.toFixed(2)}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Card total */}
       <div className="bg-secondary/40 rounded-xl p-4 text-xs text-muted-foreground space-y-3">
         <label className="flex items-start gap-3 rounded-xl border-2 border-primary/25 bg-card p-3 text-sm text-foreground">
           <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5 h-6 w-6 border-primary bg-background" />
