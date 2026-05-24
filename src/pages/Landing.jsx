@@ -9,6 +9,7 @@ import {
   ArrowRight,
   CheckCircle,
   ChevronDown,
+  CreditCard,
   DollarSign,
   Globe,
   Lock,
