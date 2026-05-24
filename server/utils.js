@@ -24,6 +24,7 @@ export function sanitizeUser(user) {
     restricted_by: user.restricted_by,
     restricted_at: user.restricted_at,
     terms_accepted_version: user.terms_accepted_version,
+    two_factor_enabled: Boolean(Number(user.two_factor_enabled || 0)),
     created_date: user.created_at,
     updated_date: user.updated_at
   };

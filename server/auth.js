@@ -27,6 +27,24 @@ export function signAuthToken(user) {
   );
 }
 
+export function signTwoFactorChallenge(user, portal = 'user') {
+  return jwt.sign(
+    { sub: user.id, role: user.role, email: user.email, purpose: '2fa-login', portal },
+    config.jwtSecret,
+    { expiresIn: '10m' }
+  );
+}
+
+export function readTwoFactorChallenge(token) {
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, config.jwtSecret);
+    return payload?.purpose === '2fa-login' ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
 export function setSessionCookie(res, user) {
   const token = signAuthToken(user);
   res.cookie(COOKIE_NAME, token, {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
@@ -20,8 +20,17 @@ const routeMap = {
 
 export default function LegalPage() {
   const location = useLocation();
+  const navigate = useNavigate();
   const slug = location.pathname.replace(/^\//, '') || 'terms';
   const policy = policies[routeMap[slug] || 'terms'];
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -33,8 +42,8 @@ export default function LegalPage() {
             </div>
             <span className="font-bold">{BRAND_NAME}</span>
           </Link>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/login"><ArrowLeft className="w-4 h-4 mr-2" />Back</Link>
+          <Button type="button" variant="outline" size="sm" onClick={handleBack}>
+            <ArrowLeft className="w-4 h-4 mr-2" />Back
           </Button>
         </div>
       </header>

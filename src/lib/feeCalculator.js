@@ -63,6 +63,7 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
   const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
   const gatewayFeeEtb = money(Math.max(0, totalPayableEtb - requiredBeforeChapaEtb));
   const serviceAndProcessingFeeEtb = money(Math.max(0, totalPayableEtb - etbAmount));
+  const effectivePayableRate = usdAmount > 0 ? money(totalPayableEtb / usdAmount) : 0;
 
   return {
     usdAmount,
@@ -75,6 +76,7 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
     gatewayFeeEtb,
     gatewayFeePercentage,
     totalPayableEtb,
+    effectivePayableRate,
     finalUsdCredit: money(usdAmount),
     providerCostUsd,
     providerCostEtb,

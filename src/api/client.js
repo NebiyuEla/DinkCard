@@ -62,6 +62,7 @@ export const apiClient = {
   auth: {
     me: () => request('/api/auth/me'),
     login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
+    verifyTwoFactorLogin: (payload) => request('/api/auth/login/2fa', { method: 'POST', body: JSON.stringify(payload) }),
     register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
     logout: async (redirectTo = '/') => {
       try {
@@ -72,7 +73,11 @@ export const apiClient = {
       }
       window.location.href = redirectTo;
     },
-    updateMe: (payload) => request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) })
+    updateMe: (payload) => request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+    getTwoFactorStatus: () => request('/api/auth/2fa/status'),
+    setupTwoFactor: (payload) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify(payload) }),
+    enableTwoFactor: (payload) => request('/api/auth/2fa/enable', { method: 'POST', body: JSON.stringify(payload) }),
+    disableTwoFactor: (payload) => request('/api/auth/2fa/disable', { method: 'POST', body: JSON.stringify(payload) })
   },
   entities: {
     User: entityApi('User'),

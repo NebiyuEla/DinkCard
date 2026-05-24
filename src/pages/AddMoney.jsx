@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, CheckCircle, DollarSign, ExternalLink, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,7 @@ import LegalLinks from '@/components/LegalLinks';
 import { toast } from 'sonner';
 
 export default function AddMoney() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
   const { data: settings } = useFeeSettings();
@@ -66,12 +67,18 @@ export default function AddMoney() {
   const latestDeposit = deposits?.[0];
   const kycApproved = kyc?.status === 'approved';
 
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate('/dashboard');
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto space-y-4 sm:space-y-6 pb-24 lg:pb-0 px-1 sm:px-0">
       <div className="flex items-center gap-3">
-        <Link to="/dashboard">
-          <Button variant="ghost" size="icon"><ArrowLeft className="w-5 h-5" /></Button>
-        </Link>
+        <Button type="button" variant="ghost" size="icon" onClick={goBack}><ArrowLeft className="w-5 h-5" /></Button>
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Add Funds</h1>
           <p className="text-sm text-muted-foreground">Pay in ETB for supported virtual card-related services.</p>
@@ -120,6 +127,10 @@ export default function AddMoney() {
                 <p className="text-xs text-muted-foreground">Exchange rate</p>
                 <p className="font-mono font-semibold">1 USD = {fees.exchangeRate.toLocaleString()} ETB</p>
               </div>
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+              <span className="text-muted-foreground">Effective payable rate</span>
+              <span className="font-mono font-semibold text-right">1 USD = {fees.effectivePayableRate.toFixed(2)} ETB</span>
             </div>
             <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
               <span className="text-muted-foreground">Service & processing fee</span>

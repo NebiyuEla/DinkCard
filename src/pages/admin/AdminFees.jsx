@@ -125,6 +125,10 @@ export default function AdminFees() {
               <p className="text-muted-foreground">Rate</p>
               <p className="font-mono font-semibold">{preview.exchangeRate.toLocaleString()} ETB</p>
             </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Effective rate</p>
+              <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB</p>
+            </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
               <p className="text-muted-foreground">Effective minimum card creation / top-up</p>
               <p className="font-mono font-semibold">${effectiveMinCreation.toFixed(2)} / ${effectiveMinFunding.toFixed(2)}</p>

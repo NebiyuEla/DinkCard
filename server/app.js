@@ -8,10 +8,11 @@ import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { config } from './config.js';
 import { db, mapRow } from './db.js';
-import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, setSessionCookie } from './auth.js';
+import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, readTwoFactorChallenge, setSessionCookie, signTwoFactorChallenge } from './auth.js';
 import { sanitizeUser, parseJson, generateId, money, nowIso } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, creditWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
+import { buildTwoFactorRecoverySummary, formatSecretForDisplay, getOtpAuthUrl, getTwoFactorSetupForUser, isTwoFactorEnabled, readEncryptedTwoFactorSecret, replacementRecoveryState, verifyTotp, verifyTwoFactorCode } from './two-factor.js';
 import {
   bitnobService,
   changeCardStatus,
@@ -250,6 +251,13 @@ function requireSuperadmin(req, res) {
     return false;
   }
   return true;
+}
+
+function serializeTwoFactorUser(user) {
+  return {
+    ...sanitizeUser(user),
+    ...buildTwoFactorRecoverySummary(user)
+  };
 }
 
 function collectUserUploadUrls(userEmail) {
@@ -950,7 +958,7 @@ export function createApp() {
 
     setSessionCookie(res, user);
 
-    res.status(201).json({ user: sanitizeUser(user) });
+    res.status(201).json({ user: serializeTwoFactorUser(user) });
   });
 
   app.post('/api/auth/login', authLimiter, async (req, res) => {
@@ -985,11 +993,73 @@ export function createApp() {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
+    if (isTwoFactorEnabled(user)) {
+      writeAudit({
+        actor: user.email,
+        userId: user.email,
+        action: 'login_password_verified',
+        entityType: 'auth',
+        newValue: { role: user.role, portal: portal || 'user', second_factor_required: true }
+      });
+      return res.json({
+        requiresTwoFactor: true,
+        challengeToken: signTwoFactorChallenge(user, portal || 'user')
+      });
+    }
+
     setSessionCookie(res, user);
 
     writeAudit({ actor: user.email, userId: user.email, action: 'login', entityType: 'auth', newValue: { role: user.role, portal: portal || 'user' } });
 
-    res.json({ user: sanitizeUser(user) });
+    res.json({ user: serializeTwoFactorUser(user) });
+  });
+
+  app.post('/api/auth/login/2fa', authLimiter, async (req, res) => {
+    const challenge = readTwoFactorChallenge(req.body.challengeToken);
+    const code = String(req.body.code || '').trim();
+
+    if (!challenge) {
+      return res.status(401).json({ message: 'Your login session expired. Please sign in again.' });
+    }
+
+    if (!code) {
+      return res.status(400).json({ message: 'Enter your authentication code.' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(challenge.sub);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    if ((user.account_status || 'active') !== 'active') {
+      writeAudit({ actor: user.email, userId: user.email, action: 'login_failed', entityType: 'auth', reason: user.account_status || 'restricted' });
+      return res.status(403).json({ message: 'This account is restricted. Contact support for help.' });
+    }
+
+    const verification = verifyTwoFactorCode(user, code);
+
+    if (!verification.valid) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'login_failed', entityType: 'auth', reason: 'invalid_two_factor_code' });
+      return res.status(401).json({ message: 'Invalid authentication code.' });
+    }
+
+    if (verification.method === 'recovery') {
+      db.prepare('UPDATE users SET two_factor_recovery_codes = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(verification.nextRecoveryHashes || []), nowIso(), user.id);
+    }
+
+    setSessionCookie(res, user);
+
+    writeAudit({
+      actor: user.email,
+      userId: user.email,
+      action: 'login',
+      entityType: 'auth',
+      newValue: { role: user.role, portal: challenge.portal || 'user', second_factor: verification.method }
+    });
+
+    res.json({ user: serializeTwoFactorUser(user) });
   });
 
   app.post('/api/auth/logout', (req, res) => {
@@ -1011,7 +1081,7 @@ export function createApp() {
       return res.status(403).json({ message: 'This account is restricted. Contact support for help.' });
     }
 
-    return res.json(sanitizeUser(user));
+    return res.json(serializeTwoFactorUser(user));
   });
 
   app.patch('/api/auth/me', authMiddleware(db), (req, res) => {
@@ -1032,7 +1102,120 @@ export function createApp() {
 
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
 
-    res.json(sanitizeUser(user));
+    res.json(serializeTwoFactorUser(user));
+  });
+
+  app.get('/api/auth/2fa/status', authMiddleware(db), (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json(buildTwoFactorRecoverySummary(user));
+  });
+
+  app.post('/api/auth/2fa/setup', authMiddleware(db), async (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const password = String(req.body.password || '');
+    const validPassword = await comparePassword(password, user.password_hash);
+    if (!validPassword) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_setup_failed', entityType: 'auth', reason: 'invalid_password' });
+      return res.status(401).json({ message: 'Password confirmation failed.' });
+    }
+
+    const setup = getTwoFactorSetupForUser(user);
+    db.prepare('UPDATE users SET two_factor_temp_secret = ?, updated_at = ? WHERE id = ?')
+      .run(setup.encryptedSecret, nowIso(), user.id);
+
+    writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_setup_started', entityType: 'auth' });
+
+    res.json({
+      secret: formatSecretForDisplay(setup.secret),
+      secretRaw: setup.secret,
+      issuer: 'Dink Card',
+      account: user.email,
+      otpauthUrl: getOtpAuthUrl({ secret: setup.secret, email: user.email })
+    });
+  });
+
+  app.post('/api/auth/2fa/enable', authMiddleware(db), async (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const password = String(req.body.password || '');
+    const code = String(req.body.code || '').trim();
+    const validPassword = await comparePassword(password, user.password_hash);
+
+    if (!validPassword) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_enable_failed', entityType: 'auth', reason: 'invalid_password' });
+      return res.status(401).json({ message: 'Password confirmation failed.' });
+    }
+
+    const tempSecret = readEncryptedTwoFactorSecret(user.two_factor_temp_secret);
+    if (!tempSecret) {
+      return res.status(400).json({ message: 'Start 2FA setup first.' });
+    }
+
+    if (!verifyTotp(tempSecret, code)) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_enable_failed', entityType: 'auth', reason: 'invalid_code' });
+      return res.status(400).json({ message: 'The authentication code is not valid.' });
+    }
+
+    const recovery = replacementRecoveryState();
+    const now = nowIso();
+    db.prepare(`
+      UPDATE users
+      SET two_factor_enabled = 1,
+          two_factor_secret = ?,
+          two_factor_temp_secret = NULL,
+          two_factor_recovery_codes = ?,
+          two_factor_enabled_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(user.two_factor_temp_secret, JSON.stringify(recovery.recoveryHashes), now, now, user.id);
+
+    writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_enabled', entityType: 'auth' });
+
+    const refreshed = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    res.json({
+      user: serializeTwoFactorUser(refreshed),
+      recoveryCodes: recovery.recoveryCodes
+    });
+  });
+
+  app.post('/api/auth/2fa/disable', authMiddleware(db), async (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const password = String(req.body.password || '');
+    const code = String(req.body.code || '').trim();
+    const validPassword = await comparePassword(password, user.password_hash);
+
+    if (!validPassword) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_disable_failed', entityType: 'auth', reason: 'invalid_password' });
+      return res.status(401).json({ message: 'Password confirmation failed.' });
+    }
+
+    const verification = verifyTwoFactorCode(user, code);
+    if (!verification.valid) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_disable_failed', entityType: 'auth', reason: 'invalid_code' });
+      return res.status(400).json({ message: 'The authentication code is not valid.' });
+    }
+
+    db.prepare(`
+      UPDATE users
+      SET two_factor_enabled = 0,
+          two_factor_secret = NULL,
+          two_factor_temp_secret = NULL,
+          two_factor_recovery_codes = NULL,
+          two_factor_enabled_at = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `).run(nowIso(), user.id);
+
+    writeAudit({ actor: user.email, userId: user.email, action: 'two_factor_disabled', entityType: 'auth' });
+
+    const refreshed = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
+    res.json({ user: serializeTwoFactorUser(refreshed) });
   });
 
   app.post('/api/notifications/:id/read', authMiddleware(db), (req, res) => {

@@ -27,6 +27,11 @@ CREATE TABLE IF NOT EXISTS users (
   restricted_by TEXT,
   restricted_at TEXT,
   terms_accepted_version TEXT,
+  two_factor_enabled INTEGER NOT NULL DEFAULT 0,
+  two_factor_secret TEXT,
+  two_factor_temp_secret TEXT,
+  two_factor_recovery_codes TEXT,
+  two_factor_enabled_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -410,6 +415,11 @@ ensureColumn('users', 'account_status', "TEXT NOT NULL DEFAULT 'active'");
 ensureColumn('users', 'restricted_reason', 'TEXT');
 ensureColumn('users', 'restricted_by', 'TEXT');
 ensureColumn('users', 'restricted_at', 'TEXT');
+ensureColumn('users', 'two_factor_enabled', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('users', 'two_factor_secret', 'TEXT');
+ensureColumn('users', 'two_factor_temp_secret', 'TEXT');
+ensureColumn('users', 'two_factor_recovery_codes', 'TEXT');
+ensureColumn('users', 'two_factor_enabled_at', 'TEXT');
 
 db.prepare("UPDATE users SET account_status = 'active' WHERE account_status IS NULL OR account_status = ''").run();
 

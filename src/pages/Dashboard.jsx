@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { useCurrentUser, useWallet, useCards, useDeposits, useKYCStatus, useFeeSettings, useWalletTransactions } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
@@ -8,9 +8,12 @@ import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Wallet, CreditCard, PlusCircle, ArrowDownUp, ShieldCheck,
-  HeadphonesIcon, DollarSign, TrendingUp, AlertCircle, ArrowUpRight
+  HeadphonesIcon, DollarSign, TrendingUp, AlertCircle, ArrowUpRight, Copy
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
@@ -30,6 +33,12 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [paymentBanner, setPaymentBanner] = useState(null);
+  const [securityDialog, setSecurityDialog] = useState({ open: false, mode: 'enable' });
+  const [securityPassword, setSecurityPassword] = useState('');
+  const [securityCode, setSecurityCode] = useState('');
+  const [setupPayload, setSetupPayload] = useState(null);
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
+  const [securityError, setSecurityError] = useState('');
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: cards } = useCards(user?.email);
@@ -49,6 +58,59 @@ export default function Dashboard() {
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
   const mobileQuickActions = quickActions.filter((action) => !action.desktopOnly);
+  const twoFactorEnabled = Boolean(user?.two_factor_enabled);
+
+  const resetSecurityState = (nextMode = 'enable') => {
+    setSecurityDialog({ open: false, mode: nextMode });
+    setSecurityPassword('');
+    setSecurityCode('');
+    setSetupPayload(null);
+    setRecoveryCodes([]);
+    setSecurityError('');
+  };
+
+  const refreshUser = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['currentUser'] });
+  };
+
+  const setupTwoFactor = useMutation({
+    mutationFn: () => apiClient.auth.setupTwoFactor({ password: securityPassword }),
+    onSuccess: (result) => {
+      setSetupPayload(result);
+      setSecurityError('');
+      toast.success('Authenticator setup started.');
+    },
+    onError: (error) => {
+      setSecurityError(error.message || 'Could not start 2FA setup.');
+    }
+  });
+
+  const enableTwoFactor = useMutation({
+    mutationFn: () => apiClient.auth.enableTwoFactor({ password: securityPassword, code: securityCode }),
+    onSuccess: async (result) => {
+      setRecoveryCodes(result.recoveryCodes || []);
+      setSetupPayload(null);
+      setSecurityCode('');
+      setSecurityError('');
+      await refreshUser();
+      toast.success('Two-factor authentication enabled.');
+    },
+    onError: (error) => {
+      setSecurityError(error.message || 'Could not enable 2FA.');
+    }
+  });
+
+  const disableTwoFactor = useMutation({
+    mutationFn: () => apiClient.auth.disableTwoFactor({ password: securityPassword, code: securityCode }),
+    onSuccess: async () => {
+      await refreshUser();
+      resetSecurityState('enable');
+      toast.success('Two-factor authentication disabled.');
+    },
+    onError: (error) => {
+      setSecurityError(error.message || 'Could not disable 2FA.');
+    }
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -237,6 +299,125 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Account Security</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Protect sign-in with a real authenticator app code.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Status: <span className={twoFactorEnabled ? 'text-primary' : 'text-muted-foreground'}>{twoFactorEnabled ? '2FA enabled' : '2FA not enabled'}</span>
+              {twoFactorEnabled && user?.remainingRecoveryCodes ? ` • ${user.remainingRecoveryCodes} recovery codes left` : ''}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={twoFactorEnabled ? 'outline' : 'default'}
+            className={twoFactorEnabled ? '' : 'bg-primary text-primary-foreground'}
+            onClick={() => {
+              setSecurityDialog({ open: true, mode: twoFactorEnabled ? 'disable' : 'enable' });
+              setSecurityError('');
+              setSetupPayload(null);
+              setRecoveryCodes([]);
+              setSecurityCode('');
+            }}
+          >
+            {twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
+          </Button>
+        </div>
+      </div>
+
+      <Dialog open={securityDialog.open} onOpenChange={(open) => {
+        if (!open) resetSecurityState(twoFactorEnabled ? 'disable' : 'enable');
+      }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{securityDialog.mode === 'disable' ? 'Disable two-factor authentication' : 'Enable two-factor authentication'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Password</Label>
+              <Input type="password" value={securityPassword} onChange={(event) => setSecurityPassword(event.target.value)} className="mt-1.5" />
+            </div>
+
+            {securityDialog.mode === 'enable' && !setupPayload && (
+              <div className="rounded-xl border border-border bg-secondary/30 p-3 text-sm text-muted-foreground">
+                Confirm your password to generate your authenticator secret.
+              </div>
+            )}
+
+            {securityDialog.mode === 'enable' && setupPayload && !recoveryCodes.length && (
+              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div>
+                  <p className="text-sm font-semibold">Step 1: Add this account to your authenticator app</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Use Google Authenticator, Microsoft Authenticator, Authy, or another TOTP app.</p>
+                </div>
+                <div className="rounded-lg bg-background/90 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Setup key</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <code className="break-all text-sm font-semibold">{setupPayload.secret}</code>
+                    <Button type="button" size="sm" variant="outline" onClick={() => {
+                      navigator.clipboard.writeText(setupPayload.secretRaw);
+                      toast.success('Setup key copied.');
+                    }}>
+                      <Copy className="mr-2 h-4 w-4" />Copy
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Authenticator Code</Label>
+                  <Input value={securityCode} onChange={(event) => setSecurityCode(event.target.value)} placeholder="123456" className="mt-1.5 tracking-[0.2em]" autoComplete="one-time-code" />
+                </div>
+              </div>
+            )}
+
+            {securityDialog.mode === 'disable' && (
+              <div>
+                <Label>Authenticator or recovery code</Label>
+                <Input value={securityCode} onChange={(event) => setSecurityCode(event.target.value)} placeholder="123456 or ABCDE-12345" className="mt-1.5" autoComplete="one-time-code" />
+              </div>
+            )}
+
+            {recoveryCodes.length > 0 && (
+              <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div>
+                  <p className="text-sm font-semibold">Recovery codes</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Store these in a safe place. Each code works once.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {recoveryCodes.map((code) => (
+                    <div key={code} className="rounded-lg bg-background/90 px-3 py-2 text-center font-mono text-sm">{code}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {securityError && <p className="text-sm text-destructive">{securityError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => resetSecurityState(twoFactorEnabled ? 'disable' : 'enable')}>
+              {recoveryCodes.length ? 'Close' : 'Cancel'}
+            </Button>
+            {!recoveryCodes.length && securityDialog.mode === 'enable' && !setupPayload && (
+              <Button type="button" className="bg-primary text-primary-foreground" disabled={!securityPassword || setupTwoFactor.isPending} onClick={() => setupTwoFactor.mutate()}>
+                {setupTwoFactor.isPending ? 'Preparing...' : 'Generate setup key'}
+              </Button>
+            )}
+            {!recoveryCodes.length && securityDialog.mode === 'enable' && setupPayload && (
+              <Button type="button" className="bg-primary text-primary-foreground" disabled={!securityPassword || !securityCode || enableTwoFactor.isPending} onClick={() => enableTwoFactor.mutate()}>
+                {enableTwoFactor.isPending ? 'Enabling...' : 'Enable 2FA'}
+              </Button>
+            )}
+            {securityDialog.mode === 'disable' && (
+              <Button type="button" variant="destructive" disabled={!securityPassword || !securityCode || disableTwoFactor.isPending} onClick={() => disableTwoFactor.mutate()}>
+                {disableTwoFactor.isPending ? 'Disabling...' : 'Disable 2FA'}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
