@@ -32,19 +32,20 @@ const FIX_LABELS = {
 
 const ETHIOPIAN_STATES = [
   'Addis Ababa',
-  'Afar',
-  'Amhara',
-  'Benishangul-Gumuz',
-  'Central Ethiopia',
-  'Dire Dawa',
-  'Gambela',
-  'Harari',
   'Oromia',
+  'Amhara',
+  'Tigray',
   'Sidama',
+  'SNNPR',
   'Somali',
+  'Afar',
+  'Benishangul-Gumuz',
+  'Gambella',
+  'Harari',
+  'Dire Dawa',
+  'Central Ethiopia',
   'South Ethiopia',
-  'South West Ethiopia Peoples',
-  'Tigray'
+  'South West Ethiopia Peoples'
 ];
 
 function parseFixFields(value) {
@@ -190,9 +191,11 @@ export default function KYCPage() {
     !form.id_type && 'ID type',
     !form.id_number && 'ID number',
     !frontIdUrl && 'Front of ID',
+    (needsBackId && !backIdUrl) && 'Back of ID',
     !selfieUrl && 'Selfie'
   ].filter(Boolean);
   const canSubmitKYC = requiredMissing.length === 0 && !submitKYC.isPending && !Object.values(uploading).some(Boolean);
+  const needsBackId = form.id_type === 'national_id';
 
   if (isLoading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
@@ -346,17 +349,16 @@ export default function KYCPage() {
                 <SelectItem value="national_id">National ID</SelectItem>
                 <SelectItem value="passport">Passport</SelectItem>
                 <SelectItem value="drivers_license">Driver's License</SelectItem>
-                <SelectItem value="kebele_id">Kebele ID</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-sm">ID Number</Label><Input value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value})} className="mt-1.5" /></div>
+          <div><Label className="text-sm">{form.id_type === 'passport' ? 'Passport Number' : 'National ID Number'}</Label><Input value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value.trim()})} className="mt-1.5" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             { label: 'Front of ID', url: frontIdUrl, setter: setFrontIdUrl, key: 'front' },
-            { label: 'Back of ID', url: backIdUrl, setter: setBackIdUrl, key: 'back' },
+            ...(needsBackId ? [{ label: 'Back of ID', url: backIdUrl, setter: setBackIdUrl, key: 'back' }] : []),
             { label: 'Selfie', url: selfieUrl, setter: setSelfieUrl, key: 'selfie' },
           ].map(item => (
             <div key={item.key}>

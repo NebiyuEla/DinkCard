@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   username TEXT UNIQUE,
   password_hash TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
   full_name TEXT,
   phone TEXT,
   role TEXT NOT NULL DEFAULT 'user',
@@ -32,6 +34,8 @@ CREATE TABLE IF NOT EXISTS users (
   two_factor_temp_secret TEXT,
   two_factor_recovery_codes TEXT,
   two_factor_enabled_at TEXT,
+  password_reset_token_hash TEXT,
+  password_reset_expires_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -429,11 +433,15 @@ ensureColumn('users', 'account_status', "TEXT NOT NULL DEFAULT 'active'");
 ensureColumn('users', 'restricted_reason', 'TEXT');
 ensureColumn('users', 'restricted_by', 'TEXT');
 ensureColumn('users', 'restricted_at', 'TEXT');
+ensureColumn('users', 'first_name', 'TEXT');
+ensureColumn('users', 'last_name', 'TEXT');
 ensureColumn('users', 'two_factor_enabled', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'two_factor_secret', 'TEXT');
 ensureColumn('users', 'two_factor_temp_secret', 'TEXT');
 ensureColumn('users', 'two_factor_recovery_codes', 'TEXT');
 ensureColumn('users', 'two_factor_enabled_at', 'TEXT');
+ensureColumn('users', 'password_reset_token_hash', 'TEXT');
+ensureColumn('users', 'password_reset_expires_at', 'TEXT');
 
 db.prepare("UPDATE users SET account_status = 'active' WHERE account_status IS NULL OR account_status = ''").run();
 
@@ -501,13 +509,15 @@ if (!superadmin) {
 
   db.prepare(`
     INSERT INTO users (
-      id, email, username, password_hash, full_name, phone, role, terms_accepted_version, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, '', 'superadmin', ?, ?, ?)
+      id, email, username, password_hash, first_name, last_name, full_name, phone, role, terms_accepted_version, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', 'superadmin', ?, ?, ?)
   `).run(
     userId,
     config.superadmin.email,
     config.superadmin.username,
     hash,
+    'Super',
+    'Admin',
     'Super Admin',
     config.termsVersion,
     now,

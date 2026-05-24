@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/client';
-import { useCurrentUser } from '@/hooks/useAppData';
+import { useCurrentUser, useKYCStatus } from '@/hooks/useAppData';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,8 @@ function buildProfileTheme(seed) {
 export default function AccountPage() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
-  const [form, setForm] = useState({ full_name: '', username: '', phone: '' });
+  const { data: kyc } = useKYCStatus(user?.email);
+  const [form, setForm] = useState({ first_name: '', last_name: '', username: '', phone: '' });
   const [securityDialog, setSecurityDialog] = useState({ open: false, mode: 'enable' });
   const [securityPassword, setSecurityPassword] = useState('');
   const [securityCode, setSecurityCode] = useState('');
@@ -41,7 +42,8 @@ export default function AccountPage() {
   useEffect(() => {
     if (!user) return;
     setForm({
-      full_name: user.full_name || '',
+      first_name: user.first_name || user.full_name?.split(' ')[0] || '',
+      last_name: user.last_name || user.full_name?.split(' ').slice(1).join(' ') || '',
       username: user.username || '',
       phone: user.phone || ''
     });
@@ -65,15 +67,16 @@ export default function AccountPage() {
   }, [setupPayload]);
 
   const initials = useMemo(() => {
-    const parts = String(form.full_name || user?.full_name || user?.email || 'DC')
+    const parts = String(`${form.first_name} ${form.last_name}`.trim() || user?.full_name || user?.email || 'DC')
       .trim()
       .split(/\s+/)
       .filter(Boolean);
     return parts.slice(0, 2).map((part) => part[0]?.toUpperCase()).join('') || 'DC';
-  }, [form.full_name, user?.full_name, user?.email]);
+  }, [form.first_name, form.last_name, user?.full_name, user?.email]);
 
-  const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || form.full_name), [user?.email, form.username, form.full_name]);
+  const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
+  const kycLocked = kyc?.status === 'approved';
 
   const refreshUser = async () => {
     await queryClient.invalidateQueries({ queryKey: ['currentUser'] });
@@ -154,7 +157,7 @@ export default function AccountPage() {
       <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
         <div className="rounded-3xl border border-border bg-card p-5">
           <div
-            className="relative overflow-hidden rounded-3xl p-5 text-white"
+            className="relative overflow-hidden rounded-[28px] p-5 text-white"
             style={{ backgroundImage: profileTheme.bg, boxShadow: `0 18px 40px ${profileTheme.glow}` }}
           >
             <div className="flex items-start justify-between gap-3">
@@ -166,7 +169,7 @@ export default function AccountPage() {
               </div>
             </div>
             <div className="mt-8">
-              <p className="text-lg font-semibold">{form.full_name || user?.full_name || 'Dink Card User'}</p>
+              <p className="text-lg font-semibold">{`${form.first_name} ${form.last_name}`.trim() || user?.full_name || 'Dink Card User'}</p>
               <p className="mt-1 text-sm text-white/80">@{form.username || user?.username || 'set-username'}</p>
               <p className="mt-4 text-xs text-white/70">{user?.email}</p>
             </div>
@@ -196,19 +199,24 @@ export default function AccountPage() {
               <h2 className="font-semibold">Profile</h2>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Full name</Label>
-                <Input value={form.full_name} onChange={(event) => setForm((current) => ({ ...current, full_name: event.target.value }))} />
+              <div className="space-y-1.5">
+                <Label>First name</Label>
+                <Input value={form.first_name} disabled={kycLocked} onChange={(event) => setForm((current) => ({ ...current, first_name: event.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Last name</Label>
+                <Input value={form.last_name} disabled={kycLocked} onChange={(event) => setForm((current) => ({ ...current, last_name: event.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Username</Label>
-                <Input value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value }))} />
+                <Input value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '') }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Phone</Label>
-                <Input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="9XXXXXXXX" />
+                <Input value={form.phone} disabled={kycLocked} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2519XXXXXXXX" />
               </div>
             </div>
+            {kycLocked && <p className="mt-3 text-xs text-muted-foreground">Your identity details are locked after approved KYC. You can still change password and security settings.</p>}
             <div className="mt-4 flex justify-end">
               <Button type="button" onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? 'Saving...' : 'Save profile'}
@@ -256,6 +264,9 @@ export default function AccountPage() {
                 <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Portal access</p>
                 <p className="mt-2 font-semibold capitalize">{user?.role || 'user'}</p>
               </div>
+            </div>
+            <div className="mt-4 text-right">
+              <Link to="/forgot-password" className="text-sm text-primary hover:underline">Request password reset</Link>
             </div>
           </div>
         </div>

@@ -64,6 +64,8 @@ export const apiClient = {
     login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
     verifyTwoFactorLogin: (payload) => request('/api/auth/login/2fa', { method: 'POST', body: JSON.stringify(payload) }),
     register: (payload) => request('/api/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+    requestPasswordReset: (payload) => request('/api/auth/password-reset/request', { method: 'POST', body: JSON.stringify(payload) }),
+    confirmPasswordReset: (payload) => request('/api/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify(payload) }),
     logout: async (redirectTo = '/') => {
       try {
         await request('/api/auth/logout', { method: 'POST' });
@@ -139,7 +141,8 @@ export const apiClient = {
   admin: {
     kyc: {
       approve: (id) => request(`/api/admin/kyc/${id}/approve`, { method: 'POST' }),
-      requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) })
+      requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) }),
+      manualReview: (id, payload) => request(`/api/admin/kyc/${id}/manual-review`, { method: 'POST', body: JSON.stringify(payload || {}) })
     },
     users: {
       suspend: (id, reason) => request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),

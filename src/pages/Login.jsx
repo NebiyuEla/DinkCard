@@ -78,8 +78,8 @@ export default function Login() {
           {!requiresTwoFactor ? (
             <>
               <div>
-                <Label>Email</Label>
-                <Input type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@example.com" className="mt-1.5" autoComplete="email" />
+                <Label>Email, Phone, or Username</Label>
+                <Input value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="you@example.com, +251..., or username" className="mt-1.5" autoComplete="username" />
               </div>
               <div>
                 <Label>Password</Label>
@@ -106,7 +106,7 @@ export default function Login() {
               </div>
               <div>
                 <Label>Authentication Code</Label>
-                <Input value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value)} placeholder="123456 or ABCDE-12345" className="mt-1.5 tracking-[0.2em]" autoComplete="one-time-code" />
+                <Input value={twoFactorCode} onChange={(e) => setTwoFactorCode(e.target.value)} placeholder="123456 or ABCDE-12345" className="mt-1.5 tracking-[0.2em]" autoComplete="one-time-code" inputMode="numeric" />
               </div>
               <Button type="button" variant="ghost" className="px-0 text-muted-foreground" onClick={returnToPasswordStep}>
                 <ArrowLeft className="mr-2 h-4 w-4" />Use a different account
@@ -117,6 +117,11 @@ export default function Login() {
           <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading}>
             {loading ? 'Signing in...' : requiresTwoFactor ? 'Verify and Sign In' : 'Sign In'}
           </Button>
+          {!requiresTwoFactor && (
+            <div className="text-right">
+              <Link to="/forgot-password" className="text-sm text-primary hover:underline">Forgot password?</Link>
+            </div>
+          )}
         </form>
         <p className="text-sm text-center text-muted-foreground mt-4">
           New here? <Link to="/register" className="text-primary hover:underline">Create your account</Link>

@@ -18,7 +18,7 @@ const tableMap = {
 };
 
 const fieldMap = {
-  User: ['id', 'email', 'username', 'full_name', 'phone', 'role', 'account_status', 'restricted_reason', 'restricted_by', 'restricted_at', 'terms_accepted_version', 'created_at', 'updated_at'],
+  User: ['id', 'email', 'username', 'first_name', 'last_name', 'full_name', 'phone', 'role', 'account_status', 'restricted_reason', 'restricted_by', 'restricted_at', 'terms_accepted_version', 'created_at', 'updated_at'],
   Wallet: ['id', 'user_id', 'currency', 'available_balance', 'locked_balance', 'status', 'created_at', 'updated_at'],
   WalletTransaction: ['id', 'user_id', 'wallet_id', 'type', 'amount', 'currency', 'balance_before', 'balance_after', 'status', 'reference', 'description', 'metadata', 'created_at'],
   KYCSubmission: ['id', 'user_id', 'first_name', 'last_name', 'legal_name', 'date_of_birth', 'gender', 'phone', 'email', 'address', 'street_address', 'city', 'state', 'postal_code', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url', 'level', 'status', 'rejection_reason', 'resubmission_scope', 'resubmission_fields', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],

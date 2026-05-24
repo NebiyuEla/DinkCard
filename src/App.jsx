@@ -9,6 +9,8 @@ import PageNotFound from './lib/PageNotFound';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import LegalPage from './pages/LegalPage';
 import Dashboard from './pages/Dashboard';
 import AddMoney from './pages/AddMoney';
@@ -119,6 +121,8 @@ function AppRoutes() {
       ))}
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
       <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+      <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
+      <Route path="/reset-password" element={<PublicOnly><ResetPassword /></PublicOnly>} />
       <Route path="/superadmin" element={<SuperAdminLogin />} />
 
       <Route element={<RequireAuth roles={['superadmin']} />}>

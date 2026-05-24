@@ -77,7 +77,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6 pb-24 sm:space-y-8 lg:pb-0">
       <div>
-        <h1 className="text-xl font-bold sm:text-2xl">Welcome back{user?.full_name ? `, ${user.full_name.split(' ')[0]}` : ''}</h1>
+        <h1 className="text-xl font-bold sm:text-2xl">Welcome back{user?.first_name || user?.full_name ? `, ${user?.first_name || user.full_name.split(' ')[0]}` : ''}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your account overview</p>
       </div>
 

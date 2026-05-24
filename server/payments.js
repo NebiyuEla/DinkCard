@@ -180,8 +180,8 @@ export async function initializeChapaPayment({ user, amountUsd, phoneNumber }) {
   }
   const calc = calculateDeposit(amountUsd, settings);
   const txRef = `dinkcard_service_${generateId('tx')}`;
-  const firstName = user.full_name?.split(' ')[0] || 'Dink';
-  const lastName = user.full_name?.split(' ').slice(1).join(' ') || 'User';
+  const firstName = user.first_name || user.full_name?.split(' ')[0] || 'Dink';
+  const lastName = user.last_name || user.full_name?.split(' ').slice(1).join(' ') || 'User';
   const now = nowIso();
 
   db.prepare(`

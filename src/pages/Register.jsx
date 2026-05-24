@@ -15,7 +15,9 @@ import LegalLinks from '@/components/LegalLinks';
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
   const navigate = useNavigate();
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -29,7 +31,7 @@ export default function Register() {
     setLoading(true);
     setError('');
     try {
-      const result = await apiClient.auth.register({ fullName, email, phone, password, acceptedTerms });
+      const result = await apiClient.auth.register({ firstName, lastName, username, email, phone, password, acceptedTerms });
       setAuthenticatedUser(result.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -63,9 +65,19 @@ export default function Register() {
           <p className="text-sm text-muted-foreground mt-2">Agree to the Terms & Conditions before using the platform.</p>
         </div>
         <form onSubmit={handleSubmit} className="bg-card border border-border rounded-2xl p-6 space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <Label>First Name</Label>
+              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} className="mt-1.5" />
+            </div>
+            <div>
+              <Label>Last Name</Label>
+              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} className="mt-1.5" />
+            </div>
+          </div>
           <div>
-            <Label>Full Name</Label>
-            <Input value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-1.5" />
+            <Label>Username</Label>
+            <Input value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, ''))} placeholder="letters_numbers_only" className="mt-1.5" />
           </div>
           <div>
             <Label>Email</Label>
@@ -73,7 +85,7 @@ export default function Register() {
           </div>
           <div>
             <Label>Phone Number</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+251..." className="mt-1.5" />
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09..., 9..., or +251..." className="mt-1.5" />
           </div>
           <div>
             <Label>Password</Label>

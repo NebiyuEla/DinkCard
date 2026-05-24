@@ -9,7 +9,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, readTwoFactorChallenge, setSessionCookie, signTwoFactorChallenge } from './auth.js';
-import { sanitizeUser, parseJson, generateId, money, nowIso } from './utils.js';
+import { sanitizeUser, parseJson, generateId, money, nowIso, normalizeEthiopianPhone, toUsername, hmacSha256Hex } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, creditWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import { buildTwoFactorRecoverySummary, formatSecretForDisplay, getOtpAuthUrl, getTwoFactorSetupForUser, isTwoFactorEnabled, readEncryptedTwoFactorSecret, replacementRecoveryState, verifyTotp, verifyTwoFactorCode } from './two-factor.js';
@@ -120,18 +120,7 @@ function getUploadExtension(file) {
 }
 
 function normalizeUsername(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '');
-}
-
-function normalizeEthiopianUserPhone(value) {
-  let digits = String(value || '').replace(/\D/g, '');
-  if (digits.startsWith('00251')) digits = digits.slice(5);
-  if (digits.startsWith('251')) digits = digits.slice(3);
-  digits = digits.replace(/^0+/, '');
-  return digits.slice(0, 9);
+  return toUsername(value);
 }
 
 const uploadStorage = multer.diskStorage({
@@ -461,6 +450,9 @@ function normalizeAssetBalanceAmount(amount, asset, row = {}) {
   }
 
   const target = String(asset || '').toUpperCase();
+  if ((target === 'USDC' || target === 'USDT') && Number.isInteger(numeric) && Math.abs(numeric) >= 1000) {
+    return numeric / 1_000_000;
+  }
   const scale = ASSET_AMOUNT_SCALES[target];
   const threshold = target === 'BTC' ? 10_000 : 100_000;
   if (scale && Number.isInteger(numeric) && Math.abs(numeric) >= threshold) {
@@ -994,10 +986,18 @@ export function createApp() {
   });
 
   app.post('/api/auth/register', authLimiter, async (req, res) => {
-    const { fullName, email, phone, password, acceptedTerms } = req.body;
+    const {
+      firstName,
+      lastName,
+      username,
+      email,
+      phone,
+      password,
+      acceptedTerms
+    } = req.body;
 
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: 'Full name, email, and password are required.' });
+    if (!firstName || !lastName || !username || !email || !password) {
+      return res.status(400).json({ message: 'First name, last name, username, email, and password are required.' });
     }
 
     if (String(password).length < 8) {
@@ -1009,15 +1009,22 @@ export function createApp() {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedUsername = normalizeUsername(username);
+    const normalizedPhone = normalizeEthiopianPhone(phone);
+    const cleanFirstName = String(firstName).trim();
+    const cleanLastName = String(lastName).trim();
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
+    if (!/^[a-zA-Z0-9_]+$/.test(normalizedUsername)) {
+      return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
+    }
 
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalizedEmail);
+    const existing = db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(normalizedEmail, normalizedUsername);
 
     if (existing) {
-      return res.status(409).json({ message: 'An account with this email already exists.' });
+      return res.status(409).json({ message: 'An account with this email or username already exists.' });
     }
 
     const now = nowIso();
@@ -1025,9 +1032,21 @@ export function createApp() {
     const passwordHash = await hashPassword(password);
 
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, full_name, phone, role, terms_accepted_version, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'user', ?, ?, ?)
-    `).run(userId, normalizedEmail, passwordHash, fullName, phone || '', config.termsVersion, now, now);
+      INSERT INTO users (id, email, username, password_hash, first_name, last_name, full_name, phone, role, terms_accepted_version, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user', ?, ?, ?)
+    `).run(
+      userId,
+      normalizedEmail,
+      normalizedUsername,
+      passwordHash,
+      cleanFirstName,
+      cleanLastName,
+      `${cleanFirstName} ${cleanLastName}`.trim(),
+      normalizedPhone,
+      config.termsVersion,
+      now,
+      now
+    );
 
     db.prepare(`
       INSERT INTO wallets (id, user_id, currency, available_balance, locked_balance, status, created_at, updated_at)
@@ -1049,7 +1068,12 @@ export function createApp() {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(normalized, normalized);
+    let normalizedPhone = null;
+    try {
+      normalizedPhone = normalizeEthiopianPhone(normalized);
+    } catch {}
+
+    const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(normalized, normalized, normalizedPhone);
 
     if (!user) {
       writeAudit({ actor: 'system:auth', userId: normalized, action: 'login_failed', entityType: 'auth', reason: 'unknown_account' });
@@ -1092,6 +1116,55 @@ export function createApp() {
     writeAudit({ actor: user.email, userId: user.email, action: 'login', entityType: 'auth', newValue: { role: user.role, portal: portal || 'user' } });
 
     res.json({ user: serializeTwoFactorUser(user) });
+  });
+
+  app.post('/api/auth/password-reset/request', authLimiter, (req, res) => {
+    const identifier = String(req.body.identifier || '').trim().toLowerCase();
+    if (!identifier) return res.status(400).json({ message: 'Enter your email, phone number, or username.' });
+
+    let normalizedPhone = null;
+    try {
+      normalizedPhone = normalizeEthiopianPhone(identifier);
+    } catch {}
+
+    const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(identifier, identifier, normalizedPhone);
+    if (!user) {
+      return res.json({ message: 'If the account exists, a password reset link has been prepared.' });
+    }
+
+    const resetToken = generateId('rst');
+    const tokenHash = hmacSha256Hex(config.jwtSecret, resetToken);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    db.prepare('UPDATE users SET password_reset_token_hash = ?, password_reset_expires_at = ?, updated_at = ? WHERE id = ?')
+      .run(tokenHash, expiresAt, nowIso(), user.id);
+
+    res.json({
+      message: 'Password reset requested. Use the link below to choose a new password.',
+      resetUrl: `${config.appUrl}/reset-password?token=${encodeURIComponent(resetToken)}`
+    });
+  });
+
+  app.post('/api/auth/password-reset/confirm', authLimiter, async (req, res) => {
+    const token = String(req.body.token || '');
+    const password = String(req.body.password || '');
+    if (!token || !password) return res.status(400).json({ message: 'Reset token and new password are required.' });
+    if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+
+    const tokenHash = hmacSha256Hex(config.jwtSecret, token);
+    const user = db.prepare('SELECT * FROM users WHERE password_reset_token_hash = ?').get(tokenHash);
+    if (!user || !user.password_reset_expires_at || Date.parse(user.password_reset_expires_at) < Date.now()) {
+      return res.status(400).json({ message: 'This password reset link is invalid or expired.' });
+    }
+
+    const passwordHash = await hashPassword(password);
+    db.prepare(`
+      UPDATE users
+      SET password_hash = ?, password_reset_token_hash = NULL, password_reset_expires_at = NULL, updated_at = ?
+      WHERE id = ?
+    `).run(passwordHash, nowIso(), user.id);
+
+    writeAudit({ actor: user.email, userId: user.email, action: 'password_reset_completed', entityType: 'auth' });
+    res.json({ message: 'Password updated successfully.' });
   });
 
   app.post('/api/auth/login/2fa', authLimiter, async (req, res) => {
@@ -1198,22 +1271,32 @@ export function createApp() {
   app.patch('/api/auth/me', authMiddleware(db), (req, res) => {
     const updates = [];
     const values = [];
+    const approvedKyc = db.prepare(`
+      SELECT id FROM kyc_submissions
+      WHERE user_id = ? AND status = 'approved'
+      ORDER BY created_at DESC LIMIT 1
+    `).get(req.user.email);
 
-    if (typeof req.body.full_name === 'string') {
-      const fullName = String(req.body.full_name).trim();
-      if (!fullName) return res.status(400).json({ message: 'Full name is required.' });
-      updates.push('full_name = ?');
-      values.push(fullName);
+    const requestedFirstName = typeof req.body.first_name === 'string' ? String(req.body.first_name).trim() : null;
+    const requestedLastName = typeof req.body.last_name === 'string' ? String(req.body.last_name).trim() : null;
+    if (!approvedKyc && (requestedFirstName !== null || requestedLastName !== null || typeof req.body.full_name === 'string')) {
+      const current = db.prepare('SELECT first_name, last_name FROM users WHERE id = ?').get(req.user.id);
+      const firstName = requestedFirstName ?? current?.first_name ?? '';
+      const lastName = requestedLastName ?? current?.last_name ?? '';
+      const fullName = String(req.body.full_name || `${firstName} ${lastName}`.trim()).trim();
+      if (!firstName || !lastName) return res.status(400).json({ message: 'First name and last name are required.' });
+      updates.push('first_name = ?', 'last_name = ?', 'full_name = ?');
+      values.push(firstName, lastName, fullName);
     }
 
-    if (typeof req.body.phone === 'string') {
+    if (!approvedKyc && typeof req.body.phone === 'string') {
       updates.push('phone = ?');
-      values.push(normalizeEthiopianUserPhone(req.body.phone));
+      values.push(normalizeEthiopianPhone(req.body.phone));
     }
 
     if (typeof req.body.username === 'string') {
       const username = normalizeUsername(req.body.username);
-      if (!username) return res.status(400).json({ message: 'Enter a valid username.' });
+      if (!/^[a-z0-9_]+$/.test(username)) return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
       const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? AND id != ?').get(username, req.user.id);
       if (existing) return res.status(409).json({ message: 'That username is already in use.' });
       updates.push('username = ?');
@@ -1498,7 +1581,8 @@ export function createApp() {
       const usdc = findAssetBalance(provider, 'USDC');
       const usdt = findAssetBalance(provider, 'USDT');
       const btc = findAssetBalance(provider, 'BTC');
-      res.json({ provider, environment: config.bitnob.env, usdc, usdt, btc, stableUsd: Math.max(usdc, usdt) });
+      const totalUsd = money(usdc + usdt);
+      res.json({ provider, environment: config.bitnob.env, usdc, usdt, btc, stableUsd: totalUsd, totalUsd });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to fetch company wallet balance.' });
     }
@@ -1943,15 +2027,17 @@ export function createApp() {
       const passwordHash = await hashPassword(password);
 
       db.prepare(`
-        INSERT INTO users (id, email, username, password_hash, full_name, phone, role, terms_accepted_version, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO users (id, email, username, password_hash, first_name, last_name, full_name, phone, role, terms_accepted_version, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         userId,
         email,
         username,
         passwordHash,
+        fullName.split(/\s+/)[0] || fullName,
+        fullName.split(/\s+/).slice(1).join(' '),
         fullName,
-        normalizeEthiopianUserPhone(req.body.phone || ''),
+        req.body.phone ? normalizeEthiopianPhone(req.body.phone) : '',
         role,
         config.termsVersion,
         now,
@@ -2691,6 +2777,52 @@ export function createApp() {
       console.error('KYC correction request failed:', error);
       res.status(400).json({ message: error.message || 'KYC correction request failed.' });
     }
+  });
+
+  app.post('/api/admin/kyc/:id/manual-review', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+      const now = nowIso();
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET status = 'manual_review', rejection_reason = ?, reviewed_by = ?, reviewed_at = ?, updated_at = ?
+        WHERE id = ?
+      `).run(String(req.body.reason || 'Marked for manual review.'), req.user.email, now, now, kyc.id);
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not mark KYC for manual review.' });
+    }
+  });
+
+  app.get('/api/kyc/status', authMiddleware(db), (req, res) => {
+    const kyc = db.prepare(`
+      SELECT * FROM kyc_submissions
+      WHERE user_id = ?
+      ORDER BY created_at DESC LIMIT 1
+    `).get(req.user.email);
+    res.json(kyc ? mapRow(kyc) : { status: 'not_started' });
+  });
+
+  app.post('/api/kyc/submit', authMiddleware(db), (req, res) => {
+    try {
+      const existing = db.prepare(`
+        SELECT * FROM kyc_submissions
+        WHERE user_id = ?
+        ORDER BY created_at DESC LIMIT 1
+      `).get(req.user.email);
+      const result = existing?.id
+        ? updateEntity(db, 'KYCSubmission', existing.id, req.body, req.user)
+        : createEntity(db, 'KYCSubmission', { ...req.body, user_id: req.user.email }, req.user);
+      res.status(existing?.id ? 200 : 201).json(result);
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'KYC submission failed.' });
+    }
+  });
+
+  app.post('/api/kyc/webhook', (req, res) => {
+    res.json({ ok: true, message: 'KYC webhook placeholder ready.' });
   });
 
   app.post('/api/webhooks/bitnob', (req, res) => {

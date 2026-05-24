@@ -109,7 +109,7 @@ export default function CardsPage() {
           onAction={() => navigate('/cards/create')}
         />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)]">
           <div className="space-y-3">
             {activeCards.map((card) => (
               <div
@@ -136,16 +136,18 @@ export default function CardsPage() {
 
           {selectedCard && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <VirtualCardDisplay
-                card={{
-                  ...selectedCard,
-                  card_number_encrypted: secureDetails?.card_number,
-                  cvv_encrypted: secureDetails?.cvv,
-                  expiry_month: secureDetails?.expiry_month || selectedCard.expiry_month,
-                  expiry_year: secureDetails?.expiry_year || selectedCard.expiry_year
-                }}
-                showDetails={Boolean(secureDetails)}
-              />
+              <div className="flex justify-center">
+                <VirtualCardDisplay
+                  card={{
+                    ...selectedCard,
+                    card_number_encrypted: secureDetails?.card_number,
+                    cvv_encrypted: secureDetails?.cvv,
+                    expiry_month: secureDetails?.expiry_month || selectedCard.expiry_month,
+                    expiry_year: secureDetails?.expiry_year || selectedCard.expiry_year
+                  }}
+                  showDetails={Boolean(secureDetails)}
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-2">
                 {!selectedCard.card_pin_enabled_at && (
@@ -190,7 +192,6 @@ export default function CardsPage() {
               </div>
 
               <div className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>Virtual card for supported online payments</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedCard.status} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${(selectedCard.balance || 0).toFixed(2)}</span></div>
               </div>
@@ -205,7 +206,7 @@ export default function CardsPage() {
             <DialogTitle>Enter card PIN</DialogTitle>
             <DialogDescription>Use your 4-digit card PIN before fetching sensitive card details from Bitnob.</DialogDescription>
           </DialogHeader>
-          <Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="4-digit card PIN" maxLength={4} />
+          <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
             <Button onClick={() => revealCard.mutate()} className="bg-primary text-primary-foreground" disabled={!pin || revealCard.isPending}>
@@ -222,8 +223,8 @@ export default function CardsPage() {
             <DialogDescription>This 4-digit PIN is used to reveal, lock, and unlock the card.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input type="password" value={newPin} onChange={(e) => setNewPin(e.target.value)} placeholder="Enter 4-digit PIN" maxLength={4} />
-            <Input type="password" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} placeholder="Confirm 4-digit PIN" maxLength={4} />
+            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Enter 4-digit PIN" maxLength={4} />
+            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Confirm 4-digit PIN" maxLength={4} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
@@ -240,7 +241,7 @@ export default function CardsPage() {
             <DialogTitle>{confirmDialog === 'freeze' ? 'Lock card' : 'Unlock card'}</DialogTitle>
             <DialogDescription>Enter your 4-digit card PIN to continue.</DialogDescription>
           </DialogHeader>
-          <Input type="password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="4-digit card PIN" maxLength={4} />
+          <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
             <Button

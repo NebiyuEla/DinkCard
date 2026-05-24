@@ -52,7 +52,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        'relative w-full max-w-sm aspect-[1.586/1] rounded-2xl p-6 flex flex-col justify-between overflow-hidden',
+        'relative w-full max-w-[340px] aspect-[1.586/1] rounded-2xl p-5 sm:p-6 flex flex-col justify-between overflow-hidden',
         'bg-gradient-to-br from-[hsl(222,44%,12%)] to-[hsl(222,44%,6%)] border',
         statusStyles[card.status]
       )}
@@ -62,7 +62,6 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       <div className="relative flex items-start justify-between">
         <div>
           <p className="text-xs text-muted-foreground">{card.card_nickname}</p>
-          <p className="text-[10px] text-muted-foreground/60 uppercase mt-0.5">Virtual Card</p>
         </div>
         <span className="text-lg font-bold tracking-tight text-foreground/80">Dink</span>
       </div>

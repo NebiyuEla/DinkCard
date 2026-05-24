@@ -77,6 +77,22 @@ export default function AdminKYC() {
     }
   });
 
+  const manualReview = useMutation({
+    mutationFn: (kyc) => apiClient.admin.kyc.manualReview(kyc.id, { reason: 'Marked for manual review.' }),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('KYC marked for manual review');
+      setSelected(null);
+    },
+    onError: (error) => toast.error(error.message || 'Could not update KYC status')
+  });
+
+  const maskIdNumber = (value) => {
+    const clean = String(value || '');
+    if (clean.length <= 4) return clean;
+    return `${'*'.repeat(Math.max(0, clean.length - 4))}${clean.slice(-4)}`;
+  };
+
   const toggleField = (field, checked) => {
     setResubmissionFields(prev => checked ? [...new Set([...prev, field])] : prev.filter(item => item !== field));
   };
@@ -161,11 +177,11 @@ export default function AdminKYC() {
                 <div><span className="text-muted-foreground">Email:</span> {selected.email}</div>
                 <div><span className="text-muted-foreground">City:</span> {selected.city}</div>
                 <div><span className="text-muted-foreground">ID Type:</span> <span className="capitalize">{(selected.id_type || '').replace(/_/g, ' ')}</span></div>
-                <div><span className="text-muted-foreground">ID Number:</span> <span className="font-mono">{selected.id_number}</span></div>
+                <div><span className="text-muted-foreground">ID Number:</span> <span className="font-mono">{maskIdNumber(selected.id_number)}</span></div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <FilePreview url={selected.front_id_url} label="Front ID" />
-                <FilePreview url={selected.back_id_url} label="Back ID" />
+                {selected.id_type !== 'passport' && <FilePreview url={selected.back_id_url} label="Back ID" />}
                 <FilePreview url={selected.selfie_url} label="Selfie" />
               </div>
               {selected.status === 'pending' && (
@@ -175,6 +191,9 @@ export default function AdminKYC() {
                   </Button>
                   <Button variant="destructive" onClick={openCorrectionDialog} disabled={approveKYC.isPending || rejectKYC.isPending} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Request Fix
+                  </Button>
+                  <Button variant="outline" onClick={() => manualReview.mutate(selected)} disabled={manualReview.isPending} className="flex-1">
+                    Manual Review
                   </Button>
                 </div>
               )}

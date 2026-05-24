@@ -16,6 +16,8 @@ export function sanitizeUser(user) {
     id: user.id,
     email: user.email,
     username: user.username,
+    first_name: user.first_name,
+    last_name: user.last_name,
     full_name: user.full_name,
     phone: user.phone,
     role: user.role,
@@ -28,6 +30,29 @@ export function sanitizeUser(user) {
     created_date: user.created_at,
     updated_date: user.updated_at
   };
+}
+
+export function normalizeEthiopianPhone(phone) {
+  let cleaned = String(phone || '').trim().replace(/\s+/g, '');
+  if (!cleaned) return '';
+  if (cleaned.startsWith('+251')) {
+    cleaned = cleaned;
+  } else if (cleaned.startsWith('251')) {
+    cleaned = `+${cleaned}`;
+  } else if (cleaned.startsWith('0')) {
+    cleaned = `+251${cleaned.slice(1)}`;
+  } else if (cleaned.length === 9) {
+    cleaned = `+251${cleaned}`;
+  }
+  const ethiopianPhoneRegex = /^\+251[79]\d{8}$/;
+  if (!ethiopianPhoneRegex.test(cleaned)) {
+    throw new Error('Please enter a valid Ethiopian phone number.');
+  }
+  return cleaned;
+}
+
+export function toUsername(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
 }
 
 function getKey() {
