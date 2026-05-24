@@ -5,7 +5,7 @@ import { ArrowLeft, CreditCard, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { useCards, useCurrentUser, useFeeSettings, useWallet } from '@/hooks/useAppData';
-import { calculateCardFundingFees } from '@/lib/feeCalculator';
+import { calculateCardFundingFees, getEffectiveMinCardFunding } from '@/lib/feeCalculator';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ export default function FundCard() {
   const selectedCard = fundableCards.find((card) => card.id === selectedCardId);
   const fundAmount = parseFloat(amount) || 0;
   const fees = useMemo(() => calculateCardFundingFees(fundAmount, settings || {}), [fundAmount, settings]);
-  const minFunding = settings?.min_card_funding_usd || 1;
+  const minFunding = getEffectiveMinCardFunding(settings || {});
   const maxFunding = useMemo(() => {
     const configuredMax = settings?.max_card_funding_usd || 500;
     let low = 0;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import { calculateDepositFees, DEFAULT_SETTINGS } from '@/lib/feeCalculator';
+import { calculateDepositFees, DEFAULT_SETTINGS, getEffectiveMinCardFunding } from '@/lib/feeCalculator';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ export default function AdminFees() {
 
   const [form, setForm] = useState(DEFAULT_SETTINGS);
   const preview = calculateDepositFees(50, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
+  const effectiveMinFunding = getEffectiveMinCardFunding(form);
 
   useEffect(() => {
     if (existingSettings) {
@@ -121,6 +122,10 @@ export default function AdminFees() {
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Rate</p>
               <p className="font-mono font-semibold">{preview.exchangeRate.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
+              <p className="text-muted-foreground">Effective minimum card funding</p>
+              <p className="font-mono font-semibold">${effectiveMinFunding.toFixed(2)}</p>
             </div>
           </div>
         </div>

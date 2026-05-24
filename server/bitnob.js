@@ -19,6 +19,13 @@ function getBitnobCard(response) {
   return response?.data?.card || response?.data || response?.card || {};
 }
 
+function getEffectiveMinCardFunding(settings) {
+  const raw = Number(settings?.min_card_funding_usd);
+  if (!Number.isFinite(raw) || raw <= 0) return 1;
+  // Older deployments used 2 as the default floor even though our current product floor is 1.
+  return raw === 2 ? 1 : raw;
+}
+
 function signBitnob(body = '') {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
@@ -103,6 +110,13 @@ function friendlyBitnobError(error) {
   const message = String(error?.message || error || 'Card provider request failed');
   if (/authentication|signature|unauthorized|forbidden/i.test(message)) {
     return new Error('Provider authentication failed. Check server environment keys.');
+  }
+  const minimumFundingMatch = message.match(/minimum funding of \$?(\d+(?:\.\d+)?)/i);
+  if (minimumFundingMatch) {
+    const providerMinimum = Number(minimumFundingMatch[1]);
+    if (Number.isFinite(providerMinimum)) {
+      return new Error(`Card provider currently requires at least $${providerMinimum.toFixed(2)} for this action. Increase the amount and try again.`);
+    }
   }
   return error;
 }
@@ -246,8 +260,9 @@ export async function createVirtualCardForUser(user, payload) {
   }
 
   const fundingAmount = Number(payload.fundingAmount || 0);
-  if (!Number.isFinite(fundingAmount) || fundingAmount < Number(settings.min_card_funding_usd || 1)) {
-    throw new Error(`Minimum card funding is $${Number(settings.min_card_funding_usd || 1).toFixed(2)}.`);
+  const minFunding = getEffectiveMinCardFunding(settings);
+  if (!Number.isFinite(fundingAmount) || fundingAmount < minFunding) {
+    throw new Error(`Minimum card funding is $${Number(minFunding).toFixed(2)}.`);
   }
   if (fundingAmount > Number(settings.max_card_funding_usd || 500)) {
     throw new Error(`Maximum card funding is $${Number(settings.max_card_funding_usd || 500).toFixed(2)}.`);
@@ -334,8 +349,9 @@ export async function fundVirtualCard(user, cardId, amount) {
   }
   const settings = getFeeSettings();
   const fundingAmount = Number(amount);
-  if (!Number.isFinite(fundingAmount) || fundingAmount < Number(settings.min_card_funding_usd || 1)) {
-    throw new Error(`Minimum card funding is $${Number(settings.min_card_funding_usd || 1).toFixed(2)}.`);
+  const minFunding = getEffectiveMinCardFunding(settings);
+  if (!Number.isFinite(fundingAmount) || fundingAmount < minFunding) {
+    throw new Error(`Minimum card funding is $${Number(minFunding).toFixed(2)}.`);
   }
   if (fundingAmount > Number(settings.max_card_funding_usd || 500)) {
     throw new Error(`Maximum card funding is $${Number(settings.max_card_funding_usd || 500).toFixed(2)}.`);

@@ -14,6 +14,12 @@ function safeNumber(value, fallback) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 
+export function getEffectiveMinCardFunding(settings = {}) {
+  const raw = safeNumber(settings.min_card_funding_usd, 1);
+  if (raw <= 0) return 1;
+  return raw === 2 ? 1 : raw;
+}
+
 function roundUpTo(value, nearest) {
   const step = Math.max(1, safeNumber(nearest, 50));
   return money(Math.ceil(Number(value || 0) / step) * step);

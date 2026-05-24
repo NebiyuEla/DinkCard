@@ -124,7 +124,7 @@ export default function Sidebar({ user, unreadCount = 0 }) {
         </div>
       </aside>
 
-      <nav className="fixed inset-x-3 bottom-3 z-50 rounded-3xl border border-border/80 bg-card/95 p-2 shadow-2xl shadow-black/30 backdrop-blur-xl lg:hidden">
+      <nav className="fixed inset-x-3 bottom-3 z-50 rounded-[28px] border border-border/80 bg-card/95 px-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-2xl shadow-black/30 backdrop-blur-xl lg:hidden">
         <div className="grid grid-cols-5 gap-1">
           {mobileNavItems.map((item) => {
             const isActive = isPathActive(location.pathname, item.path);
@@ -133,16 +133,17 @@ export default function Sidebar({ user, unreadCount = 0 }) {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl text-[11px] font-semibold transition-all active:scale-95',
+                  'relative flex min-h-[60px] flex-col items-center justify-center gap-1.5 rounded-[22px] px-1 text-[11px] font-semibold transition-all active:scale-95',
                   item.primary
                     ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
                     : isActive
-                      ? 'bg-secondary text-foreground'
-                      : 'text-muted-foreground'
+                      ? 'bg-secondary text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:bg-secondary/70'
                 )}
               >
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
+                {isActive && !item.primary && <span className="absolute inset-x-4 top-1 h-1 rounded-full bg-primary/70" />}
+                <item.icon className={cn('h-5 w-5', item.primary && 'h-[22px] w-[22px]')} />
+                <span className="leading-none">{item.label}</span>
                 {item.label === 'Alerts' && unreadCount > 0 && (
                   <span className="absolute right-3 top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] text-primary-foreground">
                     {unreadCount > 9 ? '9+' : unreadCount}
