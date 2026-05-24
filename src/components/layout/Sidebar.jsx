@@ -5,6 +5,7 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   HeadphonesIcon,
   LayoutDashboard,
   LogOut,
