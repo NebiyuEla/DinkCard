@@ -155,7 +155,7 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route element={<RequireAuth roles={['support', 'admin', 'superadmin']} />}>
+      <Route element={<RequireAuth roles={['support', 'support_response', 'kyc_checker', 'admin', 'superadmin']} />}>
         <Route path="/admin" element={<AdminDashboard />}>
           <Route path="users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
           <Route path="kyc" element={<AdminKYC />} />

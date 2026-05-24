@@ -46,7 +46,7 @@ function isPathActive(pathname, itemPath) {
 export default function Sidebar({ user, unreadCount = 0 }) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const isAdmin = ['support', 'admin', 'superadmin'].includes(user?.role);
+  const isAdmin = ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'].includes(user?.role);
 
   return (
     <>

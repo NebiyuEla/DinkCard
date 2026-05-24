@@ -190,7 +190,7 @@ export default function AdminCards() {
     setSecureDetails(null);
   };
 
-  const companyStableBalance = Number(balancesQuery.data?.stableUsd || Math.max(Number(balancesQuery.data?.usdc || 0), Number(balancesQuery.data?.usdt || 0)) || 0);
+  const companyStableBalance = Number(balancesQuery.data?.totalUsd || balancesQuery.data?.stableUsd || 0);
   const lowBalance = companyStableBalance < 7;
   const environment = providerStatusQuery.data?.environment || balancesQuery.data?.environment || 'sandbox';
 

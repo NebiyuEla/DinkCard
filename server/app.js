@@ -93,8 +93,10 @@ function writeAudit({
   }
 }
 
+const ADMIN_ROLES = ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'];
+
 function hasAnyAdminRole(user) {
-  return ['support', 'admin', 'superadmin'].includes(user?.role);
+  return ADMIN_ROLES.includes(user?.role);
 }
 
 function requireAdmin(req, res) {
@@ -996,8 +998,8 @@ export function createApp() {
       acceptedTerms
     } = req.body;
 
-    if (!firstName || !lastName || !username || !email || !password) {
-      return res.status(400).json({ message: 'First name, last name, username, email, and password are required.' });
+    if (!firstName || !lastName || !email || !password) {
+      return res.status(400).json({ message: 'First name, last name, email, and password are required.' });
     }
 
     if (String(password).length < 8) {
@@ -1017,11 +1019,13 @@ export function createApp() {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return res.status(400).json({ message: 'Enter a valid email address.' });
     }
-    if (!/^[a-zA-Z0-9_]+$/.test(normalizedUsername)) {
+    if (normalizedUsername && !/^[a-zA-Z0-9_]+$/.test(normalizedUsername)) {
       return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
     }
 
-    const existing = db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(normalizedEmail, normalizedUsername);
+    const existing = normalizedUsername
+      ? db.prepare("SELECT id FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ?").get(normalizedEmail, normalizedUsername)
+      : db.prepare("SELECT id FROM users WHERE lower(email) = ?").get(normalizedEmail);
 
     if (existing) {
       return res.status(409).json({ message: 'An account with this email or username already exists.' });
@@ -1037,7 +1041,7 @@ export function createApp() {
     `).run(
       userId,
       normalizedEmail,
-      normalizedUsername,
+      normalizedUsername || null,
       passwordHash,
       cleanFirstName,
       cleanLastName,
@@ -1120,7 +1124,12 @@ export function createApp() {
 
   app.post('/api/auth/password-reset/request', authLimiter, (req, res) => {
     const identifier = String(req.body.identifier || '').trim().toLowerCase();
+    const providedLastName = String(req.body.lastName || '').trim().toLowerCase();
+    const providedDob = String(req.body.dateOfBirth || '').trim();
     if (!identifier) return res.status(400).json({ message: 'Enter your email, phone number, or username.' });
+    if (!providedLastName || !providedDob) {
+      return res.status(400).json({ message: 'Last name and date of birth are required to reset your password.' });
+    }
 
     let normalizedPhone = null;
     try {
@@ -1130,6 +1139,28 @@ export function createApp() {
     const user = db.prepare("SELECT * FROM users WHERE lower(email) = ? OR lower(ifnull(username, '')) = ? OR phone = ?").get(identifier, identifier, normalizedPhone);
     if (!user) {
       return res.json({ message: 'If the account exists, a password reset link has been prepared.' });
+    }
+
+    const kyc = db.prepare(`
+      SELECT * FROM kyc_submissions
+      WHERE user_id = ?
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1
+    `).get(user.email);
+
+    if (!kyc?.date_of_birth || !kyc?.last_name) {
+      return res.status(403).json({ message: 'We could not verify this reset request. Contact admin for help.' });
+    }
+
+    if (String(kyc.last_name || '').trim().toLowerCase() !== providedLastName || String(kyc.date_of_birth || '').trim() !== providedDob) {
+      writeAudit({
+        actor: user.email,
+        userId: user.email,
+        action: 'password_reset_verification_failed',
+        entityType: 'auth',
+        reason: 'last_name_or_dob_mismatch'
+      });
+      return res.status(403).json({ message: 'We could not verify this reset request. Contact admin for help.' });
     }
 
     const resetToken = generateId('rst');
@@ -1296,11 +1327,13 @@ export function createApp() {
 
     if (typeof req.body.username === 'string') {
       const username = normalizeUsername(req.body.username);
-      if (!/^[a-z0-9_]+$/.test(username)) return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
-      const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? AND id != ?').get(username, req.user.id);
-      if (existing) return res.status(409).json({ message: 'That username is already in use.' });
+      if (username) {
+        if (!/^[a-z0-9_]+$/.test(username)) return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
+        const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? AND id != ?').get(username, req.user.id);
+        if (existing) return res.status(409).json({ message: 'That username is already in use.' });
+      }
       updates.push('username = ?');
-      values.push(username);
+      values.push(username || null);
     }
 
     if (req.body.terms_accepted_version) {
@@ -1975,7 +2008,9 @@ export function createApp() {
     if (!target) return res.status(404).json({ message: 'User not found' });
     if (target.role === 'superadmin') return res.status(400).json({ message: 'Superadmin role cannot be changed here.' });
 
-    const nextRole = req.body.role === 'admin' ? 'admin' : 'user';
+    const allowedRoles = new Set(['user', 'support', 'support_response', 'kyc_checker', 'admin', 'superadmin']);
+    const requestedRole = String(req.body.role || '').trim().toLowerCase();
+    const nextRole = allowedRoles.has(requestedRole) ? requestedRole : 'user';
     const now = nowIso();
 
     db.prepare('UPDATE users SET role = ?, updated_at = ? WHERE id = ?').run(nextRole, now, target.id);
@@ -2003,12 +2038,13 @@ export function createApp() {
       const username = normalizeUsername(req.body.username);
       const password = String(req.body.password || '');
       const role = String(req.body.role || '').trim().toLowerCase();
+      const allowedRoles = new Set(['support', 'support_response', 'kyc_checker', 'admin', 'superadmin']);
 
       if (!fullName || !email || !username || !password) {
         return res.status(400).json({ message: 'Full name, email, username, and password are required.' });
       }
-      if (!['admin', 'support'].includes(role)) {
-        return res.status(400).json({ message: 'Role must be admin or support.' });
+      if (!allowedRoles.has(role)) {
+        return res.status(400).json({ message: 'Role must be support, support response, KYC checker, admin, or superadmin.' });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });

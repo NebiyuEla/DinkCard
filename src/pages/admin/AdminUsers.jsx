@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { AlertTriangle, BadgeCheck, CreditCard, DollarSign, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CreditCard, DollarSign, Eye, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, UserCog, UserMinus } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
@@ -31,9 +31,9 @@ function getActionCopy(action, user) {
       requiresReason: false
     },
     make_admin: {
-      title: 'Make admin',
-      description: 'This gives the user limited admin access. Use only for trusted staff.',
-      confirm: 'Make Admin',
+      title: 'Set admin role',
+      description: 'This gives the user broader admin access. Use only for trusted staff.',
+      confirm: 'Set Admin',
       variant: 'default',
       requiresReason: true
     },
@@ -83,7 +83,7 @@ function getActionCopy(action, user) {
   return copy[action] || {};
 }
 
-function UserActions({ user, onAction }) {
+function UserActions({ user, onAction, onView }) {
   if (user.role === 'superadmin') {
     return <span className="text-xs text-muted-foreground">Owner protected</span>;
   }
@@ -99,6 +99,8 @@ function UserActions({ user, onAction }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem onClick={() => onView(user)}><Eye className="h-4 w-4" /> View details</DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => onAction(user, 'add_money')}><DollarSign className="h-4 w-4" /> Add money</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction(user, 'set_balance')}><DollarSign className="h-4 w-4" /> Set usable balance</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction(user, 'pass_kyc')}><BadgeCheck className="h-4 w-4" /> Pass KYC</DropdownMenuItem>
@@ -131,14 +133,24 @@ export default function AdminUsers() {
     queryFn: apiClient.admin.walletSummary,
     refetchInterval: REFRESH.admin
   });
+  const { data: kycSubmissions } = useQuery({
+    queryKey: ['admin-kyc'],
+    queryFn: () => apiClient.entities.KYCSubmission.list('-updated_date', 200),
+    refetchInterval: REFRESH.admin
+  });
   const walletByUser = new Map((wallets?.wallets || []).map((wallet) => [wallet.user_id, wallet]));
+  const latestKycByUser = new Map();
+  for (const submission of (kycSubmissions || [])) {
+    if (!latestKycByUser.has(submission.user_id)) latestKycByUser.set(submission.user_id, submission);
+  }
 
   const [pendingAction, setPendingAction] = useState(null);
+  const [detailUser, setDetailUser] = useState(null);
   const [reason, setReason] = useState('');
   const [manualAmount, setManualAmount] = useState('');
   const [manualCard, setManualCard] = useState({ nickname: 'Virtual Card', balance: '', lastFour: '' });
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
-  const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support' });
+  const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support_response' });
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
@@ -191,7 +203,7 @@ export default function AdminUsers() {
       invalidateOperationalData(queryClient);
       toast.success('Staff account created.');
       setStaffDialogOpen(false);
-      setStaffForm({ fullName: '', email: '', username: '', password: '', role: 'support' });
+      setStaffForm({ fullName: '', email: '', username: '', password: '', role: 'support_response' });
     },
     onError: (error) => toast.error(error.message || 'Could not create staff account.')
   });
@@ -244,7 +256,7 @@ export default function AdminUsers() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{user.created_date ? format(new Date(user.created_date), 'MMM d, yyyy') : ''}</td>
-                  <td className="px-4 py-3"><UserActions user={user} onAction={openAction} /></td>
+                  <td className="px-4 py-3"><UserActions user={user} onAction={openAction} onView={setDetailUser} /></td>
                 </tr>
               ))}
             </tbody>
@@ -266,11 +278,65 @@ export default function AdminUsers() {
                 <span>{user.created_date ? format(new Date(user.created_date), 'MMM d, yyyy') : ''}</span>
               </div>
               {user.restricted_reason && <p className="rounded-lg bg-destructive/10 p-2 text-xs text-destructive">{user.restricted_reason}</p>}
-              <UserActions user={user} onAction={openAction} />
+              <UserActions user={user} onAction={openAction} onView={setDetailUser} />
             </div>
           ))}
         </div>
       </div>
+
+      <Dialog open={Boolean(detailUser)} onOpenChange={(open) => !open && setDetailUser(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>User details</DialogTitle>
+            <DialogDescription>Review the account, KYC profile, and uploaded documents for this user.</DialogDescription>
+          </DialogHeader>
+          {detailUser && (() => {
+            const kyc = latestKycByUser.get(detailUser.email);
+            return (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account</p>
+                    <p className="mt-2 font-semibold">{detailUser.full_name || '-'}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailUser.email}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Role</p>
+                    <p className="mt-2 font-semibold capitalize">{String(detailUser.role || 'user').replace(/_/g, ' ')}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailUser.username ? `@${detailUser.username}` : 'No username yet'}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-secondary/30 p-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Usable balance</p>
+                    <p className="mt-2 font-semibold text-primary">${Number(walletByUser.get(detailUser.email)?.available_balance || 0).toFixed(2)}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{detailUser.phone || 'No phone saved'}</p>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="font-semibold">KYC profile</h3>
+                    <StatusBadge status={kyc?.status || 'not_started'} />
+                  </div>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div><span className="text-muted-foreground">First name:</span> {kyc?.first_name || detailUser.first_name || '-'}</div>
+                    <div><span className="text-muted-foreground">Last name:</span> {kyc?.last_name || detailUser.last_name || '-'}</div>
+                    <div><span className="text-muted-foreground">Date of birth:</span> {kyc?.date_of_birth || '-'}</div>
+                    <div><span className="text-muted-foreground">ID type:</span> <span className="capitalize">{String(kyc?.id_type || '-').replace(/_/g, ' ')}</span></div>
+                    <div><span className="text-muted-foreground">ID number:</span> <span className="font-mono">{kyc?.id_number || '-'}</span></div>
+                    <div><span className="text-muted-foreground">Country:</span> {kyc?.country || 'Ethiopia'}</div>
+                    <div className="md:col-span-2"><span className="text-muted-foreground">Address:</span> {[kyc?.street_address || kyc?.address, kyc?.city, kyc?.state, kyc?.postal_code].filter(Boolean).join(', ') || '-'}</div>
+                    {kyc?.rejection_reason && <div className="md:col-span-2 rounded-xl border border-orange-500/20 bg-orange-500/10 p-3 text-sm text-orange-600">{kyc.rejection_reason}</div>}
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Front ID</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.front_id_url} label="Front ID" /></div></div>
+                    {kyc?.id_type !== 'passport' && <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Back ID</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.back_id_url} label="Back ID" /></div></div>}
+                    <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Selfie</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.selfie_url} label="Selfie" /></div></div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(pendingAction)} onOpenChange={(open) => !open && setPendingAction(null)}>
         <DialogContent>
@@ -359,7 +425,7 @@ export default function AdminUsers() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create staff account</DialogTitle>
-            <DialogDescription>Create a dedicated login for admin or support access.</DialogDescription>
+            <DialogDescription>Create a dedicated login for support, KYC review, admin, or full superadmin access.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             <div className="space-y-1.5">
@@ -388,8 +454,11 @@ export default function AdminUsers() {
                   onChange={(event) => setStaffForm((current) => ({ ...current, role: event.target.value }))}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
+                  <option value="support_response">Support Response</option>
                   <option value="support">Support</option>
+                  <option value="kyc_checker">KYC Checker</option>
                   <option value="admin">Admin</option>
+                  <option value="superadmin">Full Super Admin</option>
                 </select>
               </div>
             </div>

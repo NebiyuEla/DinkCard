@@ -22,10 +22,23 @@ const adminNav = [
   { label: 'Audit Logs', path: '/admin/audit', icon: FileText, ownerOnly: true },
 ];
 
+const roleNavAccess = {
+  support: new Set(['/admin', '/admin/tickets']),
+  support_response: new Set(['/admin', '/admin/tickets']),
+  kyc_checker: new Set(['/admin', '/admin/kyc']),
+  admin: new Set(['/admin', '/admin/kyc', '/admin/deposits', '/admin/cards', '/admin/tickets']),
+  superadmin: null
+};
+
 export default function AdminDashboard() {
   const location = useLocation();
   const { data: currentUser } = useCurrentUser();
-  const visibleNav = adminNav.filter((item) => !item.ownerOnly || currentUser?.role === 'superadmin');
+  const access = roleNavAccess[currentUser?.role] || roleNavAccess.support;
+  const visibleNav = adminNav.filter((item) => {
+    if (currentUser?.role === 'superadmin') return true;
+    if (item.ownerOnly) return false;
+    return access?.has(item.path);
+  });
 
   const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: kycSubs } = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
@@ -39,12 +52,12 @@ export default function AdminDashboard() {
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const totalUsableBalance = Number(walletSummary?.totalUsableBalance || 0);
-  const stableCompanyBalance = Number(companyBalances?.stableUsd || Math.max(Number(companyBalances?.usdc || 0), Number(companyBalances?.usdt || 0)) || 0);
+  const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
 
   const isOverview = location.pathname === '/admin';
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto w-full max-w-7xl space-y-6 lg:px-4">
       <div className="flex items-center gap-3">
         <Link to="/dashboard">
           <button className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
@@ -58,7 +71,8 @@ export default function AdminDashboard() {
       </div>
 
       {/* Admin nav tabs */}
-      <div className="flex gap-1 overflow-x-auto pb-2">
+      <div className="rounded-2xl border border-border bg-card p-2">
+        <div className="flex gap-1 overflow-x-auto">
         {visibleNav.map(item => (
           <Link key={item.path} to={item.path}>
             <button className={cn(
@@ -73,10 +87,11 @@ export default function AdminDashboard() {
             </button>
           </Link>
         ))}
+        </div>
       </div>
 
       {isOverview ? (
-        <div className="space-y-6">
+        <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
           <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-500">
             All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
           </div>
@@ -84,7 +99,7 @@ export default function AdminDashboard() {
             <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
-            <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(2)} USDT`} icon={WalletCards} />
+            <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
             <StatCard title="Platform Bal." value={`$${totalUsableBalance.toFixed(0)}`} icon={Activity} />
             <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
           </div>
@@ -113,7 +128,9 @@ export default function AdminDashboard() {
           )}
         </div>
       ) : (
-        <Outlet />
+        <div className="rounded-[28px] border border-border bg-card p-4 md:p-6">
+          <Outlet />
+        </div>
       )}
     </div>
   );

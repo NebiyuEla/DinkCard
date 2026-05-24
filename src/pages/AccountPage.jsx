@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, Compass, KeyRound, LogOut, Orbit, ShieldCheck, Sparkles, Star, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 function buildProfileTheme(seed) {
@@ -21,6 +21,23 @@ function buildProfileTheme(seed) {
     bg: `linear-gradient(135deg, hsl(${hue} 70% 20%), hsl(${(hue + 42) % 360} 80% 36%))`,
     glow: `hsla(${(hue + 42) % 360}, 90%, 60%, 0.22)`
   };
+}
+
+const PROFILE_ICONS = [Sparkles, Star, Orbit, Compass];
+
+function pickProfileIcon(seed) {
+  let hash = 0;
+  for (const char of String(seed || 'dink-card')) {
+    hash = (hash * 33 + char.charCodeAt(0)) >>> 0;
+  }
+  return PROFILE_ICONS[hash % PROFILE_ICONS.length];
+}
+
+function maskIdNumber(value) {
+  const clean = String(value || '');
+  if (!clean) return 'Not submitted';
+  if (clean.length <= 4) return clean;
+  return `${'*'.repeat(Math.max(0, clean.length - 4))}${clean.slice(-4)}`;
 }
 
 export default function AccountPage() {
@@ -75,6 +92,7 @@ export default function AccountPage() {
   }, [form.first_name, form.last_name, user?.full_name, user?.email]);
 
   const profileTheme = useMemo(() => buildProfileTheme(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
+  const ProfileIcon = useMemo(() => pickProfileIcon(user?.email || form.username || `${form.first_name}${form.last_name}`), [user?.email, form.username, form.first_name, form.last_name]);
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const kycLocked = kyc?.status === 'approved';
 
@@ -162,7 +180,10 @@ export default function AccountPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/12 text-2xl font-bold backdrop-blur">
-                {initials}
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <ProfileIcon className="h-5 w-5" />
+                  <span className="text-sm">{initials}</span>
+                </div>
               </div>
               <div className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em]">
                 {twoFactorEnabled ? '2FA Active' : '2FA Off'}
@@ -213,7 +234,7 @@ export default function AccountPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Phone</Label>
-                <Input value={form.phone} disabled={kycLocked} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+2519XXXXXXXX" />
+                <Input value={form.phone} disabled={kycLocked} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
               </div>
             </div>
             {kycLocked && <p className="mt-3 text-xs text-muted-foreground">Your identity details are locked after approved KYC. You can still change password and security settings.</p>}
@@ -221,6 +242,37 @@ export default function AccountPage() {
               <Button type="button" onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
                 {updateProfile.isPending ? 'Saving...' : 'Save profile'}
               </Button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-card p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <h2 className="font-semibold">KYC & Identity</h2>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Status</p>
+                <p className="mt-2 font-semibold capitalize">{String(kyc?.status || 'not_started').replace(/_/g, ' ')}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">ID Type</p>
+                <p className="mt-2 font-semibold capitalize">{String(kyc?.id_type || 'not submitted').replace(/_/g, ' ')}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4 md:col-span-2">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Address</p>
+                <p className="mt-2 text-sm font-medium">
+                  {[kyc?.street_address || kyc?.address, kyc?.city, kyc?.state, kyc?.postal_code, kyc?.country].filter(Boolean).join(', ') || 'Not submitted yet'}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Date of birth</p>
+                <p className="mt-2 font-semibold">{kyc?.date_of_birth || 'Not submitted'}</p>
+              </div>
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">ID Number</p>
+                <p className="mt-2 font-mono text-sm font-semibold">{maskIdNumber(kyc?.id_number)}</p>
+              </div>
             </div>
           </div>
 

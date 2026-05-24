@@ -172,12 +172,17 @@ export default function AdminKYC() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Name:</span> {selected.legal_name}</div>
+                <div><span className="text-muted-foreground">First / Last:</span> {[selected.first_name, selected.last_name].filter(Boolean).join(' ') || '-'}</div>
                 <div><span className="text-muted-foreground">DOB:</span> {selected.date_of_birth}</div>
                 <div><span className="text-muted-foreground">Phone:</span> {selected.phone}</div>
                 <div><span className="text-muted-foreground">Email:</span> {selected.email}</div>
                 <div><span className="text-muted-foreground">City:</span> {selected.city}</div>
+                <div><span className="text-muted-foreground">State:</span> {selected.state || '-'}</div>
+                <div><span className="text-muted-foreground">Postal Code:</span> {selected.postal_code || '-'}</div>
+                <div><span className="text-muted-foreground">Country:</span> {selected.country || 'Ethiopia'}</div>
                 <div><span className="text-muted-foreground">ID Type:</span> <span className="capitalize">{(selected.id_type || '').replace(/_/g, ' ')}</span></div>
                 <div><span className="text-muted-foreground">ID Number:</span> <span className="font-mono">{maskIdNumber(selected.id_number)}</span></div>
+                <div className="col-span-2"><span className="text-muted-foreground">Street Address:</span> {selected.street_address || selected.address || '-'}</div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <FilePreview url={selected.front_id_url} label="Front ID" />

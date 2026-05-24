@@ -180,6 +180,7 @@ export default function KYCPage() {
     }
   });
 
+  const needsBackId = form.id_type === 'national_id';
   const requiredMissing = [
     !form.first_name && 'First name',
     !form.last_name && 'Last name',
@@ -195,7 +196,6 @@ export default function KYCPage() {
     !selfieUrl && 'Selfie'
   ].filter(Boolean);
   const canSubmitKYC = requiredMissing.length === 0 && !submitKYC.isPending && !Object.values(uploading).some(Boolean);
-  const needsBackId = form.id_type === 'national_id';
 
   if (isLoading) return <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-muted border-t-primary rounded-full animate-spin" /></div>;
 
@@ -314,10 +314,7 @@ export default function KYCPage() {
           </div>
           <div>
             <Label className="text-sm">Phone</Label>
-            <div className="mt-1.5 flex overflow-hidden rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
-              <span className="flex items-center border-r border-input px-3 text-sm text-muted-foreground">+251</span>
-              <Input value={form.phone} onChange={e => setForm({...form, phone: normalizeEtPhone(e.target.value)})} placeholder="9XXXXXXXX" className="border-0 focus-visible:ring-0" />
-            </div>
+            <Input value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} className="mt-1.5" />
           </div>
           <div><Label className="text-sm">Email</Label><Input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="mt-1.5" /></div>
           <div className="md:col-span-2"><Label className="text-sm">Street Address</Label><Input value={form.street_address} onChange={e => setForm({...form, street_address: e.target.value, address: e.target.value})} className="mt-1.5" /></div>
@@ -348,7 +345,6 @@ export default function KYCPage() {
               <SelectContent>
                 <SelectItem value="national_id">National ID</SelectItem>
                 <SelectItem value="passport">Passport</SelectItem>
-                <SelectItem value="drivers_license">Driver's License</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -76,8 +76,8 @@ export default function Register() {
             </div>
           </div>
           <div>
-            <Label>Username</Label>
-            <Input value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, ''))} placeholder="letters_numbers_only" className="mt-1.5" />
+            <Label>Username <span className="text-muted-foreground">(optional)</span></Label>
+            <Input value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, ''))} className="mt-1.5" />
           </div>
           <div>
             <Label>Email</Label>
@@ -85,7 +85,7 @@ export default function Register() {
           </div>
           <div>
             <Label>Phone Number</Label>
-            <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="09..., 9..., or +251..." className="mt-1.5" />
+            <Input value={phone} onChange={(e) => setPhone(e.target.value)} className="mt-1.5" />
           </div>
           <div>
             <Label>Password</Label>
