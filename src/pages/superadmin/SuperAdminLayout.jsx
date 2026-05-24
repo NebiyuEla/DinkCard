@@ -7,10 +7,11 @@ import { REFRESH } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard,
-  HeadphonesIcon, Settings, FileText, LogOut, ShieldAlert
+  HeadphonesIcon, Settings, FileText, LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TermsModal from '@/components/TermsModal';
+import BrandLogo from '@/components/BrandLogo';
 
 const nav = [
   { label: 'Overview', path: '/superadmin/dashboard', icon: LayoutDashboard },
@@ -50,8 +51,7 @@ export default function SuperAdminLayout() {
       <header className="md:hidden sticky top-0 z-30 border-b border-border bg-card">
         <div className="h-14 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-primary" />
-            <span className="font-bold text-sm">Dink Card Admin</span>
+            <BrandLogo imageClassName="h-7 w-7 rounded-lg" labelClassName="font-bold text-sm" />
           </div>
           <Button variant="ghost" size="sm" onClick={handleLogout}>Sign Out</Button>
         </div>
@@ -77,9 +77,7 @@ export default function SuperAdminLayout() {
       {/* Sidebar */}
       <aside className="hidden md:flex w-56 shrink-0 border-r border-border bg-card flex-col">
         <div className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-            <ShieldAlert className="w-4 h-4 text-primary" />
-          </div>
+          <BrandLogo imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
           <div>
             <p className="font-bold text-sm leading-tight">Dink Card</p>
             <p className="text-[10px] text-muted-foreground">Super Admin</p>

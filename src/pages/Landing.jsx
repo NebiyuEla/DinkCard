@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
+import BrandLogo from '@/components/BrandLogo';
 import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
 import {
   ArrowRight,
   CheckCircle,
   ChevronDown,
-  CreditCard,
   DollarSign,
   Globe,
   Lock,
@@ -56,12 +56,7 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       <nav className="fixed top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <CreditCard className="h-4 w-4 text-primary-foreground" />
-            </div>
-            <span className="text-lg font-bold tracking-tight">Dink Card</span>
-          </div>
+          <BrandLogo imageClassName="h-8 w-8 rounded-lg" />
           <div className="flex items-center gap-3">
             <Link to="/login">
               <Button variant="ghost" size="sm">Sign In</Button>
@@ -109,7 +104,9 @@ export default function Landing() {
             <div className="rounded-3xl border border-border bg-card p-6 shadow-sm">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm font-semibold">Dink Card</p>
+                  <div className="mb-1">
+                    <BrandLogo imageClassName="h-7 w-7 rounded-lg" labelClassName="text-sm font-semibold" />
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">Virtual USD card</p>
                 </div>
                 <span className="text-sm font-bold tracking-[0.24em] text-primary">DINK</span>
@@ -246,12 +243,7 @@ export default function Landing() {
 
       <footer className="border-t border-border px-4 py-10">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 md:flex-row">
-          <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary">
-              <CreditCard className="h-3.5 w-3.5 text-primary-foreground" />
-            </div>
-            <span className="font-bold">Dink Card</span>
-          </div>
+          <BrandLogo imageClassName="h-7 w-7 rounded-md" labelClassName="font-bold text-base" />
           <div className="space-y-3">
             <LegalLinks />
             <p className="max-w-2xl text-center text-xs text-muted-foreground">{footerDisclaimer}</p>

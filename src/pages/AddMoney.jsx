@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle, Copy, DollarSign, ExternalLink, WalletCards } from 'lucide-react';
-import QRCode from 'qrcode';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, CheckCircle, DollarSign, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/api/client';
 import { useCurrentUser, useDeposits, useFeeSettings, useKYCStatus } from '@/hooks/useAppData';
 import { calculateDepositFees } from '@/lib/feeCalculator';
@@ -27,12 +25,9 @@ export default function AddMoney() {
   const [amountMode, setAmountMode] = useState('usd');
   const [enteredAmount, setEnteredAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
-  const [selectedNetwork, setSelectedNetwork] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [acceptedNotice, setAcceptedNotice] = useState(false);
   const [showFeeDetails, setShowFeeDetails] = useState(false);
-  const [generatedUsdcDeposit, setGeneratedUsdcDeposit] = useState(null);
-  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const rate = settings?.usd_to_etb_rate || 190;
   const amount = useMemo(() => {
@@ -47,63 +42,8 @@ export default function AddMoney() {
   const displayStyle = fees?.feeDisplayStyle || settings?.customer_fee_display_style || 'hybrid';
   const shouldShowDetails = displayStyle === 'detailed' || (displayStyle === 'hybrid' && showFeeDetails);
 
-  const usdcNetworksQuery = useQuery({
-    queryKey: ['usdc-networks'],
-    queryFn: () => apiClient.payments.getUsdcNetworks(),
-    enabled: kyc?.status === 'approved'
-  });
-
   const latestDeposit = deposits?.[0];
   const kycApproved = kyc?.status === 'approved';
-  const activeUsdcDeposit = generatedUsdcDeposit
-    || deposits?.find((deposit) => deposit.payment_method === 'usdc' && ['pending_transfer', 'awaiting_review'].includes(deposit.status))
-    || null;
-  const availableUsdcNetworks = usdcNetworksQuery.data?.networks || [];
-  const usdcFeatureAvailable = !!activeUsdcDeposit || availableUsdcNetworks.length > 0;
-
-  useEffect(() => {
-    if (activeUsdcDeposit) {
-      setPaymentMethod('usdc');
-    }
-  }, [activeUsdcDeposit]);
-
-  useEffect(() => {
-    if (paymentMethod === 'usdc' && !activeUsdcDeposit && usdcNetworksQuery.isError) {
-      setPaymentMethod('chapa');
-    }
-  }, [activeUsdcDeposit, paymentMethod, usdcNetworksQuery.isError]);
-
-  useEffect(() => {
-    let ignore = false;
-    const address = String(activeUsdcDeposit?.payment_address || '').trim();
-    if (!address) {
-      setQrCodeUrl('');
-      return undefined;
-    }
-
-    QRCode.toDataURL(address, {
-      margin: 1,
-      width: 220,
-      color: {
-        dark: '#0f172a',
-        light: '#ffffff'
-      }
-    }).then((url) => {
-      if (!ignore) setQrCodeUrl(url);
-    }).catch(() => {
-      if (!ignore) setQrCodeUrl('');
-    });
-
-    return () => {
-      ignore = true;
-    };
-  }, [activeUsdcDeposit?.payment_address]);
-
-  useEffect(() => {
-    if (!selectedNetwork && availableUsdcNetworks.length) {
-      setSelectedNetwork(availableUsdcNetworks[0].value);
-    }
-  }, [selectedNetwork, availableUsdcNetworks]);
 
   useEffect(() => {
     const txRef = new URLSearchParams(window.location.search).get('tx_ref');
@@ -133,39 +73,12 @@ export default function AddMoney() {
     }
   });
 
-  const createUsdcAddress = useMutation({
-    mutationFn: () => apiClient.payments.createUsdcAddress({ amountUsd: amount, network: selectedNetwork }),
-    onSuccess: (result) => {
-      setGeneratedUsdcDeposit({
-        id: result.id,
-        transaction_reference: result.reference,
-        payment_address: result.address,
-        payment_network: result.network,
-        payment_currency: result.currency,
-        payment_amount: result.amountUsdc,
-        status: 'pending_transfer'
-      });
-      invalidateOperationalData(queryClient);
-      toast.success('USDC address generated.');
-    },
-    onError: (error) => toast.error(error.message || 'Unable to generate a USDC address')
-  });
-
   const goBack = () => {
     if (window.history.length > 1) {
       navigate(-1);
       return;
     }
     navigate('/dashboard');
-  };
-
-  const copyText = async (value, label) => {
-    try {
-      await navigator.clipboard.writeText(String(value || ''));
-      toast.success(`${label} copied`);
-    } catch {
-      toast.error(`Could not copy ${label.toLowerCase()}`);
-    }
   };
 
   return (
@@ -192,25 +105,6 @@ export default function AddMoney() {
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <div className="space-y-4 sm:space-y-5">
-          <div>
-            <Label className="text-sm font-medium">Funding method</Label>
-            <div className={`mt-1.5 grid gap-2 ${usdcFeatureAvailable ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              <Button type="button" variant={paymentMethod === 'chapa' ? 'default' : 'outline'} className={paymentMethod === 'chapa' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setPaymentMethod('chapa')}>
-                Pay in ETB
-              </Button>
-              {usdcFeatureAvailable && (
-                <Button type="button" variant={paymentMethod === 'usdc' ? 'default' : 'outline'} className={paymentMethod === 'usdc' ? 'bg-primary text-primary-foreground' : ''} onClick={() => setPaymentMethod('usdc')}>
-                  Pay with USDC
-                </Button>
-              )}
-            </div>
-            {!usdcFeatureAvailable && kycApproved && usdcNetworksQuery.isError && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                USDC funding is not available on your current Bitnob account or environment right now.
-              </p>
-            )}
-          </div>
-
           <div>
             <Label className="text-sm font-medium">Amount</Label>
             <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -240,153 +134,59 @@ export default function AddMoney() {
             </p>
           </div>
 
-          {paymentMethod === 'chapa' && (
-            <>
-              <div>
-                <Label className="text-sm font-medium">Phone Number</Label>
-                <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+251..." className="mt-1.5" />
+          <div>
+            <Label className="text-sm font-medium">Phone Number</Label>
+            <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="+251..." className="mt-1.5" />
+          </div>
+
+          {fees && (
+            <div className="space-y-3 border-t border-border pt-4 text-sm">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl bg-secondary/35 p-3">
+                  <p className="text-xs text-muted-foreground">Card amount</p>
+                  <p className="font-mono font-semibold">${fees.cardAmountUsd.toFixed(2)}</p>
+                </div>
+                <div className="rounded-xl bg-secondary/35 p-3">
+                  <p className="text-xs text-muted-foreground">Exchange rate</p>
+                  <p className="font-mono font-semibold">1 USD = {fees.exchangeRate.toLocaleString()} ETB</p>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+                <span className="text-muted-foreground">Conversion amount</span>
+                <span className="text-right font-mono font-semibold">{fees.etbAmount.toLocaleString()} ETB</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+                <span className="text-muted-foreground">Fees & charges</span>
+                <span className="text-right font-mono font-semibold">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+                <span className="text-muted-foreground">Gateway fee (%)</span>
+                <span className="text-right font-mono font-semibold">{fees.gatewayFeePercentage.toFixed(2)}%</span>
+              </div>
+              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">Total payable</span>
+                  <span className="text-right font-mono text-lg font-bold text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span>
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} service balance.</p>
               </div>
 
-              {fees && (
-                <div className="space-y-3 border-t border-border pt-4 text-sm">
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-secondary/35 p-3">
-                      <p className="text-xs text-muted-foreground">Card amount</p>
-                      <p className="font-mono font-semibold">${fees.cardAmountUsd.toFixed(2)}</p>
-                    </div>
-                    <div className="rounded-xl bg-secondary/35 p-3">
-                      <p className="text-xs text-muted-foreground">Exchange rate</p>
-                      <p className="font-mono font-semibold">1 USD = {fees.exchangeRate.toLocaleString()} ETB</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                    <span className="text-muted-foreground">Conversion amount</span>
-                    <span className="text-right font-mono font-semibold">{fees.etbAmount.toLocaleString()} ETB</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                    <span className="text-muted-foreground">Fees & charges</span>
-                    <span className="text-right font-mono font-semibold">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                    <span className="text-muted-foreground">Gateway fee (%)</span>
-                    <span className="text-right font-mono font-semibold">{fees.gatewayFeePercentage.toFixed(2)}%</span>
-                  </div>
-                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold">Total payable</span>
-                      <span className="text-right font-mono text-lg font-bold text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} available service balance.</p>
-                  </div>
-
-                  {displayStyle === 'hybrid' && (
-                    <button
-                      type="button"
-                      onClick={() => setShowFeeDetails((value) => !value)}
-                      className="text-xs font-semibold text-primary hover:underline"
-                    >
-                      {shouldShowDetails ? 'Hide fee details' : 'View fee details'}
-                    </button>
-                  )}
-
-                  {shouldShowDetails && (
-                    <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Fixed charge</span><span className="font-mono">{(settings?.minimum_service_fee_etb ?? 100).toLocaleString()} ETB</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Charge percentage</span><span className="font-mono">{(settings?.service_margin_percentage ?? 15).toFixed(2)}%</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Payment processing fee</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">Dink Card service fee</span><span className="font-mono">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span></div>
-                    </div>
-                  )}
-                </div>
+              {displayStyle === 'hybrid' && (
+                <button
+                  type="button"
+                  onClick={() => setShowFeeDetails((value) => !value)}
+                  className="text-xs font-semibold text-primary hover:underline"
+                >
+                  {shouldShowDetails ? 'Hide fee details' : 'View fee details'}
+                </button>
               )}
-            </>
-          )}
 
-          {paymentMethod === 'usdc' && (
-            <div className="space-y-4 border-t border-border pt-4">
-              <div>
-                <Label className="text-sm font-medium">USDC network</Label>
-                <Select value={selectedNetwork} onValueChange={setSelectedNetwork}>
-                  <SelectTrigger className="mt-1.5">
-                    <SelectValue placeholder={usdcNetworksQuery.isLoading ? 'Loading networks...' : 'Choose a network'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableUsdcNetworks.map((network) => (
-                      <SelectItem key={network.value} value={network.value}>{network.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
-                <div className="flex items-center gap-2 font-semibold text-primary">
-                  <WalletCards className="h-4 w-4" />
-                  USDC funding
-                </div>
-                <p className="mt-2 text-muted-foreground">
-                  Generate a USDC address for your preferred network, send the exact amount, and wait for automatic provider confirmation.
-                </p>
-                {amount > 0 && (
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-background/70 p-3">
-                      <p className="text-xs text-muted-foreground">Send</p>
-                      <p className="font-mono text-base font-semibold">{amount.toFixed(2)} USDC</p>
-                    </div>
-                    <div className="rounded-xl bg-background/70 p-3">
-                      <p className="text-xs text-muted-foreground">Network</p>
-                      <p className="font-mono text-base font-semibold">{selectedNetwork || '--'}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {activeUsdcDeposit && (
-                <div className="space-y-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold">USDC deposit address</p>
-                      <p className="text-xs text-muted-foreground capitalize">{String(activeUsdcDeposit.status || '').replace(/_/g, ' ')}</p>
-                    </div>
-                    <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                      {activeUsdcDeposit.payment_network}
-                    </span>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-card p-3">
-                      <p className="text-xs text-muted-foreground">Exact amount</p>
-                      <p className="font-mono font-semibold">{Number(activeUsdcDeposit.payment_amount || 0).toFixed(2)} USDC</p>
-                    </div>
-                    <div className="rounded-xl bg-card p-3">
-                      <p className="text-xs text-muted-foreground">Reference</p>
-                      <div className="mt-1 flex items-start justify-between gap-2">
-                        <p className="min-w-0 break-all font-mono text-xs">{activeUsdcDeposit.transaction_reference}</p>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(activeUsdcDeposit.transaction_reference, 'Reference')}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid gap-4 lg:grid-cols-[1fr_220px]">
-                    <div className="rounded-xl bg-card p-3">
-                      <p className="text-xs text-muted-foreground">Deposit address</p>
-                      <div className="mt-1 flex items-start justify-between gap-2">
-                        <p className="min-w-0 break-all font-mono text-xs">{activeUsdcDeposit.payment_address || 'Address not available yet'}</p>
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(activeUsdcDeposit.payment_address, 'Address')} disabled={!activeUsdcDeposit.payment_address}>
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-center rounded-xl bg-card p-3">
-                      {qrCodeUrl ? (
-                        <img src={qrCodeUrl} alt="USDC deposit address QR code" className="h-[180px] w-[180px] rounded-lg border border-border bg-white p-2" />
-                      ) : (
-                        <div className="text-center text-xs text-muted-foreground">QR code will appear when the address is ready.</div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-xl bg-card p-3 text-xs text-muted-foreground">
-                    After you send the USDC, Dink Card will wait for Bitnob to confirm the deposit and then credit your available balance automatically.
-                  </div>
+              {shouldShowDetails && (
+                <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Fixed charge</span><span className="font-mono">{(settings?.minimum_service_fee_etb ?? 100).toLocaleString()} ETB</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Charge percentage</span><span className="font-mono">{(settings?.service_margin_percentage ?? 15).toFixed(2)}%</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Payment processing fee</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Service fee</span><span className="font-mono">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span></div>
                 </div>
               )}
             </div>
@@ -398,24 +198,14 @@ export default function AddMoney() {
           </label>
           <LegalLinks />
 
-          {paymentMethod === 'chapa' ? (
-            <Button
-              className="h-12 w-full bg-primary text-primary-foreground"
-              disabled={!kycApproved || !fees || !phoneNumber || !acceptedNotice || startCheckout.isPending}
-              onClick={() => startCheckout.mutate()}
-            >
-              {startCheckout.isPending ? 'Opening checkout...' : 'Continue to Secure Checkout'}
-              {!startCheckout.isPending && <ExternalLink className="ml-2 h-4 w-4" />}
-            </Button>
-          ) : (
-            <Button
-              className="h-12 w-full bg-primary text-primary-foreground"
-              disabled={!kycApproved || !amount || !selectedNetwork || !acceptedNotice || !!activeUsdcDeposit || createUsdcAddress.isPending}
-              onClick={() => createUsdcAddress.mutate()}
-            >
-              {createUsdcAddress.isPending ? 'Generating address...' : 'Generate USDC Address'}
-            </Button>
-          )}
+          <Button
+            className="h-12 w-full bg-primary text-primary-foreground"
+            disabled={!kycApproved || !fees || !phoneNumber || !acceptedNotice || startCheckout.isPending}
+            onClick={() => startCheckout.mutate()}
+          >
+            {startCheckout.isPending ? 'Opening checkout...' : 'Continue to Secure Checkout'}
+            {!startCheckout.isPending && <ExternalLink className="ml-2 h-4 w-4" />}
+          </Button>
         </div>
       </div>
 

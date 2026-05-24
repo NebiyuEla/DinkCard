@@ -33,8 +33,14 @@ const statusColors = {
   resubmit_required: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
 };
 
+const statusLabels = {
+  pending_transfer: 'Waiting Payment',
+  awaiting_review: 'Processing',
+  pending_payment: 'Pending Payment'
+};
+
 export default function StatusBadge({ status, className }) {
-  const label = (status || 'unknown').replace(/_/g, ' ');
+  const label = statusLabels[status] || (status || 'unknown').replace(/_/g, ' ');
   return (
     <span className={cn(
       "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize border",

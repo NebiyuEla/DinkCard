@@ -213,7 +213,7 @@ export default function CardsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Enter card PIN</DialogTitle>
-            <DialogDescription>Use your 4-digit card PIN before fetching sensitive card details from Bitnob.</DialogDescription>
+            <DialogDescription>Use your 4-digit card PIN before showing sensitive card details.</DialogDescription>
           </DialogHeader>
           <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
           <DialogFooter>

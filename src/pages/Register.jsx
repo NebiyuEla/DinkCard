@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,6 +11,7 @@ import { useAuth } from '@/lib/AuthContext';
 import TermsContent from '@/components/TermsContent';
 import LegalLinks from '@/components/LegalLinks';
 import PoweredByDinkDev from '@/components/PoweredByDinkDev';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
@@ -59,9 +59,7 @@ export default function Register() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="w-7 h-7 text-primary-foreground" />
-          </div>
+          <BrandLogo className="justify-center mb-4" imageClassName="h-14 w-14 rounded-2xl" showLabel={false} />
           <h1 className="text-3xl font-bold">Create your account</h1>
           <p className="text-sm text-muted-foreground mt-2">Agree to the Terms & Conditions before using the platform.</p>
         </div>

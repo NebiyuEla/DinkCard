@@ -1,18 +1,20 @@
-import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import React, { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { useCurrentUser, useWallet, useWalletTransactions, useFeeSettings } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal } from 'lucide-react';
+import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal, Copy, QrCode } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/api/client';
 import { invalidateOperationalData } from '@/lib/realtime';
 import { toast } from 'sonner';
+import QRCode from 'qrcode';
 
 export default function WalletPage() {
   const queryClient = useQueryClient();
@@ -24,6 +26,10 @@ export default function WalletPage() {
   const [recipientInput, setRecipientInput] = useState('');
   const [recipient, setRecipient] = useState(null);
   const [shareAmount, setShareAmount] = useState('');
+  const [usdcOpen, setUsdcOpen] = useState(false);
+  const [usdcAmount, setUsdcAmount] = useState('');
+  const [usdcNetwork, setUsdcNetwork] = useState('');
+  const [usdcQr, setUsdcQr] = useState('');
 
   const balance = wallet?.available_balance || 0;
   const locked = wallet?.locked_balance || 0;
@@ -41,6 +47,46 @@ export default function WalletPage() {
     balance_share_sent: <SendHorizontal className="w-4 h-4 text-accent" />,
     balance_share_received: <SendHorizontal className="w-4 h-4 text-primary" />
   };
+
+  const typeLabels = {
+    balance_share_sent: 'Money sent',
+    balance_share_received: 'Money received'
+  };
+
+  const usdcNetworksQuery = useQuery({
+    queryKey: ['usdc-networks'],
+    queryFn: () => apiClient.payments.getUsdcNetworks()
+  });
+
+  const { data: deposits } = useQuery({
+    queryKey: ['deposits', user?.email, 'wallet-view'],
+    queryFn: () => apiClient.entities.Deposit.filter({ user_id: user?.email }, '-created_date'),
+    enabled: !!user?.email
+  });
+
+  const currentUsdcDeposit = deposits?.find((deposit) => deposit.payment_method === 'usdc' && ['pending_transfer', 'awaiting_review'].includes(deposit.status)) || null;
+  const usdcNetworks = usdcNetworksQuery.data?.networks || [];
+
+  useEffect(() => {
+    if (!usdcNetwork && usdcNetworks.length) {
+      setUsdcNetwork(usdcNetworks[0].value);
+    }
+  }, [usdcNetwork, usdcNetworks]);
+
+  useEffect(() => {
+    let ignore = false;
+    const address = String(currentUsdcDeposit?.payment_address || '').trim();
+    if (!address) {
+      setUsdcQr('');
+      return undefined;
+    }
+    QRCode.toDataURL(address, { margin: 1, width: 180 }).then((value) => {
+      if (!ignore) setUsdcQr(value);
+    }).catch(() => {
+      if (!ignore) setUsdcQr('');
+    });
+    return () => { ignore = true; };
+  }, [currentUsdcDeposit?.payment_address]);
 
   const lookupRecipient = useMutation({
     mutationFn: () => apiClient.wallet.lookupShareRecipient(recipientInput),
@@ -64,8 +110,26 @@ export default function WalletPage() {
       setRecipient(null);
       setShareAmount('');
     },
-    onError: (error) => toast.error(error.message || 'Could not share balance')
+    onError: (error) => toast.error(error.message || 'Could not send money')
   });
+
+  const createUsdcAddress = useMutation({
+    mutationFn: () => apiClient.payments.createUsdcAddress({ amountUsd: Number(usdcAmount), network: usdcNetwork }),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('USDC address ready');
+    },
+    onError: (error) => toast.error(error.message || 'Could not generate address')
+  });
+
+  const copyText = async (value, label) => {
+    try {
+      await navigator.clipboard.writeText(String(value || ''));
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}`);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -76,7 +140,10 @@ export default function WalletPage() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setShareOpen(true)}>
-            <SendHorizontal className="w-4 h-4 mr-2" /> Share Balance
+            <SendHorizontal className="w-4 h-4 mr-2" /> Send Money
+          </Button>
+          <Button variant="outline" onClick={() => setUsdcOpen(true)}>
+            <QrCode className="w-4 h-4 mr-2" /> USDC Deposit
           </Button>
           <Link to="/add-money">
           <Button className="bg-primary text-primary-foreground">
@@ -104,7 +171,7 @@ export default function WalletPage() {
                   {typeIcons[tx.type] || <ArrowDownUp className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium capitalize truncate">{(tx.type || '').replace(/_/g, ' ')}</p>
+                  <p className="text-sm font-medium capitalize truncate">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
                   <p className="text-xs text-muted-foreground truncate">{tx.description || tx.reference}</p>
                 </div>
                 <div className="text-right shrink-0">
@@ -127,8 +194,8 @@ export default function WalletPage() {
       <Dialog open={shareOpen} onOpenChange={setShareOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Share Balance</DialogTitle>
-            <DialogDescription>Send balance with no fee using the receiver&apos;s email, phone number, or username.</DialogDescription>
+            <DialogTitle>Send Money</DialogTitle>
+            <DialogDescription>Send money with no fee using the receiver&apos;s email, phone number, or username.</DialogDescription>
           </DialogHeader>
 
           {!recipient ? (
@@ -155,15 +222,97 @@ export default function WalletPage() {
                 <Label>Amount in USD</Label>
                 <Input type="number" min="0.01" step="0.01" value={shareAmount} onChange={(event) => setShareAmount(event.target.value)} />
               </div>
-              <p className="text-xs text-muted-foreground">No fee is charged for this balance share.</p>
+              <p className="text-xs text-muted-foreground">No fee is charged for this transfer.</p>
               <DialogFooter>
                 <Button variant="outline" onClick={() => { setRecipient(null); setShareAmount(''); }}>Back</Button>
                 <Button onClick={() => shareBalance.mutate()} disabled={!Number(shareAmount) || Number(shareAmount) > balance || shareBalance.isPending}>
-                  {shareBalance.isPending ? 'Sending...' : 'Send Balance'}
+                  {shareBalance.isPending ? 'Sending...' : 'Send Money'}
                 </Button>
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={usdcOpen} onOpenChange={setUsdcOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>USDC Deposit</DialogTitle>
+            <DialogDescription>Add to your service balance with a compact USDC deposit address.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {!currentUsdcDeposit ? (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label>Amount in USD</Label>
+                    <Input type="number" min="5" step="0.01" value={usdcAmount} onChange={(event) => setUsdcAmount(event.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Network</Label>
+                    <Select value={usdcNetwork} onValueChange={setUsdcNetwork}>
+                      <SelectTrigger><SelectValue placeholder="Choose network" /></SelectTrigger>
+                      <SelectContent>
+                        {usdcNetworks.map((network) => (
+                          <SelectItem key={network.value} value={network.value}>{network.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setUsdcOpen(false)}>Close</Button>
+                  <Button onClick={() => createUsdcAddress.mutate()} disabled={!usdcAmount || !usdcNetwork || createUsdcAddress.isPending}>
+                    {createUsdcAddress.isPending ? 'Generating...' : 'Generate Address'}
+                  </Button>
+                </DialogFooter>
+              </>
+            ) : (
+              <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">USDC deposit</p>
+                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentUsdcDeposit.status} className="text-[10px]" /></p>
+                  </div>
+                  <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    {currentUsdcDeposit.payment_network}
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Amount</p>
+                    <p className="font-mono font-semibold">{Number(currentUsdcDeposit.payment_amount || 0).toFixed(2)} USDC</p>
+                  </div>
+                  <div className="rounded-xl bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Reference</p>
+                    <div className="mt-1 flex items-start justify-between gap-2">
+                      <p className="min-w-0 break-all font-mono text-xs">{currentUsdcDeposit.transaction_reference}</p>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentUsdcDeposit.transaction_reference, 'Reference')}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+                  <div className="rounded-xl bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Address</p>
+                    <div className="mt-1 flex items-start justify-between gap-2">
+                      <p className="min-w-0 break-all font-mono text-xs">{currentUsdcDeposit.payment_address}</p>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentUsdcDeposit.payment_address, 'Address')}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-center rounded-xl bg-card p-3">
+                    {usdcQr ? <img src={usdcQr} alt="USDC deposit QR code" className="h-[150px] w-[150px] rounded-lg border border-border bg-white p-2" /> : <div className="text-xs text-muted-foreground">QR loading...</div>}
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setUsdcOpen(false)}>Close</Button>
+                </DialogFooter>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

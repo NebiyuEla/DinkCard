@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CreditCard, Eye, EyeOff, Shield } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { apiClient } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import LegalLinks from '@/components/LegalLinks';
 import PoweredByDinkDev from '@/components/PoweredByDinkDev';
+import BrandLogo from '@/components/BrandLogo';
 
 export default function Login() {
   const { setAuthenticatedUser } = useAuth();
@@ -69,9 +70,7 @@ export default function Login() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mx-auto mb-4">
-            <CreditCard className="w-7 h-7 text-primary-foreground" />
-          </div>
+          <BrandLogo className="justify-center mb-4" imageClassName="h-14 w-14 rounded-2xl" showLabel={false} />
           <h1 className="text-3xl font-bold">Sign in to Dink Card</h1>
           <p className="text-sm text-muted-foreground mt-2">You must agree to the Terms & Conditions before using the platform.</p>
         </div>

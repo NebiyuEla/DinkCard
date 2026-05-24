@@ -5,7 +5,6 @@ import {
   Bell,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   HeadphonesIcon,
   LayoutDashboard,
   LogOut,
@@ -18,6 +17,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/api/client';
+import BrandLogo from '@/components/BrandLogo';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -56,16 +56,9 @@ export default function Sidebar({ user, unreadCount = 0 }) {
       )}>
         <div className="flex h-16 items-center border-b border-border px-4">
           {!collapsed ? (
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                <CreditCard className="h-4 w-4 text-primary-foreground" />
-              </div>
-              <span className="text-lg font-bold tracking-tight">Dink Card</span>
-            </div>
+            <BrandLogo imageClassName="h-8 w-8 rounded-lg" />
           ) : (
-            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-              <CreditCard className="h-4 w-4 text-primary-foreground" />
-            </div>
+            <BrandLogo className="mx-auto" imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
           )}
         </div>
 

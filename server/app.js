@@ -19,6 +19,7 @@ import {
   createVirtualCardForUser,
   fundVirtualCard,
   handleBitnobWebhook,
+  reconcilePendingUsdcDeposits,
   revealCardDetails,
   setCardPin,
   terminateCard,
@@ -1750,6 +1751,7 @@ export function createApp() {
     try {
       if (req.params.entity === 'Deposit') {
         expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
+        reconcilePendingUsdcDeposits();
       }
       const rows = queryEntities(
         req.params.entity,
