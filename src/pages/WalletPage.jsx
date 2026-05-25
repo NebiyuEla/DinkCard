@@ -251,7 +251,7 @@ export default function WalletPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Crypto Deposit</DialogTitle>
-            <DialogDescription>Add to your service balance with a compact deposit address.</DialogDescription>
+            <DialogDescription>Generate a deposit address and add funds with crypto.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {!currentCryptoDeposit ? (
@@ -302,19 +302,10 @@ export default function WalletPage() {
                     {currentCryptoDeposit.payment_network}
                   </span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-1">
                   <div className="rounded-xl bg-card p-3">
                     <p className="text-xs text-muted-foreground">Amount</p>
                     <p className="font-mono font-semibold">{Number(currentCryptoDeposit.payment_amount || 0).toFixed(2)} {currentCryptoDeposit.payment_currency || 'USDC'}</p>
-                  </div>
-                  <div className="rounded-xl bg-card p-3">
-                    <p className="text-xs text-muted-foreground">Reference</p>
-                    <div className="mt-1 flex items-start justify-between gap-2">
-                      <p className="min-w-0 break-all font-mono text-xs">{currentCryptoDeposit.transaction_reference}</p>
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentCryptoDeposit.transaction_reference, 'Reference')}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-[1fr_180px]">

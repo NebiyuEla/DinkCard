@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, Shield, Snowflake, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -26,6 +26,14 @@ function parseJson(value, fallback = {}) {
 
 function detailValue(...values) {
   return values.find((value) => String(value || '').trim()) || '-';
+}
+
+function normalizeCardStatus(status) {
+  const value = String(status || 'pending').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
+  if (['frozen', 'freeze', 'locked', 'suspended'].includes(value)) return 'frozen';
+  if (['terminated', 'deleted', 'closed', 'cancelled', 'canceled'].includes(value)) return 'terminated';
+  return value;
 }
 
 export default function CardsPage() {
@@ -94,13 +102,21 @@ export default function CardsPage() {
     toast.success(`${label} copied`);
   };
 
-  const activeCards = useMemo(() => cards?.filter((card) => card.status !== 'terminated') || [], [cards]);
+  const activeCards = useMemo(() => cards?.filter((card) => normalizeCardStatus(card.status) !== 'terminated') || [], [cards]);
   const selectedBillingAddress = parseJson(selectedCard?.billing_address);
   const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
+  const selectedStatus = normalizeCardStatus(selectedCard?.status);
   const fullExpiry = [
     detailValue(secureDetails?.expiry_month, selectedCard?.expiry_month),
     detailValue(secureDetails?.expiry_year, selectedCard?.expiry_year)
   ].join('/');
+  const cardTransactions = useQuery({
+    queryKey: ['card-transactions', selectedCard?.id],
+    queryFn: () => apiClient.cards.transactions(selectedCard.id),
+    enabled: Boolean(selectedCard?.id),
+    retry: false
+  });
+  const cardTransactionRows = cardTransactions.data?.transactions || [];
 
   useEffect(() => {
     if (activeCards.length > 0 && (!selectedCard || !activeCards.some((card) => card.id === selectedCard.id))) {
@@ -109,7 +125,7 @@ export default function CardsPage() {
   }, [activeCards, selectedCard]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 pb-36 lg:pb-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
@@ -145,6 +161,7 @@ export default function CardsPage() {
                 <VirtualCardDisplay
                   card={{
                     ...card,
+                    status: normalizeCardStatus(card.status),
                     card_number_encrypted: secureDetails?.card_number,
                     cvv_encrypted: secureDetails?.cvv,
                     expiry_month: secureDetails?.expiry_month || card.expiry_month,
@@ -158,11 +175,12 @@ export default function CardsPage() {
 
           {selectedCard && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-              <div className="rounded-2xl border border-border bg-card/60 p-4 sm:p-5">
+              <div className="rounded-2xl border border-border bg-card/60 p-3 sm:p-5">
                 <div className="flex justify-center">
                 <VirtualCardDisplay
                   card={{
                     ...selectedCard,
+                    status: selectedStatus,
                     card_number_encrypted: secureDetails?.card_number,
                     cvv_encrypted: secureDetails?.cvv,
                     expiry_month: secureDetails?.expiry_month || selectedCard.expiry_month,
@@ -171,6 +189,26 @@ export default function CardsPage() {
                   showDetails={Boolean(secureDetails)}
                 />
                 </div>
+                {secureDetails && (
+                  <div className="mx-auto mt-3 grid max-w-[340px] grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-secondary/40 p-2">
+                      <p className="text-muted-foreground">Address</p>
+                      <p className="mt-1 break-words">{detailValue(secureDetails?.address, shownAddress.address, shownAddress.street, shownAddress.line1)}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/40 p-2">
+                      <p className="text-muted-foreground">ZIP / Postal</p>
+                      <p className="mt-1 font-mono">{detailValue(secureDetails?.postal_code, shownAddress.postal_code, shownAddress.zip)}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/40 p-2">
+                      <p className="text-muted-foreground">City</p>
+                      <p className="mt-1">{detailValue(secureDetails?.city, shownAddress.city)}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/40 p-2">
+                      <p className="text-muted-foreground">State / Country</p>
+                      <p className="mt-1">{[detailValue(secureDetails?.state, shownAddress.state, shownAddress.region), detailValue(secureDetails?.country, shownAddress.country)].filter((part) => part !== '-').join(', ') || '-'}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -200,12 +238,12 @@ export default function CardsPage() {
                   </Button>
                 </Link>
 
-                {selectedCard.status === 'active' ? (
-                  <Button variant="outline" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'freeze' : 'set-pin')}>
+                {selectedStatus === 'active' ? (
+                  <Button variant="outline" className="col-span-2 mx-auto w-full max-w-xs" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'freeze' : 'set-pin')}>
                     <Snowflake className="w-4 h-4 mr-2" /> Freeze
                   </Button>
-                ) : selectedCard.status === 'frozen' ? (
-                  <Button variant="outline" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'unfreeze' : 'set-pin')}>
+                ) : selectedStatus === 'frozen' ? (
+                  <Button variant="outline" className="col-span-2 mx-auto w-full max-w-xs" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'unfreeze' : 'set-pin')}>
                     <Play className="w-4 h-4 mr-2" /> Unfreeze
                   </Button>
                 ) : null}
@@ -213,9 +251,9 @@ export default function CardsPage() {
               </div>
 
               <div className="bg-card border border-border rounded-xl p-4 space-y-3 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedCard.status} /></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedStatus} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
-                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00 per card transaction</span></div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00</span></div>
                 <div className="flex justify-between gap-4"><span className="text-muted-foreground">Card number</span><span className="break-all text-right font-mono">{secureDetails?.card_number || selectedCard.masked_pan || `**** ${selectedCard.last_four || '----'}`}</span></div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg bg-secondary/40 p-3">
@@ -227,17 +265,31 @@ export default function CardsPage() {
                     <p className="mt-1 font-mono font-semibold">{fullExpiry.replace('-/', '**/').replace('/-', '/**')}</p>
                   </div>
                 </div>
-                <div className="rounded-lg bg-secondary/40 p-3">
-                  <p className="text-xs text-muted-foreground">Billing address</p>
-                  <p className="mt-1 text-sm">
-                    {[detailValue(secureDetails?.address, shownAddress.address, shownAddress.street, shownAddress.line1), detailValue(secureDetails?.city, shownAddress.city), detailValue(secureDetails?.state, shownAddress.state, shownAddress.region), detailValue(secureDetails?.postal_code, shownAddress.postal_code, shownAddress.zip), detailValue(secureDetails?.country, shownAddress.country)]
-                      .filter((part) => part && part !== '-')
-                      .join(', ') || '-'}
-                  </p>
-                </div>
               </div>
 
-              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+              <div className="rounded-xl border border-border bg-card p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-semibold">Card Transactions</p>
+                  {cardTransactions.isFetching && <span className="text-xs text-muted-foreground">Loading...</span>}
+                </div>
+                {!cardTransactionRows.length ? (
+                  <p className="text-sm text-muted-foreground">No card transactions yet.</p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {cardTransactionRows.slice(0, 8).map((tx, index) => (
+                      <div key={tx.id || tx.reference || index} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <div className="min-w-0">
+                          <p className="truncate font-medium capitalize">{String(tx.type || tx.description || 'Transaction').replace(/_/g, ' ')}</p>
+                          <p className="truncate text-xs text-muted-foreground">{tx.status || tx.reference || ''}</p>
+                        </div>
+                        <p className="shrink-0 font-mono font-semibold">${Number(tx.amount || tx.display_amount || 0).toFixed(2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-10 rounded-xl border border-destructive/20 bg-destructive/5 p-4 lg:mb-0">
                 <p className="text-sm font-semibold text-destructive">Danger Zone</p>
                 <p className="mt-1 text-xs text-muted-foreground">Terminate only when you are done with this card. If you set a PIN, you will need it here too.</p>
                 <Button variant="outline" className="mt-3 text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>

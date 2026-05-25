@@ -21,6 +21,15 @@ function getBitnobCard(response) {
   return response?.data?.card || response?.data || response?.card || {};
 }
 
+function normalizeProviderCardStatus(value, fallback = 'pending') {
+  const raw = String(value || fallback || 'pending').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(raw)) return 'active';
+  if (['frozen', 'freeze', 'locked', 'suspended'].includes(raw)) return 'frozen';
+  if (['terminated', 'deleted', 'closed', 'cancelled', 'canceled'].includes(raw)) return 'terminated';
+  if (['failed', 'declined', 'rejected'].includes(raw)) return 'failed';
+  return raw || fallback;
+}
+
 function getEffectiveMinCardFunding(settings) {
   const raw = Number(settings?.min_card_funding_usd);
   if (!Number.isFinite(raw) || raw <= 0) return 3;
@@ -383,8 +392,9 @@ export async function createVirtualCardForUser(user, payload) {
 }
 
 export async function fundVirtualCard(user, cardId, amount) {
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND user_id = ?').get(cardId, user.email);
+  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND user_id = ?').get(cardId, user.email);
   if (!card) throw new Error('Card not found');
+  card = await refreshLocalCardFromProvider(card);
   if (!['active', 'frozen'].includes(card.status)) {
     throw new Error('Only active or frozen cards can be funded.');
   }
@@ -476,7 +486,7 @@ export async function setCardPin(user, cardId, pin) {
 }
 
 export async function revealCardDetails(user, cardId, pin) {
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   if (!card.card_pin_hash) throw new Error('Set a 4-digit card PIN first.');
@@ -484,6 +494,7 @@ export async function revealCardDetails(user, cardId, pin) {
   if (!validPin) {
     throw new Error('Incorrect card PIN');
   }
+  card = await refreshLocalCardFromProvider(card);
   if (!['active', 'frozen'].includes(card.status)) throw new Error('Card details are unavailable for this card status.');
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
   const response = await bitnobRequest('GET', `/api/cards/${card.provider_card_id}/secure`);
@@ -517,6 +528,19 @@ export async function revealCardDetails(user, cardId, pin) {
   };
 }
 
+export async function getVirtualCardTransactions(user, cardId) {
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  if (!card) throw new Error('Card not found');
+  if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
+  if (!card.provider_card_id) return [];
+  const response = await bitnobRequest('GET', `/api/cards/${encodeURIComponent(card.provider_card_id)}/transactions`);
+  const data = response?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.transactions)) return data.transactions;
+  if (Array.isArray(response?.transactions)) return response.transactions;
+  return [];
+}
+
 export function verifyBitnobWebhook(rawBody, headerValue) {
   if (!config.bitnob.webhookSecret && !config.bitnob.clientSecret) return true;
   const secret = config.bitnob.webhookSecret || config.bitnob.clientSecret;
@@ -537,6 +561,42 @@ function extractDisplayBalance(cardData, fallback) {
   return fallback;
 }
 
+async function refreshLocalCardFromProvider(card) {
+  if (!card?.provider_card_id) return card;
+  try {
+    const response = await bitnobRequest('GET', `/api/cards/${encodeURIComponent(card.provider_card_id)}`);
+    const cardData = getBitnobCard(response);
+    if (!cardData || !Object.keys(cardData).length) return card;
+    const maskedPan = cardData.masked_pan || cardData.maskedPan || card.masked_pan || '';
+    const previousAddress = (() => {
+      try {
+        return JSON.parse(card.billing_address || '{}');
+      } catch {
+        return {};
+      }
+    })();
+    db.prepare(`
+      UPDATE virtual_cards
+      SET status = ?, masked_pan = ?, last_four = ?, expiry_month = ?, expiry_year = ?, balance = ?, billing_address = ?, meta = ?, updated_at = ?
+      WHERE id = ?
+    `).run(
+      normalizeProviderCardStatus(cardData.status || cardData.state, card.status),
+      maskedPan,
+      cardData.last_four_digit || cardData.last_four || maskedPan.replace(/\D/g, '').slice(-4) || card.last_four,
+      cardData.expiry_month || cardData.exp_month || card.expiry_month || '',
+      cardData.expiry_year || cardData.exp_year || card.expiry_year || '',
+      extractDisplayBalance(cardData, card.balance),
+      JSON.stringify(cardData.billing_address || cardData.address || previousAddress),
+      JSON.stringify(cardData),
+      nowIso(),
+      card.id
+    );
+    return db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id) || card;
+  } catch {
+    return card;
+  }
+}
+
 function extractProviderAmount(value) {
   if (value === undefined || value === null || value === '') return 0;
   const numeric = Number(value);
@@ -554,6 +614,20 @@ function extractEventAmount(data) {
 
 function eventIsOneOf(event, names) {
   return names.includes(String(event || '').toLowerCase());
+}
+
+function providerStatusIsOneOf(payload = {}, data = {}, names = []) {
+  const status = String(
+    data.status
+      || data.state
+      || data.payment_status
+      || data.transaction_status
+      || payload.status
+      || payload.state
+      || payload.payment_status
+      || ''
+  ).toLowerCase();
+  return names.includes(status);
 }
 
 function extractStablecoinAddress(data = {}, payload = {}) {
@@ -672,10 +746,13 @@ export function reconcilePendingUsdcDeposits() {
     try {
       const payload = JSON.parse(row.payload || '{}');
       const event = String(payload.event || '').toLowerCase();
-      if (!eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed'])) continue;
-      const deposit = findCryptoDepositForWebhook(payload.data || {}, payload);
+      const data = payload.data || {};
+      const completeByEvent = eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'deposit.confirmed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed', 'stablecoin.deposit.confirmed', 'crypto.deposit.success', 'crypto.deposit.completed', 'crypto.deposit.confirmed']);
+      const completeByStatus = providerStatusIsOneOf(payload, data, ['success', 'successful', 'complete', 'completed', 'confirmed', 'approved']);
+      if (!completeByEvent && !completeByStatus) continue;
+      const deposit = findCryptoDepositForWebhook(data, payload);
       if (!deposit || deposit.status === 'approved') continue;
-      const txHash = extractStablecoinTxHash(payload.data || {}, payload);
+      const txHash = extractStablecoinTxHash(data, payload);
       db.prepare(`
         UPDATE deposits
         SET provider_status = ?,
@@ -718,8 +795,16 @@ export function handleBitnobWebhook(payload) {
   const cardData = payload.data?.card || payload.data || {};
   const data = payload.data || {};
   const cryptoDeposit = findCryptoDepositForWebhook(data, payload);
+  const cryptoDepositComplete = cryptoDeposit && (
+    eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'deposit.confirmed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed', 'stablecoin.deposit.confirmed', 'crypto.deposit.success', 'crypto.deposit.completed', 'crypto.deposit.confirmed'])
+    || providerStatusIsOneOf(payload, data, ['success', 'successful', 'complete', 'completed', 'confirmed', 'approved'])
+  );
+  const cryptoDepositPending = cryptoDeposit && (
+    eventIsOneOf(event, ['deposit.detected', 'deposit.pending', 'stablecoin.deposit.detected', 'crypto.deposit.detected', 'crypto.deposit.pending'])
+    || providerStatusIsOneOf(payload, data, ['pending', 'detected', 'processing'])
+  );
 
-  if (cryptoDeposit && eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed'])) {
+  if (cryptoDepositComplete) {
     const txHash = extractStablecoinTxHash(data, payload);
     db.prepare(`
       UPDATE deposits
@@ -739,7 +824,7 @@ export function handleBitnobWebhook(payload) {
     return;
   }
 
-  if (cryptoDeposit && eventIsOneOf(event, ['deposit.detected', 'deposit.pending', 'stablecoin.deposit.detected'])) {
+  if (cryptoDepositPending) {
     const txHash = extractStablecoinTxHash(data, payload);
     db.prepare(`
       UPDATE deposits

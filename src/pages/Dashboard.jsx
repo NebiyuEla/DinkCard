@@ -75,7 +75,7 @@ export default function Dashboard() {
   }, [queryClient]);
 
   return (
-    <div className="space-y-6 pb-24 sm:space-y-8 lg:pb-0">
+    <div className="space-y-5 pb-20 sm:space-y-6 lg:pb-0">
       <div>
         <h1 className="text-xl font-bold sm:text-2xl">Welcome back{user?.first_name || user?.full_name ? `, ${user?.first_name || user.full_name.split(' ')[0]}` : ''}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your account overview</p>
@@ -229,7 +229,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
+      <div className="hidden rounded-2xl border border-border bg-card p-4 sm:p-5 md:block">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold">Account & Security</p>

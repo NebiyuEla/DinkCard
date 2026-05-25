@@ -11,13 +11,14 @@ import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, readTwoFactorChallenge, setSessionCookie, signTwoFactorChallenge } from './auth.js';
 import { sanitizeUser, parseJson, generateId, money, nowIso, normalizeEthiopianPhone, toUsername, hmacSha256Hex } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
-import { approveDeposit, creditWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
+import { approveDeposit, creditWallet, debitWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import { buildTwoFactorRecoverySummary, formatSecretForDisplay, getOtpAuthUrl, getTwoFactorSetupForUser, isTwoFactorEnabled, readEncryptedTwoFactorSecret, replacementRecoveryState, verifyTotp, verifyTwoFactorCode } from './two-factor.js';
 import {
   bitnobService,
   changeCardStatus,
   createVirtualCardForUser,
   fundVirtualCard,
+  getVirtualCardTransactions,
   handleBitnobWebhook,
   reconcilePendingUsdcDeposits,
   revealCardDetails,
@@ -2896,6 +2897,15 @@ export function createApp() {
     try {
       await changeCardStatus(req.user, req.params.id, req.body.status, req.body.pin);
       res.json({ ok: true });
+    } catch (error) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.get('/api/cards/:id/transactions', authMiddleware(db), async (req, res) => {
+    try {
+      const transactions = await getVirtualCardTransactions(req.user, req.params.id);
+      res.json({ transactions });
     } catch (error) {
       res.status(400).json({ message: error.message });
     }

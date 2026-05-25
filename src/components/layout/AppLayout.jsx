@@ -13,6 +13,10 @@ export default function AppLayout() {
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
 
   useEffect(() => {
+    document.documentElement.classList.toggle('liquid-motion', localStorage.getItem('dinkcard_motion') === 'on');
+  }, []);
+
+  useEffect(() => {
     if (!user?.email || !window.EventSource) return undefined;
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const events = new EventSource(`${baseUrl}/api/events`, { withCredentials: true });
@@ -39,7 +43,7 @@ export default function AppLayout() {
     <div className="min-h-screen bg-background">
       <Sidebar user={user} unreadCount={unreadCount} />
       <main className="lg:ml-64 min-h-screen transition-all duration-300">
-        <div className="max-w-7xl mx-auto p-4 pb-20 lg:p-8 lg:pt-6">
+        <div className="max-w-7xl mx-auto p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-24 lg:p-8 lg:pt-6">
           <Outlet />
         </div>
       </main>

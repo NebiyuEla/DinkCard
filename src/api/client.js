@@ -145,7 +145,8 @@ export const apiClient = {
     updateStatus: (cardId, status, pin) => request(`/api/cards/${cardId}/status`, { method: 'POST', body: JSON.stringify({ status, pin }) }),
     terminate: (cardId, pin) => request(`/api/cards/${cardId}`, { method: 'DELETE', body: JSON.stringify({ pin }) }),
     reveal: (cardId, pin) => request(`/api/cards/${cardId}/reveal`, { method: 'POST', body: JSON.stringify({ pin }) }),
-    setPin: (cardId, pin) => request(`/api/cards/${cardId}/pin`, { method: 'POST', body: JSON.stringify({ pin }) })
+    setPin: (cardId, pin) => request(`/api/cards/${cardId}/pin`, { method: 'POST', body: JSON.stringify({ pin }) }),
+    transactions: (cardId) => request(`/api/cards/${cardId}/transactions`)
   },
   admin: {
     deposits: {

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getSeededAvatarDataUrl } from '@/lib/avatarSeed';
-import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Sparkles, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 
 function buildProfileTheme(seed) {
@@ -47,6 +47,10 @@ export default function AccountPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [motionEnabled, setMotionEnabled] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem('dinkcard_motion') === 'on';
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -74,6 +78,11 @@ export default function AccountPage() {
       .then(setQrCodeDataUrl)
       .catch(() => setQrCodeDataUrl(''));
   }, [setupPayload]);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('liquid-motion', motionEnabled);
+    localStorage.setItem('dinkcard_motion', motionEnabled ? 'on' : 'off');
+  }, [motionEnabled]);
 
   const initials = useMemo(() => {
     const parts = String(`${form.first_name} ${form.last_name}`.trim() || user?.full_name || user?.email || 'DC')
@@ -313,7 +322,13 @@ export default function AccountPage() {
               </div>
             </div>
             <div className="mt-4 text-right">
-              <Link to="/forgot-password" className="text-sm text-primary hover:underline">Request password reset</Link>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <Button type="button" variant="outline" onClick={() => setMotionEnabled((current) => !current)}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {motionEnabled ? 'Animations on' : 'Enable animations'}
+                </Button>
+                <Link to="/forgot-password" className="text-sm text-primary hover:underline">Request password reset</Link>
+              </div>
             </div>
           </div>
         </div>

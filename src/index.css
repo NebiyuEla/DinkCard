@@ -135,3 +135,30 @@
 .animate-avatar-drift {
   animation: avatar-drift 5.5s ease-in-out infinite;
 }
+
+.liquid-motion .bg-card,
+.liquid-motion [class*="bg-card"] {
+  backdrop-filter: blur(18px) saturate(145%);
+}
+
+.liquid-motion button,
+.liquid-motion a,
+.liquid-motion [role="button"] {
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, box-shadow 180ms ease;
+}
+
+.liquid-motion button:active,
+.liquid-motion a:active,
+.liquid-motion [role="button"]:active {
+  transform: scale(0.98);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-motion *,
+  .liquid-motion *::before,
+  .liquid-motion *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
