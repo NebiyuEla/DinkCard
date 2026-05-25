@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { cn } from '@/lib/utils';
 
-export const UPLOAD_ACCEPT = 'image/*,application/pdf,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf';
+export const UPLOAD_ACCEPT = 'image/*,audio/*,video/*,application/pdf,text/plain,text/csv,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,.pdf,.txt,.csv,.mp3,.wav,.ogg,.webm,.m4a,.mp4,.doc,.docx,.xls,.xlsx';
 
 export default function FileUploadControl({ onFile, disabled, className = '', children }) {
   const inputRef = useRef(null);

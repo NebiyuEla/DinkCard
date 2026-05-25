@@ -204,6 +204,7 @@ export const apiClient = {
     walletSummary: () => request('/api/admin/wallet-summary'),
     providerStatus: () => request('/api/admin/settings/provider-status'),
     balances: () => request('/api/admin/bitnob/balances'),
+    broadcast: (payload) => request('/api/admin/broadcast', { method: 'POST', body: JSON.stringify(payload) }),
     auditLogs: () => request('/api/admin/audit-logs'),
     deleteAuditLog: (id) => request(`/api/admin/audit-logs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     system: {

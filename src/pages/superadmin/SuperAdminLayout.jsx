@@ -7,7 +7,7 @@ import { REFRESH } from '@/lib/realtime';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard,
-  HeadphonesIcon, Settings, FileText, LogOut
+  HeadphonesIcon, Settings, FileText, LogOut, BellRing
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TermsModal from '@/components/TermsModal';
@@ -20,6 +20,7 @@ const nav = [
   { label: 'Deposits', path: '/superadmin/deposits', icon: DollarSign },
   { label: 'Cards', path: '/superadmin/cards', icon: CreditCard },
   { label: 'Tickets', path: '/superadmin/tickets', icon: HeadphonesIcon },
+  { label: 'Broadcast', path: '/superadmin/broadcast', icon: BellRing },
   { label: 'Pricing Settings', path: '/superadmin/fees', icon: Settings },
   { label: 'Audit Logs', path: '/superadmin/audit', icon: FileText },
 ];

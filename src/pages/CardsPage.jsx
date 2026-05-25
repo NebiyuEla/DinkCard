@@ -106,10 +106,6 @@ export default function CardsPage() {
   const selectedBillingAddress = parseJson(selectedCard?.billing_address);
   const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
   const selectedStatus = normalizeCardStatus(selectedCard?.status);
-  const fullExpiry = [
-    detailValue(secureDetails?.expiry_month, selectedCard?.expiry_month),
-    detailValue(secureDetails?.expiry_year, selectedCard?.expiry_year)
-  ].join('/');
   const cardTransactions = useQuery({
     queryKey: ['card-transactions', selectedCard?.id],
     queryFn: () => apiClient.cards.transactions(selectedCard.id),
@@ -161,11 +157,7 @@ export default function CardsPage() {
                 <VirtualCardDisplay
                   card={{
                     ...card,
-                    status: normalizeCardStatus(card.status),
-                    card_number_encrypted: secureDetails?.card_number,
-                    cvv_encrypted: secureDetails?.cvv,
-                    expiry_month: secureDetails?.expiry_month || card.expiry_month,
-                    expiry_year: secureDetails?.expiry_year || card.expiry_year
+                    status: normalizeCardStatus(card.status)
                   }}
                   compact
                 />
@@ -191,22 +183,22 @@ export default function CardsPage() {
                 </div>
                 {secureDetails && (
                   <div className="mx-auto mt-3 grid max-w-[340px] grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-lg bg-secondary/40 p-2">
+                    <button type="button" className="rounded-lg bg-secondary/40 p-2 text-left transition-colors hover:bg-secondary/70" onClick={() => copyToClipboard(detailValue(secureDetails?.address, shownAddress.address, shownAddress.street, shownAddress.line1), 'Address')}>
                       <p className="text-muted-foreground">Address</p>
                       <p className="mt-1 break-words">{detailValue(secureDetails?.address, shownAddress.address, shownAddress.street, shownAddress.line1)}</p>
-                    </div>
-                    <div className="rounded-lg bg-secondary/40 p-2">
+                    </button>
+                    <button type="button" className="rounded-lg bg-secondary/40 p-2 text-left transition-colors hover:bg-secondary/70" onClick={() => copyToClipboard(detailValue(secureDetails?.postal_code, shownAddress.postal_code, shownAddress.zip), 'ZIP / Postal')}>
                       <p className="text-muted-foreground">ZIP / Postal</p>
                       <p className="mt-1 font-mono">{detailValue(secureDetails?.postal_code, shownAddress.postal_code, shownAddress.zip)}</p>
-                    </div>
-                    <div className="rounded-lg bg-secondary/40 p-2">
+                    </button>
+                    <button type="button" className="rounded-lg bg-secondary/40 p-2 text-left transition-colors hover:bg-secondary/70" onClick={() => copyToClipboard(detailValue(secureDetails?.city, shownAddress.city), 'City')}>
                       <p className="text-muted-foreground">City</p>
                       <p className="mt-1">{detailValue(secureDetails?.city, shownAddress.city)}</p>
-                    </div>
-                    <div className="rounded-lg bg-secondary/40 p-2">
+                    </button>
+                    <button type="button" className="rounded-lg bg-secondary/40 p-2 text-left transition-colors hover:bg-secondary/70" onClick={() => copyToClipboard([detailValue(secureDetails?.state, shownAddress.state, shownAddress.region), detailValue(secureDetails?.country, shownAddress.country)].filter((part) => part !== '-').join(', '), 'State / Country')}>
                       <p className="text-muted-foreground">State / Country</p>
                       <p className="mt-1">{[detailValue(secureDetails?.state, shownAddress.state, shownAddress.region), detailValue(secureDetails?.country, shownAddress.country)].filter((part) => part !== '-').join(', ') || '-'}</p>
-                    </div>
+                    </button>
                   </div>
                 )}
               </div>
@@ -254,17 +246,6 @@ export default function CardsPage() {
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedStatus} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
                 <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00</span></div>
-                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Card number</span><span className="break-all text-right font-mono">{secureDetails?.card_number || selectedCard.masked_pan || `**** ${selectedCard.last_four || '----'}`}</span></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg bg-secondary/40 p-3">
-                    <p className="text-xs text-muted-foreground">CVV</p>
-                    <p className="mt-1 font-mono font-semibold">{secureDetails?.cvv || '***'}</p>
-                  </div>
-                  <div className="rounded-lg bg-secondary/40 p-3">
-                    <p className="text-xs text-muted-foreground">Expiry</p>
-                    <p className="mt-1 font-mono font-semibold">{fullExpiry.replace('-/', '**/').replace('/-', '/**')}</p>
-                  </div>
-                </div>
               </div>
 
               <div className="rounded-xl border border-border bg-card p-4">

@@ -7,7 +7,7 @@ import { useCurrentUser } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import { 
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard, 
-  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity, WalletCards
+  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity, WalletCards, BellRing
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -22,15 +22,16 @@ const adminNav = [
   { label: 'Deposits', path: '/admin/deposits', icon: DollarSign },
   { label: 'Cards', path: '/admin/cards', icon: CreditCard },
   { label: 'Tickets', path: '/admin/tickets', icon: HeadphonesIcon },
+  { label: 'Broadcast', path: '/admin/broadcast', icon: BellRing },
   { label: 'Pricing Settings', path: '/admin/fees', icon: Settings, ownerOnly: true },
   { label: 'Audit Logs', path: '/admin/audit', icon: FileText, ownerOnly: true },
 ];
 
 const roleNavAccess = {
-  support: new Set(['/admin', '/admin/tickets']),
-  support_response: new Set(['/admin', '/admin/tickets']),
+  support: new Set(['/admin', '/admin/tickets', '/admin/broadcast']),
+  support_response: new Set(['/admin', '/admin/tickets', '/admin/broadcast']),
   kyc_checker: new Set(['/admin', '/admin/kyc']),
-  admin: new Set(['/admin', '/admin/kyc', '/admin/deposits', '/admin/cards', '/admin/tickets']),
+  admin: new Set(['/admin', '/admin/kyc', '/admin/deposits', '/admin/cards', '/admin/tickets', '/admin/broadcast']),
   superadmin: null
 };
 

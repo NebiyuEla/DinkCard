@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getNotificationPermission, requestDeviceNotificationPermission } from '@/lib/deviceNotifications';
+import FilePreview from '@/components/FilePreview';
 
 const typeIcons = {
   deposit: DollarSign,
@@ -18,6 +19,8 @@ const typeIcons = {
   security: AlertTriangle,
   system: Settings,
   referral: DollarSign,
+  broadcast: Bell,
+  wallet: DollarSign
 };
 
 export default function NotificationsPage() {
@@ -112,7 +115,15 @@ export default function NotificationsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={cn("text-sm font-medium", !notif.read && "text-foreground")}>{notif.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{notif.message}</p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">{notif.message}</p>
+                  {notif.link?.startsWith('/uploads/') && (
+                    <FilePreview url={notif.link} label="Notification attachment" className="mt-2 max-w-md" />
+                  )}
+                  {notif.link && !notif.link.startsWith('/uploads/') && (
+                    <a href={notif.link} className="mt-2 inline-flex text-xs font-medium text-primary hover:underline" onClick={(event) => event.stopPropagation()}>
+                      Open
+                    </a>
+                  )}
                   <p className="text-[10px] text-muted-foreground mt-1">{notif.created_date ? format(new Date(notif.created_date), 'MMM d, h:mm a') : ''}</p>
                 </div>
                 {!notif.read && <div className="w-2 h-2 rounded-full bg-primary shrink-0 mt-2" />}

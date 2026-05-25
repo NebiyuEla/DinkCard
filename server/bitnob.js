@@ -21,6 +21,18 @@ function getBitnobCard(response) {
   return response?.data?.card || response?.data || response?.card || {};
 }
 
+function firstFilled(...values) {
+  return values.find((value) => String(value ?? '').trim()) ?? '';
+}
+
+function splitExpiry(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return {};
+  const match = raw.match(/(\d{1,2})\D?(\d{2,4})/);
+  if (!match) return {};
+  return { month: match[1].padStart(2, '0'), year: match[2] };
+}
+
 function normalizeProviderCardStatus(value, fallback = 'pending') {
   const raw = String(value || fallback || 'pending').toLowerCase();
   if (['active', 'approved', 'ready', 'live'].includes(raw)) return 'active';
@@ -514,11 +526,12 @@ export async function revealCardDetails(user, cardId, pin) {
     }
   })();
   const address = secure.billing_address || secure.address || billingAddress || meta.billing_address || {};
+  const expiry = splitExpiry(secure.expiry || secure.expiration || secure.expiration_date || secure.expiry_date || secure.expiryDate || secure.valid_thru);
   return {
-    card_number: secure.pan || secure.card_number || secure.full_pan || '',
-    cvv: secure.cvv || '',
-    expiry_month: secure.expiry_month || secure.exp_month || card.expiry_month || meta.expiry_month || meta.exp_month || '',
-    expiry_year: secure.expiry_year || secure.exp_year || card.expiry_year || meta.expiry_year || meta.exp_year || '',
+    card_number: firstFilled(secure.pan, secure.card_number, secure.cardNumber, secure.full_pan, secure.fullPan, secure.number),
+    cvv: firstFilled(secure.cvv, secure.cvc, secure.security_code, secure.securityCode),
+    expiry_month: firstFilled(secure.expiry_month, secure.exp_month, secure.expMonth, expiry.month, card.expiry_month, meta.expiry_month, meta.exp_month),
+    expiry_year: firstFilled(secure.expiry_year, secure.exp_year, secure.expYear, expiry.year, card.expiry_year, meta.expiry_year, meta.exp_year),
     billing_address: address,
     address: address.address || address.street || address.line1 || '',
     city: address.city || '',

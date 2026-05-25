@@ -1,6 +1,7 @@
 import React from 'react';
 import { CreditCard, Snowflake } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 const statusStyles = {
@@ -13,6 +14,21 @@ const statusStyles = {
 export default function VirtualCardDisplay({ card, showDetails = false, compact = false }) {
   const masked = `**** **** **** ${card.last_four || '----'}`;
   const balance = Number(card.balance || 0);
+  const cardNumber = showDetails && card.card_number_encrypted ? card.card_number_encrypted : masked;
+  const expiry = showDetails && (card.expiry_month || card.expiry_year)
+    ? `${card.expiry_month || '**'}/${card.expiry_year || '**'}`
+    : '**/**';
+  const cvv = showDetails && card.cvv_encrypted ? card.cvv_encrypted : '***';
+
+  const copyField = async (value, label) => {
+    if (!showDetails || !value || String(value).includes('*')) return;
+    try {
+      await navigator.clipboard.writeText(String(value));
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label.toLowerCase()}`);
+    }
+  };
 
   if (compact) {
     return (
@@ -79,23 +95,38 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       </div>
 
       <div className="relative">
-        <p className="font-mono text-lg tracking-[0.2em] text-foreground/90">
-          {showDetails && card.card_number_encrypted ? card.card_number_encrypted : masked}
-        </p>
+        <button
+          type="button"
+          className={cn('max-w-full font-mono text-lg tracking-[0.2em] text-foreground/90', showDetails && 'cursor-copy rounded-md text-left transition-colors hover:text-primary')}
+          onClick={() => copyField(card.card_number_encrypted, 'Card number')}
+          title={showDetails ? 'Click to copy card number' : undefined}
+        >
+          {cardNumber}
+        </button>
       </div>
 
       <div className="relative flex items-end justify-between">
         <div className="space-y-1">
           <p className="text-[10px] text-muted-foreground uppercase">Expiry</p>
-          <p className="font-mono text-sm text-foreground/80">
-            {showDetails ? `${card.expiry_month}/${card.expiry_year}` : '**/**'}
-          </p>
+          <button
+            type="button"
+            className={cn('font-mono text-sm text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
+            onClick={() => copyField(expiry, 'Expiry')}
+            title={showDetails ? 'Click to copy expiry' : undefined}
+          >
+            {expiry}
+          </button>
         </div>
         <div className="space-y-1">
           <p className="text-[10px] text-muted-foreground uppercase">CVV</p>
-          <p className="font-mono text-sm text-foreground/80">
-            {showDetails && card.cvv_encrypted ? card.cvv_encrypted : '***'}
-          </p>
+          <button
+            type="button"
+            className={cn('font-mono text-sm text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
+            onClick={() => copyField(card.cvv_encrypted, 'CVV')}
+            title={showDetails ? 'Click to copy CVV' : undefined}
+          >
+            {cvv}
+          </button>
         </div>
         <div className="text-right">
           <p className="text-[10px] text-muted-foreground uppercase">Balance</p>

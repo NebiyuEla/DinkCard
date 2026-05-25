@@ -40,10 +40,24 @@ const allowedUploadTypes = new Set([
   'image/gif',
   'image/heic',
   'image/heif',
-  'application/pdf'
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/ogg',
+  'audio/webm',
+  'video/mp4',
+  'video/webm',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ]);
 
-const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.pdf']);
+const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.pdf', '.txt', '.csv', '.mp3', '.wav', '.ogg', '.webm', '.m4a', '.mp4', '.doc', '.docx', '.xls', '.xlsx']);
+const blockedUploadExtensions = new Set(['.exe', '.bat', '.cmd', '.com', '.scr', '.ps1', '.vbs', '.js', '.mjs', '.html', '.htm', '.svg']);
 
 function getClientIp(req) {
   const forwarded = req?.headers?.['x-forwarded-for'];
@@ -128,6 +142,8 @@ function getUploadExtension(file) {
   if (file.mimetype === 'image/heic') return '.heic';
   if (file.mimetype === 'image/heif') return '.heif';
   if (file.mimetype === 'application/pdf') return '.pdf';
+  if (file.mimetype?.startsWith('audio/')) return originalExt || '.audio';
+  if (file.mimetype?.startsWith('video/')) return originalExt || '.video';
   if (file.mimetype?.startsWith('image/')) return '.jpg';
   return '.upload';
 }
@@ -149,7 +165,10 @@ const upload = multer({
   limits: { fileSize: uploadLimitBytes },
   fileFilter: (req, file, callback) => {
     const originalExt = path.extname(file.originalname || '').toLowerCase();
-    if (allowedUploadTypes.has(file.mimetype) || file.mimetype?.startsWith('image/') || allowedUploadExtensions.has(originalExt) || file.mimetype === 'application/octet-stream') {
+    if (blockedUploadExtensions.has(originalExt)) {
+      return callback(new Error('Upload failed. Please try another file.'));
+    }
+    if (allowedUploadTypes.has(file.mimetype) || file.mimetype?.startsWith('image/') || file.mimetype?.startsWith('audio/') || file.mimetype?.startsWith('video/') || allowedUploadExtensions.has(originalExt) || file.mimetype === 'application/octet-stream') {
       return callback(null, true);
     }
     return callback(new Error('Upload failed. Please try another file.'));
@@ -179,6 +198,10 @@ function readUploadSignature(file) {
   }
 
   if (file.mimetype?.startsWith('image/') && file.size > 0) return { valid: true, ext: getUploadExtension(file) || '.jpg' };
+  const originalExt = path.extname(file.originalname || '').toLowerCase();
+  if (allowedUploadExtensions.has(originalExt) && !blockedUploadExtensions.has(originalExt) && file.size > 0) {
+    return { valid: true, ext: originalExt };
+  }
   return { valid: false };
 }
 
@@ -208,7 +231,7 @@ function removeUploadedFile(file) {
 
 function getUploadFilename(req) {
   const filename = path.basename(String(req.params.filename || ''));
-  if (!/^[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp|gif|heic|heif|pdf)$/i.test(filename)) return null;
+  if (!/^[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp|gif|heic|heif|pdf|txt|csv|mp3|wav|ogg|webm|m4a|mp4|doc|docx|xls|xlsx)$/i.test(filename)) return null;
   return filename;
 }
 
@@ -256,7 +279,10 @@ function canAccessUpload(req, filename) {
     LIMIT 1
   `).get(email, url);
 
-  return Boolean(message);
+  if (message) return true;
+
+  const notification = db.prepare('SELECT id FROM notifications WHERE user_id = ? AND link = ? LIMIT 1').get(email, url);
+  return Boolean(notification);
 }
 
 function isSuperadmin(user) {
@@ -1635,6 +1661,76 @@ export function createApp() {
   app.post('/api/notifications/read-all', authMiddleware(db), (req, res) => {
     const result = db.prepare('UPDATE notifications SET read = 1 WHERE user_id = ? AND read = 0').run(req.user.email);
     res.json({ ok: true, updated: result.changes || 0 });
+  });
+
+  app.post('/api/admin/broadcast', authMiddleware(db), (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const audience = String(req.body?.audience || 'specific').toLowerCase();
+    const title = String(req.body?.title || '').trim();
+    const caption = String(req.body?.caption || req.body?.message || '').trim();
+    const attachmentUrl = String(req.body?.attachment_url || req.body?.attachmentUrl || '').trim();
+    const target = String(req.body?.target || '').trim();
+
+    if (!title) return res.status(400).json({ message: 'Enter a broadcast title.' });
+    if (!caption && !attachmentUrl) return res.status(400).json({ message: 'Write a caption or attach a file.' });
+    if (attachmentUrl && !attachmentUrl.startsWith('/uploads/')) {
+      return res.status(400).json({ message: 'Attachment must be uploaded from this platform.' });
+    }
+
+    let recipients = [];
+    if (audience === 'all') {
+      if (!['admin', 'superadmin'].includes(req.user.role)) {
+        return res.status(403).json({ message: 'Only admin or superadmin can broadcast to all users.' });
+      }
+      recipients = db.prepare("SELECT email FROM users WHERE role = 'user' AND account_status != 'deleted'").all();
+    } else {
+      if (!target) return res.status(400).json({ message: 'Choose a user.' });
+      const normalizedTarget = normalizeUsername(target);
+      const normalizedPhone = (() => {
+        try {
+          return normalizeEthiopianPhone(target);
+        } catch {
+          return null;
+        }
+      })();
+      const user = db.prepare(`
+        SELECT email FROM users
+        WHERE lower(email) = lower(?)
+           OR lower(username) = lower(?)
+           OR phone = ?
+           OR phone = ?
+        LIMIT 1
+      `).get(target, normalizedTarget, target, normalizedPhone);
+      if (!user) return res.status(404).json({ message: 'User not found.' });
+      recipients = [user];
+    }
+
+    const now = nowIso();
+    const insert = db.prepare(`
+      INSERT INTO notifications (id, user_id, title, message, type, link, read, created_at)
+      VALUES (?, ?, ?, ?, 'broadcast', ?, 0, ?)
+    `);
+    const uniqueRecipients = [...new Set(recipients.map((item) => item.email).filter(Boolean))];
+    db.exec('BEGIN');
+    try {
+      for (const email of uniqueRecipients) {
+        insert.run(generateId('ntf'), email, title, caption || 'Attachment', attachmentUrl || null, now);
+      }
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
+
+    writeAudit({
+      actor: req.user.email,
+      action: 'broadcast_sent',
+      entityType: 'notification',
+      newValue: { audience, target: audience === 'all' ? 'all' : target, recipientCount: uniqueRecipients.length, attachmentUrl: attachmentUrl || null, title },
+      req
+    });
+
+    res.json({ ok: true, sent: uniqueRecipients.length });
   });
 
   app.get('/api/events', authMiddleware(db), (req, res) => {

@@ -32,6 +32,7 @@ import AdminCards from './pages/admin/AdminCards';
 import AdminTickets from './pages/admin/AdminTickets';
 import AdminFees from './pages/admin/AdminFees';
 import AdminAuditLogs from './pages/admin/AdminAuditLogs';
+import AdminBroadcast from './pages/admin/AdminBroadcast';
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin';
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout';
 import SAOverview from './pages/superadmin/SAOverview';
@@ -134,6 +135,7 @@ function AppRoutes() {
           <Route path="/superadmin/deposits" element={<AdminDeposits />} />
           <Route path="/superadmin/cards" element={<AdminCards />} />
           <Route path="/superadmin/tickets" element={<AdminTickets />} />
+          <Route path="/superadmin/broadcast" element={<AdminBroadcast />} />
           <Route path="/superadmin/fees" element={<AdminFees />} />
           <Route path="/superadmin/audit" element={<AdminAuditLogs />} />
         </Route>
@@ -163,6 +165,7 @@ function AppRoutes() {
           <Route path="deposits" element={<AdminDeposits />} />
           <Route path="cards" element={<AdminCards />} />
           <Route path="tickets" element={<AdminTickets />} />
+          <Route path="broadcast" element={<AdminBroadcast />} />
           <Route path="fees" element={<RequireOwner><AdminFees /></RequireOwner>} />
           <Route path="audit" element={<RequireOwner><AdminAuditLogs /></RequireOwner>} />
         </Route>
