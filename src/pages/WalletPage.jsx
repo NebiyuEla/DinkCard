@@ -19,8 +19,8 @@ import QRCode from 'qrcode';
 export default function WalletPage() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
-  const { data: wallet } = useWallet(user?.email);
-  const { data: transactions } = useWalletTransactions(user?.email);
+  const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
+  const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
   const { data: settings } = useFeeSettings();
   const [shareOpen, setShareOpen] = useState(false);
   const [recipientInput, setRecipientInput] = useState('');
@@ -140,7 +140,7 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="space-y-5 pb-20 lg:pb-0">
+    <div className="space-y-4 pb-20 lg:pb-0">
       <div className="space-y-3 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <div>
           <h1 className="text-2xl font-bold">Service Balance</h1>
@@ -161,42 +161,46 @@ export default function WalletPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
-        <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
-        <StatCard title="Locked Balance" value={`$${locked.toFixed(2)}`} subtitle="Pending operations" icon={Lock} />
-        <StatCard title="Total Transactions" value={transactions?.length || 0} icon={ArrowDownUp} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+        <StatCard className="col-span-2 md:col-span-1" title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
+        <StatCard title="Locked Balance" value={walletLoading ? '...' : `$${locked.toFixed(2)}`} subtitle="Pending operations" icon={Lock} />
+        <StatCard title="History" value={transactionsLoading ? '...' : (transactions?.length || 0)} icon={ArrowDownUp} />
       </div>
 
       <div>
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Ledger History</h2>
-        {!transactions?.length ? (
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">History</h2>
+        {transactionsLoading ? (
+          <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading history...</div>
+        ) : !transactions?.length ? (
           <EmptyState icon={ArrowDownUp} title="No transactions" description="Your service balance transactions will appear here." className="bg-card border border-border rounded-xl" />
         ) : (
-          <div className="bg-card border border-border rounded-xl divide-y divide-border">
+          <div className="bg-card border border-border rounded-xl divide-y divide-border overflow-hidden">
             {transactions.map(tx => (
-              <div key={tx.id} className="px-4 py-3 flex items-center gap-3">
+              <div key={tx.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 px-3 py-3 sm:flex sm:items-center sm:px-4">
                 <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                   {typeIcons[tx.type] || <ArrowDownUp className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium capitalize truncate">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
-                  <p className="text-xs text-muted-foreground truncate">{tx.description || tx.reference}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 text-sm font-medium capitalize leading-tight">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
+                    <p className={`shrink-0 whitespace-nowrap text-right font-mono text-sm font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
+                      {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
+                    </p>
+                  </div>
+                  <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{tx.description || tx.reference}</p>
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      Bal: ${Number(tx.balance_after || 0).toFixed(2)}
+                    </p>
+                    <StatusBadge status={tx.status} className="text-[10px]" />
+                  </div>
                 </div>
-                <div className="text-right shrink-0">
-                  <p className={`text-sm font-mono font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                    {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
-                  </p>
-                  <p className="text-[10px] text-muted-foreground font-mono">
-                    Bal: ${Number(tx.balance_after || 0).toFixed(2)}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="col-span-2 flex shrink-0 items-center justify-end gap-2 sm:col-span-1">
                   {depositReceiptUrl(tx) && (
                     <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(depositReceiptUrl(tx), '_blank')}>
                       <ReceiptText className="h-4 w-4" />
                     </Button>
                   )}
-                  <StatusBadge status={tx.status} className="text-[10px]" />
                 </div>
               </div>
             ))}

@@ -24,29 +24,36 @@ const quickActions = [
   { label: 'Account', path: '/account', icon: UserRound, color: 'text-muted-foreground' }
 ];
 
+function normalizeStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
+  if (['frozen', 'freeze', 'locked', 'suspended'].includes(value)) return 'frozen';
+  return value;
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [paymentBanner, setPaymentBanner] = useState(null);
   const { data: user } = useCurrentUser();
-  const { data: wallet } = useWallet(user?.email);
-  const { data: cards } = useCards(user?.email);
+  const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
+  const { data: cards, isLoading: cardsLoading } = useCards(user?.email);
   const { data: deposits } = useDeposits(user?.email);
   const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
-  const { data: transactions } = useWalletTransactions(user?.email);
+  const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
 
   const balance = Number(wallet?.available_balance || 0);
   const etbEstimate = balance * (settings?.usd_to_etb_rate || 135);
-  const activeCards = cards?.filter((card) => card.status === 'active') || [];
-  const frozenCards = cards?.filter((card) => card.status === 'frozen') || [];
+  const activeCards = cards?.filter((card) => normalizeStatus(card.status) === 'active') || [];
+  const frozenCards = cards?.filter((card) => normalizeStatus(card.status) === 'frozen') || [];
   const pendingDeposits = deposits?.filter((deposit) => ['pending_payment', 'pending_transfer', 'awaiting_review'].includes(deposit.status)) || [];
   const totalDeposited = deposits?.filter((deposit) => deposit.status === 'approved').reduce((sum, deposit) => sum + Number(deposit.final_usd_credit || 0), 0) || 0;
   const totalCardDebits = transactions?.filter((tx) => ['card_creation', 'card_funding'].includes(tx.type) && tx.status === 'completed').reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
   const cardRefunds = transactions?.filter((tx) => tx.type === 'refund' && tx.status === 'completed' && String(tx.description || '').toLowerCase().includes('card')).reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
-  const mobileQuickActions = quickActions.filter((action) => !action.desktopOnly);
+  const mobileQuickActions = quickActions.filter((action) => !action.desktopOnly && action.label !== 'Account');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -117,15 +124,17 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-3 gap-3 md:hidden">
-        <div className="rounded-2xl border border-border bg-card p-3">
+      <div className="grid grid-cols-2 gap-3 md:hidden">
+        <div className="col-span-2 rounded-2xl border border-border bg-card p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Balance</p>
-          <p className="mt-2 font-mono text-xl font-bold text-primary">${balance.toFixed(2)}</p>
-          <p className="mt-1 text-[11px] text-muted-foreground">~ {etbEstimate.toLocaleString()} ETB</p>
+          <div className="mt-2 flex items-end justify-between gap-3">
+            <p className="min-w-0 truncate font-mono text-[clamp(1.5rem,8vw,2rem)] font-bold text-primary">{walletLoading ? '...' : `$${balance.toFixed(2)}`}</p>
+            <p className="shrink-0 text-right text-[11px] text-muted-foreground">{walletLoading ? 'Loading' : `~ ${etbEstimate.toLocaleString()} ETB`}</p>
+          </div>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Cards</p>
-          <p className="mt-2 font-mono text-xl font-bold text-primary">{activeCards.length}</p>
+          <p className="mt-2 font-mono text-xl font-bold text-primary">{cardsLoading ? '...' : activeCards.length}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">{frozenCards.length ? `${frozenCards.length} frozen` : 'active'}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3">
@@ -136,7 +145,7 @@ export default function Dashboard() {
       </div>
 
       <div className="hidden auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid md:grid-cols-3 lg:grid-cols-6">
-        <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`~ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
+        <StatCard title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `~ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
         <div className="hidden h-full md:block"><StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} /></div>
         <div className="hidden h-full md:block"><StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} /></div>
         <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
@@ -149,11 +158,11 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 gap-3 md:hidden">
           {mobileQuickActions.map((action) => (
             <Link key={action.path} to={action.path}>
-              <div className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 transition-all hover:border-primary/30">
+              <div className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 transition-all hover:border-primary/30">
                 <div className="rounded-xl bg-secondary/40 p-2.5">
                   <action.icon className={`h-5 w-5 ${action.color}`} />
                 </div>
-                <p className="text-sm font-semibold">{action.label}</p>
+                <p className="text-sm font-semibold leading-tight">{action.label}</p>
               </div>
             </Link>
           ))}
@@ -201,7 +210,9 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Recent Transactions</h2>
             <Link to="/transactions" className="text-xs text-primary hover:underline">View all</Link>
           </div>
-          {recentTx.length === 0 ? (
+          {transactionsLoading ? (
+            <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading history...</div>
+          ) : recentTx.length === 0 ? (
             <EmptyState
               icon={ArrowDownUp}
               title="No transactions yet"

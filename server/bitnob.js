@@ -510,7 +510,7 @@ export async function revealCardDetails(user, cardId, pin) {
   if (!['active', 'frozen'].includes(card.status)) throw new Error('Card details are unavailable for this card status.');
   if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
   const response = await bitnobRequest('GET', `/api/cards/${card.provider_card_id}/secure`);
-  const secure = response?.data?.card || response?.data || {};
+  const secure = response?.data?.card || response?.data?.secure || response?.data?.details || response?.card || response?.secure || response?.details || response?.data || {};
   const meta = (() => {
     try {
       return JSON.parse(card.meta || '{}');
@@ -548,10 +548,14 @@ export async function getVirtualCardTransactions(user, cardId) {
   if (!card.provider_card_id) return [];
   const response = await bitnobRequest('GET', `/api/cards/${encodeURIComponent(card.provider_card_id)}/transactions`);
   const data = response?.data;
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.transactions)) return data.transactions;
-  if (Array.isArray(response?.transactions)) return response.transactions;
-  return [];
+  const rows = Array.isArray(data)
+    ? data
+    : Array.isArray(data?.transactions)
+      ? data.transactions
+      : Array.isArray(response?.transactions)
+        ? response.transactions
+        : [];
+  return rows.map(normalizeCardTransaction);
 }
 
 export function verifyBitnobWebhook(rawBody, headerValue) {
@@ -615,6 +619,28 @@ function extractProviderAmount(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.abs(numeric) >= BITNOB_AMOUNT_SCALE ? fromBitnobAmount(numeric) : money(numeric);
+}
+
+function normalizeCardTransaction(tx = {}) {
+  const amount = tx.display_amount !== undefined
+    ? Number(tx.display_amount)
+    : tx.displayAmount !== undefined
+      ? Number(tx.displayAmount)
+      : tx.amount !== undefined
+        ? extractProviderAmount(tx.amount)
+        : tx.amount_amount !== undefined
+          ? extractProviderAmount(tx.amount_amount)
+          : tx.balance_amount !== undefined
+            ? extractProviderAmount(tx.balance_amount)
+            : 0;
+  return {
+    ...tx,
+    amount: money(amount),
+    display_amount: money(amount),
+    currency: tx.display_currency || tx.currency || tx.amount_currency || 'USD',
+    description: tx.description || tx.narration || tx.merchant_name || tx.type || 'Transaction',
+    status: tx.status || tx.state || 'completed'
+  };
 }
 
 function extractEventAmount(data) {

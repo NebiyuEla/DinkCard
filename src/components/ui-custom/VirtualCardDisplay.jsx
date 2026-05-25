@@ -12,7 +12,7 @@ const statusStyles = {
 };
 
 export default function VirtualCardDisplay({ card, showDetails = false, compact = false }) {
-  const masked = `**** **** **** ${card.last_four || '----'}`;
+  const masked = card.masked_pan || card.maskedPan || `**** **** **** ${card.last_four || '----'}`;
   const balance = Number(card.balance || 0);
   const cardNumber = showDetails && card.card_number_encrypted ? card.card_number_encrypted : masked;
   const expiry = showDetails && (card.expiry_month || card.expiry_year)
@@ -68,13 +68,17 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2, scale: 1.01 }}
+      whileTap={{ scale: 0.99 }}
       className={cn(
-        'relative w-full max-w-[340px] aspect-[1.586/1] rounded-2xl p-5 sm:p-6 flex flex-col justify-between overflow-hidden',
-        'bg-gradient-to-br from-[hsl(222,44%,12%)] to-[hsl(222,44%,6%)] border',
+        'relative w-full max-w-[340px] aspect-[1.586/1] rounded-2xl p-5 sm:p-6 flex flex-col justify-between overflow-hidden shadow-2xl shadow-primary/5',
+        'bg-gradient-to-br from-[hsl(222,44%,13%)] via-[hsl(222,38%,9%)] to-[hsl(222,44%,5%)] border backdrop-blur-xl',
         statusStyles[card.status]
       )}
     >
       <div className="card-shimmer absolute inset-0 rounded-2xl" />
+      <div className="pointer-events-none absolute -left-10 -top-16 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-20 right-4 h-40 w-40 rounded-full bg-accent/10 blur-3xl" />
 
       <div className="relative flex items-start justify-between">
         <div>

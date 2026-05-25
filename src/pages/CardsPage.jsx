@@ -36,6 +36,12 @@ function normalizeCardStatus(status) {
   return value;
 }
 
+function formatCardTxAmount(tx) {
+  const raw = Number(tx.display_amount ?? tx.displayAmount ?? tx.amount ?? 0);
+  const normalized = Math.abs(raw) >= 1_000_000 ? raw / 1_000_000 : raw;
+  return Number.isFinite(normalized) ? normalized : 0;
+}
+
 export default function CardsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -263,7 +269,7 @@ export default function CardsPage() {
                           <p className="truncate font-medium capitalize">{String(tx.type || tx.description || 'Transaction').replace(/_/g, ' ')}</p>
                           <p className="truncate text-xs text-muted-foreground">{tx.status || tx.reference || ''}</p>
                         </div>
-                        <p className="shrink-0 font-mono font-semibold">${Number(tx.amount || tx.display_amount || 0).toFixed(2)}</p>
+                        <p className="shrink-0 whitespace-nowrap font-mono font-semibold">${formatCardTxAmount(tx).toFixed(2)}</p>
                       </div>
                     ))}
                   </div>
