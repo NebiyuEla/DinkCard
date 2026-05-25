@@ -14,6 +14,20 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateOperationalData } from '@/lib/realtime';
 
+function parseJson(value, fallback = {}) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
+function detailValue(...values) {
+  return values.find((value) => String(value || '').trim()) || '-';
+}
+
 export default function CardsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -81,6 +95,12 @@ export default function CardsPage() {
   };
 
   const activeCards = useMemo(() => cards?.filter((card) => card.status !== 'terminated') || [], [cards]);
+  const selectedBillingAddress = parseJson(selectedCard?.billing_address);
+  const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
+  const fullExpiry = [
+    detailValue(secureDetails?.expiry_month, selectedCard?.expiry_month),
+    detailValue(secureDetails?.expiry_year, selectedCard?.expiry_year)
+  ].join('/');
 
   useEffect(() => {
     if (activeCards.length > 0 && (!selectedCard || !activeCards.some((card) => card.id === selectedCard.id))) {
@@ -192,9 +212,29 @@ export default function CardsPage() {
 
               </div>
 
-              <div className="bg-card border border-border rounded-xl p-4 space-y-2 text-sm">
+              <div className="bg-card border border-border rounded-xl p-4 space-y-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedCard.status} /></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${(selectedCard.balance || 0).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00 per card transaction</span></div>
+                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Card number</span><span className="break-all text-right font-mono">{secureDetails?.card_number || selectedCard.masked_pan || `**** ${selectedCard.last_four || '----'}`}</span></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">CVV</p>
+                    <p className="mt-1 font-mono font-semibold">{secureDetails?.cvv || '***'}</p>
+                  </div>
+                  <div className="rounded-lg bg-secondary/40 p-3">
+                    <p className="text-xs text-muted-foreground">Expiry</p>
+                    <p className="mt-1 font-mono font-semibold">{fullExpiry.replace('-/', '**/').replace('/-', '/**')}</p>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-secondary/40 p-3">
+                  <p className="text-xs text-muted-foreground">Billing address</p>
+                  <p className="mt-1 text-sm">
+                    {[detailValue(secureDetails?.address, shownAddress.address, shownAddress.street, shownAddress.line1), detailValue(secureDetails?.city, shownAddress.city), detailValue(secureDetails?.state, shownAddress.state, shownAddress.region), detailValue(secureDetails?.postal_code, shownAddress.postal_code, shownAddress.zip), detailValue(secureDetails?.country, shownAddress.country)]
+                      .filter((part) => part && part !== '-')
+                      .join(', ') || '-'}
+                  </p>
+                </div>
               </div>
 
               <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4">

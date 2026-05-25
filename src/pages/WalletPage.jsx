@@ -6,7 +6,7 @@ import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal, Copy, QrCode } from 'lucide-react';
+import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal, Copy, QrCode, ReceiptText } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,13 +26,14 @@ export default function WalletPage() {
   const [recipientInput, setRecipientInput] = useState('');
   const [recipient, setRecipient] = useState(null);
   const [shareAmount, setShareAmount] = useState('');
-  const [usdcOpen, setUsdcOpen] = useState(false);
-  const [usdcAmount, setUsdcAmount] = useState('');
-  const [usdcNetwork, setUsdcNetwork] = useState('');
-  const [usdcQr, setUsdcQr] = useState('');
+  const [cryptoOpen, setCryptoOpen] = useState(false);
+  const [cryptoCurrency, setCryptoCurrency] = useState('USDC');
+  const [cryptoAmount, setCryptoAmount] = useState('');
+  const [cryptoNetwork, setCryptoNetwork] = useState('');
+  const [cryptoQr, setCryptoQr] = useState('');
 
-  const balance = wallet?.available_balance || 0;
-  const locked = wallet?.locked_balance || 0;
+  const balance = Number(wallet?.available_balance || 0);
+  const locked = Number(wallet?.locked_balance || 0);
   const rate = settings?.usd_to_etb_rate || 135;
 
   const typeIcons = {
@@ -53,9 +54,9 @@ export default function WalletPage() {
     balance_share_received: 'Money received'
   };
 
-  const usdcNetworksQuery = useQuery({
-    queryKey: ['usdc-networks'],
-    queryFn: () => apiClient.payments.getUsdcNetworks()
+  const cryptoNetworksQuery = useQuery({
+    queryKey: ['crypto-networks', cryptoCurrency],
+    queryFn: () => apiClient.payments.getCryptoNetworks(cryptoCurrency)
   });
 
   const { data: deposits } = useQuery({
@@ -64,29 +65,29 @@ export default function WalletPage() {
     enabled: !!user?.email
   });
 
-  const currentUsdcDeposit = deposits?.find((deposit) => deposit.payment_method === 'usdc' && ['pending_transfer', 'awaiting_review'].includes(deposit.status)) || null;
-  const usdcNetworks = usdcNetworksQuery.data?.networks || [];
+  const currentCryptoDeposit = deposits?.find((deposit) => ['usdc', 'crypto'].includes(deposit.payment_method) && ['pending_transfer', 'awaiting_review'].includes(deposit.status)) || null;
+  const cryptoNetworks = cryptoNetworksQuery.data?.networks || [];
 
   useEffect(() => {
-    if (!usdcNetwork && usdcNetworks.length) {
-      setUsdcNetwork(usdcNetworks[0].value);
+    if (cryptoNetworks.length) {
+      setCryptoNetwork((current) => cryptoNetworks.some((network) => network.value === current) ? current : cryptoNetworks[0].value);
     }
-  }, [usdcNetwork, usdcNetworks]);
+  }, [cryptoNetworks]);
 
   useEffect(() => {
     let ignore = false;
-    const address = String(currentUsdcDeposit?.payment_address || '').trim();
+    const address = String(currentCryptoDeposit?.payment_address || '').trim();
     if (!address) {
-      setUsdcQr('');
+      setCryptoQr('');
       return undefined;
     }
     QRCode.toDataURL(address, { margin: 1, width: 180 }).then((value) => {
-      if (!ignore) setUsdcQr(value);
+      if (!ignore) setCryptoQr(value);
     }).catch(() => {
-      if (!ignore) setUsdcQr('');
+      if (!ignore) setCryptoQr('');
     });
     return () => { ignore = true; };
-  }, [currentUsdcDeposit?.payment_address]);
+  }, [currentCryptoDeposit?.payment_address]);
 
   const lookupRecipient = useMutation({
     mutationFn: () => apiClient.wallet.lookupShareRecipient(recipientInput),
@@ -113,14 +114,21 @@ export default function WalletPage() {
     onError: (error) => toast.error(error.message || 'Could not send money')
   });
 
-  const createUsdcAddress = useMutation({
-    mutationFn: () => apiClient.payments.createUsdcAddress({ amountUsd: Number(usdcAmount), network: usdcNetwork }),
+  const createCryptoAddress = useMutation({
+    mutationFn: () => apiClient.payments.createCryptoAddress({ amountUsd: Number(cryptoAmount), network: cryptoNetwork, currency: cryptoCurrency }),
     onSuccess: () => {
       invalidateOperationalData(queryClient);
-      toast.success('USDC address ready');
+      toast.success(`${cryptoCurrency} address ready`);
     },
     onError: (error) => toast.error(error.message || 'Could not generate address')
   });
+
+  const depositReceiptUrl = (tx) => {
+    if (tx.type !== 'deposit') return null;
+    const ref = String(tx.reference || '');
+    if (ref.startsWith('DEP-')) return apiClient.payments.invoiceUrl(ref.slice(4));
+    return apiClient.payments.invoiceUrl(ref);
+  };
 
   const copyText = async (value, label) => {
     try {
@@ -132,28 +140,28 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5 pb-20 lg:pb-0">
+      <div className="space-y-3 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <div>
           <h1 className="text-2xl font-bold">Service Balance</h1>
           <p className="text-sm text-muted-foreground">Your available platform balance and history</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShareOpen(true)}>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button variant="outline" className="justify-center" onClick={() => setShareOpen(true)}>
             <SendHorizontal className="w-4 h-4 mr-2" /> Send Money
           </Button>
-          <Button variant="outline" onClick={() => setUsdcOpen(true)}>
-            <QrCode className="w-4 h-4 mr-2" /> USDC Deposit
+          <Button variant="outline" className="justify-center" onClick={() => setCryptoOpen(true)}>
+            <QrCode className="w-4 h-4 mr-2" /> Crypto Deposit
           </Button>
-          <Link to="/add-money">
-          <Button className="bg-primary text-primary-foreground">
+          <Link to="/add-money" className="col-span-2 sm:col-span-1">
+          <Button className="w-full justify-center bg-primary text-primary-foreground">
             <PlusCircle className="w-4 h-4 mr-2" /> Add Money
           </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
         <StatCard title="Available Service Balance" value={`$${balance.toFixed(2)}`} subtitle={`Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
         <StatCard title="Locked Balance" value={`$${locked.toFixed(2)}`} subtitle="Pending operations" icon={Lock} />
         <StatCard title="Total Transactions" value={transactions?.length || 0} icon={ArrowDownUp} />
@@ -175,14 +183,19 @@ export default function WalletPage() {
                   <p className="text-xs text-muted-foreground truncate">{tx.description || tx.reference}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`text-sm font-mono font-semibold ${tx.amount >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                    {tx.amount >= 0 ? '+' : ''}{tx.amount?.toFixed(2)} USD
+                  <p className={`text-sm font-mono font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
+                    {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
                   </p>
                   <p className="text-[10px] text-muted-foreground font-mono">
-                    Bal: ${tx.balance_after?.toFixed(2)}
+                    Bal: ${Number(tx.balance_after || 0).toFixed(2)}
                   </p>
                 </div>
-                <div className="shrink-0">
+                <div className="flex shrink-0 items-center gap-2">
+                  {depositReceiptUrl(tx) && (
+                    <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(depositReceiptUrl(tx), '_blank')}>
+                      <ReceiptText className="h-4 w-4" />
+                    </Button>
+                  )}
                   <StatusBadge status={tx.status} className="text-[10px]" />
                 </div>
               </div>
@@ -234,26 +247,37 @@ export default function WalletPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={usdcOpen} onOpenChange={setUsdcOpen}>
+      <Dialog open={cryptoOpen} onOpenChange={setCryptoOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>USDC Deposit</DialogTitle>
-            <DialogDescription>Add to your service balance with a compact USDC deposit address.</DialogDescription>
+            <DialogTitle>Crypto Deposit</DialogTitle>
+            <DialogDescription>Add to your service balance with a compact deposit address.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {!currentUsdcDeposit ? (
+            {!currentCryptoDeposit ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label>Asset</Label>
+                    <Select value={cryptoCurrency} onValueChange={setCryptoCurrency}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USDC">USDC</SelectItem>
+                        <SelectItem value="USDT">USDT</SelectItem>
+                        <SelectItem value="BTC">BTC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="space-y-1.5">
                     <Label>Amount in USD</Label>
-                    <Input type="number" min="5" step="0.01" value={usdcAmount} onChange={(event) => setUsdcAmount(event.target.value)} />
+                    <Input type="number" min="5" step="0.01" value={cryptoAmount} onChange={(event) => setCryptoAmount(event.target.value)} />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Network</Label>
-                    <Select value={usdcNetwork} onValueChange={setUsdcNetwork}>
+                    <Select value={cryptoNetwork} onValueChange={setCryptoNetwork}>
                       <SelectTrigger><SelectValue placeholder="Choose network" /></SelectTrigger>
                       <SelectContent>
-                        {usdcNetworks.map((network) => (
+                        {cryptoNetworks.map((network) => (
                           <SelectItem key={network.value} value={network.value}>{network.label}</SelectItem>
                         ))}
                       </SelectContent>
@@ -261,9 +285,9 @@ export default function WalletPage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setUsdcOpen(false)}>Close</Button>
-                  <Button onClick={() => createUsdcAddress.mutate()} disabled={!usdcAmount || !usdcNetwork || createUsdcAddress.isPending}>
-                    {createUsdcAddress.isPending ? 'Generating...' : 'Generate Address'}
+                  <Button variant="outline" onClick={() => setCryptoOpen(false)}>Close</Button>
+                  <Button onClick={() => createCryptoAddress.mutate()} disabled={!cryptoAmount || !cryptoNetwork || createCryptoAddress.isPending}>
+                    {createCryptoAddress.isPending ? 'Generating...' : 'Generate Address'}
                   </Button>
                 </DialogFooter>
               </>
@@ -271,23 +295,23 @@ export default function WalletPage() {
               <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold">USDC deposit</p>
-                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentUsdcDeposit.status} className="text-[10px]" /></p>
+                    <p className="font-semibold">{currentCryptoDeposit.payment_currency || 'Crypto'} deposit</p>
+                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentCryptoDeposit.status} className="text-[10px]" /></p>
                   </div>
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                    {currentUsdcDeposit.payment_network}
+                    {currentCryptoDeposit.payment_network}
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-card p-3">
                     <p className="text-xs text-muted-foreground">Amount</p>
-                    <p className="font-mono font-semibold">{Number(currentUsdcDeposit.payment_amount || 0).toFixed(2)} USDC</p>
+                    <p className="font-mono font-semibold">{Number(currentCryptoDeposit.payment_amount || 0).toFixed(2)} {currentCryptoDeposit.payment_currency || 'USDC'}</p>
                   </div>
                   <div className="rounded-xl bg-card p-3">
                     <p className="text-xs text-muted-foreground">Reference</p>
                     <div className="mt-1 flex items-start justify-between gap-2">
-                      <p className="min-w-0 break-all font-mono text-xs">{currentUsdcDeposit.transaction_reference}</p>
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentUsdcDeposit.transaction_reference, 'Reference')}>
+                      <p className="min-w-0 break-all font-mono text-xs">{currentCryptoDeposit.transaction_reference}</p>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentCryptoDeposit.transaction_reference, 'Reference')}>
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
@@ -297,18 +321,18 @@ export default function WalletPage() {
                   <div className="rounded-xl bg-card p-3">
                     <p className="text-xs text-muted-foreground">Address</p>
                     <div className="mt-1 flex items-start justify-between gap-2">
-                      <p className="min-w-0 break-all font-mono text-xs">{currentUsdcDeposit.payment_address}</p>
-                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentUsdcDeposit.payment_address, 'Address')}>
+                      <p className="min-w-0 break-all font-mono text-xs">{currentCryptoDeposit.payment_address}</p>
+                      <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyText(currentCryptoDeposit.payment_address, 'Address')}>
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
                   <div className="flex items-center justify-center rounded-xl bg-card p-3">
-                    {usdcQr ? <img src={usdcQr} alt="USDC deposit QR code" className="h-[150px] w-[150px] rounded-lg border border-border bg-white p-2" /> : <div className="text-xs text-muted-foreground">QR loading...</div>}
+                    {cryptoQr ? <img src={cryptoQr} alt="Deposit QR code" className="h-[150px] w-[150px] rounded-lg border border-border bg-white p-2" /> : <div className="text-xs text-muted-foreground">QR loading...</div>}
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setUsdcOpen(false)}>Close</Button>
+                  <Button variant="outline" onClick={() => setCryptoOpen(false)}>Close</Button>
                 </DialogFooter>
               </div>
             )}

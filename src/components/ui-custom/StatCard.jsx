@@ -6,9 +6,9 @@ export default function StatCard({ title, value, subtitle, icon: Icon, trend, ac
     <div className={cn('flex h-full min-h-[104px] flex-col justify-between rounded-xl border border-border bg-card p-3 sm:min-h-[118px] sm:p-4 transition-all hover:border-primary/20', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <p className="truncate text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">{title}</p>
+          <p className="text-[10px] font-medium uppercase leading-snug tracking-[0.12em] text-muted-foreground sm:text-[11px]">{title}</p>
           <p className={cn('truncate whitespace-nowrap font-mono text-lg font-bold leading-tight sm:text-xl', accentClass)}>{value}</p>
-          {subtitle && <p className="truncate whitespace-nowrap text-[11px] leading-snug text-muted-foreground">{subtitle}</p>}
+          {subtitle && <p className="break-words text-[11px] leading-snug text-muted-foreground">{subtitle}</p>}
         </div>
         {Icon && (
           <div className="shrink-0 rounded-lg bg-secondary p-2 sm:p-2.5">

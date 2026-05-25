@@ -123,8 +123,10 @@ export const apiClient = {
   },
   payments: {
     initializeChapa: (payload) => request('/api/payments/chapa/initialize', { method: 'POST', body: JSON.stringify(payload) }),
-    getUsdcNetworks: () => request('/api/payments/usdc/networks'),
-    createUsdcAddress: (payload) => request('/api/payments/usdc/address', { method: 'POST', body: JSON.stringify(payload) }),
+    getCryptoNetworks: (currency = 'USDC') => request(`/api/payments/crypto/networks?currency=${encodeURIComponent(currency)}`),
+    createCryptoAddress: (payload) => request('/api/payments/crypto/address', { method: 'POST', body: JSON.stringify(payload) }),
+    getUsdcNetworks: () => request('/api/payments/crypto/networks?currency=USDC'),
+    createUsdcAddress: (payload) => request('/api/payments/crypto/address', { method: 'POST', body: JSON.stringify({ ...payload, currency: 'USDC' }) }),
     submitUsdcTransfer: (depositId, payload = {}) => request(`/api/payments/usdc/${encodeURIComponent(depositId)}/submit`, { method: 'POST', body: JSON.stringify(payload) }),
     getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`),
     invoiceUrl: (txRef) => `${API_BASE_URL}/api/payments/invoice/${encodeURIComponent(txRef)}/download`

@@ -582,10 +582,17 @@ function normalizeStablecoinChains(payload, currency = 'USDC') {
       .concat(Array.isArray(entry?.stablecoins) ? entry.stablecoins : [])
       .concat(Array.isArray(entry?.assets) ? entry.assets : [])
       .concat(Array.isArray(entry?.currencies) ? entry.currencies : []);
+    const entrySymbols = [
+      entry?.symbol,
+      entry?.code,
+      entry?.asset,
+      entry?.currency,
+      entry?.ticker
+    ].map((value) => String(value || '').toUpperCase());
     const supportsTarget = stablecoins.some((coin) => {
       const symbol = String(coin?.symbol || coin?.code || coin?.asset || coin || '').toUpperCase();
       return symbol === target;
-    });
+    }) || entrySymbols.includes(target);
     if (!supportsTarget) return [];
 
     const chainValue = String(entry?.name || entry?.chain || entry?.network || entry?.code || '').trim();
@@ -970,13 +977,13 @@ function escapeHtml(value) {
 function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
   const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
-  const isStablecoinDeposit = String(deposit.payment_method || '').toLowerCase() === 'usdc';
+  const isStablecoinDeposit = ['usdc', 'crypto'].includes(String(deposit.payment_method || '').toLowerCase());
   const rows = isStablecoinDeposit
     ? [
         ['Payment reference', deposit.transaction_reference],
         ['Order status', status],
         ['Funding amount', `${Number(deposit.payment_amount || deposit.final_usd_credit || 0).toFixed(2)} ${deposit.payment_currency || 'USDC'}`],
-        ['Network', deposit.payment_network || 'USDC'],
+        ['Network', deposit.payment_network || deposit.payment_currency || 'USDC'],
         ['Deposit address', deposit.payment_address || '-'],
         ['USD credit', `$${Number(deposit.final_usd_credit || 0).toFixed(2)}`],
         ['ETB equivalent', `${Number(deposit.etb_amount || 0).toLocaleString()} ETB`],
@@ -984,7 +991,9 @@ function invoiceHtml(deposit) {
       ]
     : [
         ['Payment reference', deposit.transaction_reference],
+        ['Processor reference', deposit.provider_reference || '-'],
         ['Order status', status],
+        ['Payment method', 'Hosted ETB checkout'],
         ['Card amount', `$${Number(deposit.requested_usd_amount || 0).toFixed(2)}`],
         ['Exchange rate', `1 USD = ${Number(deposit.exchange_rate || 0).toFixed(2)} ETB`],
         ['Service & processing fee', `${serviceProcessingFee.toLocaleString()} ETB`],
@@ -1441,6 +1450,7 @@ export function createApp() {
       return res.status(403).json({ message: 'This account is restricted. Contact support for help.' });
     }
 
+    ensureWallet(user.email);
     return res.json(serializeTwoFactorUser(user));
   });
 
@@ -1694,9 +1704,9 @@ export function createApp() {
 
       ensureWallet(req.user.email);
       ensureWallet(recipient.email);
-      const reference = `SND-${Date.now()}-${generateId('bal')}`;
-      debitWallet(req.user.email, amount, 'balance_share_sent', `Shared balance to ${recipient.full_name || recipient.email}`, reference);
-      creditWallet(recipient.email, amount, 'balance_share_received', `Received balance from ${req.user.full_name || req.user.email}`, reference);
+      const transferId = `SND-${Date.now()}-${generateId('bal')}`;
+      debitWallet(req.user.email, amount, 'balance_share_sent', `Sent money to ${recipient.full_name || recipient.email}`, `${transferId}-debit`);
+      creditWallet(recipient.email, amount, 'balance_share_received', `Received money from ${req.user.full_name || req.user.email}`, `${transferId}-credit`);
       createNotification(recipient.email, 'Balance Received', `$${money(amount).toFixed(2)} was shared to you by ${req.user.full_name || req.user.email}.`, 'wallet', '/wallet');
       createNotification(req.user.email, 'Balance Sent', `You shared $${money(amount).toFixed(2)} to ${recipient.full_name || recipient.email}.`, 'wallet', '/wallet');
       writeAudit({
@@ -1704,13 +1714,13 @@ export function createApp() {
         userId: recipient.email,
         action: 'balance_shared',
         entityType: 'wallet',
-        entityId: reference,
+        entityId: transferId,
         newValue: { from: req.user.email, to: recipient.email, amount: money(amount) },
         req
       });
       res.json({
         ok: true,
-        reference,
+        reference: transferId,
         amount: money(amount),
         receiver: {
           full_name: recipient.full_name || `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim(),
@@ -2634,17 +2644,21 @@ export function createApp() {
     }
   });
 
-  app.get('/api/payments/usdc/networks', authMiddleware(db), async (req, res) => {
+  app.get('/api/payments/crypto/networks', authMiddleware(db), async (req, res) => {
     try {
+      const currency = String(req.query.currency || 'USDC').toUpperCase();
+      if (!['USDC', 'USDT', 'BTC'].includes(currency)) {
+        return res.status(400).json({ message: 'Choose USDC, USDT, or BTC.' });
+      }
       const supportedChains = await bitnobService.getSupportedChains();
-      const networks = normalizeStablecoinChains(supportedChains, 'USDC');
-      res.json({ currency: 'USDC', networks });
+      const networks = normalizeStablecoinChains(supportedChains, currency);
+      res.json({ currency, networks });
     } catch (error) {
-      res.status(400).json({ message: error.message || 'Unable to load USDC networks right now.' });
+      res.status(400).json({ message: error.message || 'Unable to load deposit networks right now.' });
     }
   });
 
-  app.post('/api/payments/usdc/address', authMiddleware(db), async (req, res) => {
+  app.post('/api/payments/crypto/address', authMiddleware(db), async (req, res) => {
     try {
       const approvedKyc = db.prepare(`
         SELECT id FROM kyc_submissions
@@ -2658,6 +2672,10 @@ export function createApp() {
       const settings = getFeeSettings();
       const amountUsd = Number(req.body?.amountUsd || 0);
       const network = String(req.body?.network || '').trim();
+      const currency = String(req.body?.currency || 'USDC').toUpperCase();
+      if (!['USDC', 'USDT', 'BTC'].includes(currency)) {
+        return res.status(400).json({ message: 'Choose USDC, USDT, or BTC.' });
+      }
       if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
         return res.status(400).json({ message: 'Enter a valid USD amount.' });
       }
@@ -2668,14 +2686,14 @@ export function createApp() {
         return res.status(400).json({ message: `Maximum deposit is $${Number(settings.max_deposit_usd || 1000).toFixed(2)}.` });
       }
       if (!network) {
-        return res.status(400).json({ message: 'Choose a USDC network first.' });
+        return res.status(400).json({ message: `Choose a ${currency} network first.` });
       }
 
       const supportedChains = await bitnobService.getSupportedChains();
-      const networks = normalizeStablecoinChains(supportedChains, 'USDC');
+      const networks = normalizeStablecoinChains(supportedChains, currency);
       const selectedNetwork = networks.find((item) => item.value.toUpperCase() === network.toUpperCase());
       if (!selectedNetwork) {
-        return res.status(400).json({ message: 'That USDC network is not available right now.' });
+        return res.status(400).json({ message: `That ${currency} network is not available right now.` });
       }
 
       db.prepare(`
@@ -2685,20 +2703,22 @@ export function createApp() {
             rejection_reason = 'Replaced by a newer USDC funding request.',
             updated_at = ?
         WHERE user_id = ?
-          AND payment_method = 'usdc'
+          AND payment_method = 'crypto'
           AND status IN ('pending_transfer', 'awaiting_review')
       `).run(nowIso(), req.user.email);
 
-      const txRef = `dinkcard_usdc_${generateId('tx')}`;
+      const txRef = `dinkcard_${currency.toLowerCase()}_${generateId('tx')}`;
       const providerResponse = await bitnobService.generateAddress({
         chain: selectedNetwork.value,
+        currency,
+        asset: currency,
         customer_email: req.user.email,
-        label: `Dink Card USDC ${selectedNetwork.label}`,
+        label: `Dink Card ${currency} ${selectedNetwork.label}`,
         reference: txRef
       });
       const address = extractGeneratedAddress(providerResponse);
       if (!address) {
-        return res.status(400).json({ message: 'Bitnob did not return a deposit address for that network.' });
+        return res.status(400).json({ message: 'A deposit address was not returned for that network.' });
       }
 
       const rate = Number(settings.usd_to_etb_rate || 190);
@@ -2711,10 +2731,11 @@ export function createApp() {
           requested_usd_amount, exchange_rate, etb_amount, service_fee_etb, gateway_fee_etb, total_payable_etb,
           final_usd_credit, sender_name, sender_phone, transaction_reference, status, provider_status, provider_payload,
           source, created_at, updated_at
-        ) VALUES (?, ?, 'usdc', 'USDC', ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 'pending_transfer', 'address_generated', ?, 'dinkcard', ?, ?)
+        ) VALUES (?, ?, 'crypto', ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 'pending_transfer', 'address_generated', ?, 'dinkcard', ?, ?)
       `).run(
         depositId,
         req.user.email,
+        currency,
         selectedNetwork.value,
         address,
         money(amountUsd),
@@ -2734,14 +2755,14 @@ export function createApp() {
       res.status(201).json({
         id: depositId,
         reference: txRef,
-        currency: 'USDC',
+        currency,
         network: selectedNetwork.value,
         address,
         amountUsd: money(amountUsd),
-        amountUsdc: money(amountUsd)
+        amountCrypto: money(amountUsd)
       });
     } catch (error) {
-      res.status(400).json({ message: error.message || 'Unable to create a USDC funding address right now.' });
+      res.status(400).json({ message: error.message || 'Unable to create a funding address right now.' });
     }
   });
 
@@ -2749,7 +2770,7 @@ export function createApp() {
     try {
       const deposit = db.prepare('SELECT * FROM deposits WHERE id = ? AND user_id = ?').get(req.params.depositId, req.user.email);
       if (!deposit) return res.status(404).json({ message: 'Funding request not found.' });
-      if (deposit.payment_method !== 'usdc') return res.status(400).json({ message: 'This funding request is not a USDC transfer.' });
+      if (!['usdc', 'crypto'].includes(deposit.payment_method)) return res.status(400).json({ message: 'This funding request is not a crypto transfer.' });
       if (!['pending_transfer', 'awaiting_review'].includes(deposit.status)) {
         return res.status(400).json({ message: 'This funding request can no longer be submitted.' });
       }

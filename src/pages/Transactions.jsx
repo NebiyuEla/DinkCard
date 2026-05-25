@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useCurrentUser, useWalletTransactions } from '@/hooks/useAppData';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
+import { Button } from '@/components/ui/button';
+import { apiClient } from '@/api/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowDownUp, PlusCircle, DollarSign, ArrowUpRight, Lock, Clock, CreditCard, Gift } from 'lucide-react';
+import { ArrowDownUp, PlusCircle, DollarSign, ArrowUpRight, Lock, Clock, CreditCard, Gift, ReceiptText } from 'lucide-react';
 import { format } from 'date-fns';
 
 const typeFilters = [
@@ -40,6 +42,13 @@ export default function Transactions() {
     if (statusFilter !== 'all' && tx.status !== statusFilter) return false;
     return true;
   });
+
+  const receiptUrl = (tx) => {
+    if (tx.type !== 'deposit') return null;
+    const ref = String(tx.reference || '');
+    if (!ref) return null;
+    return apiClient.payments.invoiceUrl(ref.startsWith('DEP-') ? ref.slice(4) : ref);
+  };
 
   return (
     <div className="space-y-6">
@@ -83,13 +92,18 @@ export default function Transactions() {
                 <p className="text-xs text-muted-foreground truncate">{tx.description || tx.reference}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className={`text-sm font-mono font-semibold ${tx.amount >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                  {tx.amount >= 0 ? '+' : ''}{tx.amount?.toFixed(2)} USD
+                <p className={`text-sm font-mono font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
+                  {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   {tx.created_date ? format(new Date(tx.created_date), 'MMM d, h:mm a') : ''}
                 </p>
               </div>
+              {receiptUrl(tx) && (
+                <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => window.open(receiptUrl(tx), '_blank')}>
+                  <ReceiptText className="h-4 w-4" />
+                </Button>
+              )}
               <StatusBadge status={tx.status} className="shrink-0 text-[10px]" />
             </div>
           ))}
