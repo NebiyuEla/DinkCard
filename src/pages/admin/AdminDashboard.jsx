@@ -1,15 +1,16 @@
 import React from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import { REFRESH } from '@/lib/realtime';
+import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { useCurrentUser } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import { 
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard, 
-  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity, WalletCards, BellRing
+  HeadphonesIcon, Settings, ArrowLeft, FileText, Activity, WalletCards, BellRing, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -36,6 +37,7 @@ const roleNavAccess = {
 };
 
 export default function AdminDashboard() {
+  const queryClient = useQueryClient();
   const location = useLocation();
   const { data: currentUser } = useCurrentUser();
   const access = roleNavAccess[currentUser?.role] || roleNavAccess.support;
@@ -60,18 +62,51 @@ export default function AdminDashboard() {
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
 
   const isOverview = location.pathname === '/admin';
+  const syncProvider = useMutation({
+    mutationFn: apiClient.admin.customers.syncBitnob,
+    onSuccess: async (result) => {
+      await invalidateOperationalData(queryClient);
+      toast.success(`Synced ${result?.imported || 0} imported and ${result?.updated || 0} updated records`);
+    },
+    onError: (error) => toast.error(error.message || 'Sync failed')
+  });
+
+  const refreshDashboard = async () => {
+    await invalidateOperationalData(queryClient);
+    toast.success('Dashboard refreshed');
+  };
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 lg:px-4">
-      <div className="flex items-center gap-3">
-        <Link to="/dashboard">
-          <button className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
+    <div className="mx-auto w-full max-w-7xl space-y-6 pt-4 md:pt-6 lg:px-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard">
+            <button className="p-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors">
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <p className="text-sm text-muted-foreground">Platform management</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={refreshDashboard}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <RefreshCw className="h-4 w-4" /> Refresh
           </button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">Admin Panel</h1>
-          <p className="text-sm text-muted-foreground">Platform management</p>
+          <button
+            type="button"
+            onClick={() => syncProvider.mutate()}
+            disabled={syncProvider.isPending}
+            className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60"
+          >
+            <RefreshCw className={cn('h-4 w-4', syncProvider.isPending && 'animate-spin')} />
+            {syncProvider.isPending ? 'Syncing...' : 'Sync Provider'}
+          </button>
         </div>
       </div>
 

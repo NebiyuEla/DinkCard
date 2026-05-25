@@ -614,6 +614,24 @@ async function refreshLocalCardFromProvider(card) {
   }
 }
 
+export async function reconcileVirtualCards({ userId, limit = 100 } = {}) {
+  const rows = db.prepare(`
+    SELECT * FROM virtual_cards
+    WHERE provider = 'bitnob'
+      AND provider_card_id IS NOT NULL
+      AND status != 'terminated'
+      ${userId ? 'AND user_id = ?' : ''}
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT ?
+  `).all(...(userId ? [userId, limit] : [limit]));
+
+  const refreshed = [];
+  for (const row of rows) {
+    refreshed.push(await refreshLocalCardFromProvider(row));
+  }
+  return refreshed;
+}
+
 function extractProviderAmount(value) {
   if (value === undefined || value === null || value === '') return 0;
   const numeric = Number(value);

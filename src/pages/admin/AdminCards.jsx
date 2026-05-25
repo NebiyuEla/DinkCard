@@ -120,9 +120,7 @@ export default function AdminCards() {
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: (result) => {
       toast.success(`Synced ${result.importedCustomers || result.imported || 0} customers and ${result.importedCards || 0} cards`);
-      queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
-      queryClient.invalidateQueries({ queryKey: ['admin-cards'] });
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      invalidateOperationalData(queryClient);
     },
     onError: (error) => toast.error(error.message || 'Bitnob sync failed')
   });
@@ -142,8 +140,7 @@ export default function AdminCards() {
       toast.success('Customer deleted from Bitnob and Dink Card');
       setDeleteCustomer(null);
       setDeleteReason('');
-      queryClient.invalidateQueries({ queryKey: ['bitnob-customers'] });
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      invalidateOperationalData(queryClient);
     },
     onError: (error) => toast.error(error.message || 'Customer deletion failed')
   });

@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 const MANUAL_APPROVAL_STATUSES = new Set(['awaiting_review', 'pending_transfer', 'pending_payment', 'processing']);
+const CONFIRMED_CRYPTO_STATUSES = new Set(['deposit_success', 'confirmed', 'completed', 'success']);
 
 export default function AdminDeposits() {
   const queryClient = useQueryClient();
@@ -24,6 +25,11 @@ export default function AdminDeposits() {
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
+  const canManuallyApprove = (deposit) => {
+    if (!deposit || !MANUAL_APPROVAL_STATUSES.has(deposit.status)) return false;
+    if (String(deposit.payment_method || '').toLowerCase() !== 'crypto') return true;
+    return CONFIRMED_CRYPTO_STATUSES.has(String(deposit.provider_status || '').toLowerCase());
+  };
 
   const approveDeposit = useMutation({
     mutationFn: (deposit) => apiClient.admin.deposits.approve(deposit.id),
@@ -154,7 +160,13 @@ export default function AdminDeposits() {
                 </div>
               )}
 
-              {MANUAL_APPROVAL_STATUSES.has(selected.status) && (
+              {String(selected.payment_method || '').toLowerCase() === 'crypto' && !CONFIRMED_CRYPTO_STATUSES.has(String(selected.provider_status || '').toLowerCase()) && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
+                  Crypto deposits are credited automatically after network confirmation. Manual approval is disabled until the provider confirms the transfer.
+                </div>
+              )}
+
+              {canManuallyApprove(selected) && (
                 <div className="flex gap-2 pt-2">
                   <Button onClick={() => approveDeposit.mutate(selected)} disabled={approveDeposit.isPending} className="flex-1 bg-primary text-primary-foreground">
                     <Check className="w-4 h-4 mr-2" /> {approveDeposit.isPending ? 'Approving...' : 'Manual Approve'}

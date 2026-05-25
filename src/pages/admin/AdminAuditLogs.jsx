@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
-import { REFRESH } from '@/lib/realtime';
+import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 
 export default function AdminAuditLogs() {
@@ -19,7 +19,7 @@ export default function AdminAuditLogs() {
     mutationFn: (id) => apiClient.admin.deleteAuditLog(id),
     onSuccess: () => {
       toast.success('Audit log deleted');
-      queryClient.invalidateQueries({ queryKey: ['audit-logs'] });
+      invalidateOperationalData(queryClient);
     },
     onError: (error) => toast.error(error.message || 'Could not delete audit log')
   });

@@ -23,6 +23,7 @@ export default function AdminFees() {
 
   const [form, setForm] = useState(DEFAULT_SETTINGS);
   const [clearScope, setClearScope] = useState('notifications');
+  const [specificDelete, setSpecificDelete] = useState({ entity: 'deposit', id: '', reason: '' });
   const preview = calculateDepositFees(50, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
   const effectiveMinCreation = getEffectiveMinCardCreation(form);
   const effectiveMinFunding = getEffectiveMinCardFunding(form);
@@ -57,6 +58,18 @@ export default function AdminFees() {
       toast.success(`${String(result.scope).replace(/_/g, ' ')} data cleared`);
     },
     onError: (error) => toast.error(error.message || 'Failed to clear data')
+  });
+
+  const deleteSpecific = useMutation({
+    mutationFn: () => apiClient.admin.system.deleteRecord(specificDelete.entity, specificDelete.id.trim(), {
+      reason: specificDelete.reason.trim() || 'Selected record cleanup'
+    }),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('Selected record deleted');
+      setSpecificDelete(prev => ({ ...prev, id: '', reason: '' }));
+    },
+    onError: (error) => toast.error(error.message || 'Failed to delete selected record')
   });
 
   const pricingFields = [
@@ -179,6 +192,48 @@ export default function AdminFees() {
             >
               <Trash2 className="mr-2 h-4 w-4" />{clearData.isPending ? 'Clearing...' : 'Clear Data'}
             </Button>
+          </div>
+          <div className="mt-5 rounded-lg border border-border bg-background/70 p-3">
+            <p className="text-xs font-semibold text-foreground">Delete one selected record</p>
+            <p className="mt-1 text-xs text-muted-foreground">Use this when you only want to remove one deposit, card, customer, KYC record, ticket, notification, audit log, or webhook record.</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-[180px_1fr_1fr_auto]">
+              <select
+                value={specificDelete.entity}
+                onChange={(event) => setSpecificDelete(prev => ({ ...prev, entity: event.target.value }))}
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="deposit">Deposit</option>
+                <option value="card">Card</option>
+                <option value="customer">Customer</option>
+                <option value="kyc">KYC</option>
+                <option value="support_ticket">Support ticket</option>
+                <option value="notification">Notification</option>
+                <option value="audit">Audit log</option>
+                <option value="webhook">Webhook record</option>
+              </select>
+              <Input
+                value={specificDelete.id}
+                onChange={(event) => setSpecificDelete(prev => ({ ...prev, id: event.target.value }))}
+                placeholder="Record ID"
+              />
+              <Input
+                value={specificDelete.reason}
+                onChange={(event) => setSpecificDelete(prev => ({ ...prev, reason: event.target.value }))}
+                placeholder="Reason"
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleteSpecific.isPending || !specificDelete.id.trim()}
+                onClick={() => {
+                  if (window.confirm(`Delete this ${specificDelete.entity.replace(/_/g, ' ')} record?`)) {
+                    deleteSpecific.mutate();
+                  }
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />{deleteSpecific.isPending ? 'Deleting...' : 'Delete Record'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

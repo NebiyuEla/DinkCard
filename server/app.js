@@ -20,6 +20,7 @@ import {
   fundVirtualCard,
   getVirtualCardTransactions,
   handleBitnobWebhook,
+  reconcileVirtualCards,
   reconcilePendingUsdcDeposits,
   revealCardDetails,
   setCardPin,
@@ -1854,11 +1855,14 @@ export function createApp() {
     });
   });
 
-  app.get('/api/entities/:entity', authMiddleware(db), (req, res) => {
+  app.get('/api/entities/:entity', authMiddleware(db), async (req, res) => {
     try {
       if (req.params.entity === 'Deposit') {
         expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
         reconcilePendingUsdcDeposits();
+      }
+      if (req.params.entity === 'VirtualCard') {
+        await reconcileVirtualCards({ userId: req.user.role === 'user' ? req.user.email : undefined, limit: req.user.role === 'user' ? 20 : 100 });
       }
       const rows = queryEntities(
         req.params.entity,
@@ -2080,9 +2084,10 @@ export function createApp() {
     }
   });
 
-  app.get('/api/admin/cards', authMiddleware(db), (req, res) => {
+  app.get('/api/admin/cards', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
+      await reconcileVirtualCards({ limit: 100 });
       const rows = db.prepare(`
         SELECT vc.*, bc.first_name, bc.last_name, bc.email AS customer_email
         FROM virtual_cards vc
@@ -2695,6 +2700,66 @@ export function createApp() {
     }
   });
 
+  app.delete('/api/admin/system/records/:entity/:id', authMiddleware(db), async (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+
+    const entity = String(req.params.entity || '').toLowerCase();
+    const id = String(req.params.id || '').trim();
+    const reason = String(req.body?.reason || '').trim() || 'Deleted specific record by superadmin';
+    const allowed = {
+      notification: 'notifications',
+      deposit: 'deposits',
+      card: 'virtual_cards',
+      customer: 'bitnob_customers',
+      kyc: 'kyc_submissions',
+      support_ticket: 'support_tickets',
+      audit: 'audit_logs',
+      webhook: 'webhook_events'
+    };
+    const table = allowed[entity];
+    if (!table) return res.status(400).json({ message: 'Unsupported record type.' });
+    if (!id) return res.status(400).json({ message: 'Enter the record ID.' });
+
+    try {
+      let row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+      if (!row && entity === 'card') {
+        row = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ? OR customer_reference = ?').get(id, id);
+      }
+      if (!row && entity === 'customer') {
+        row = db.prepare('SELECT * FROM bitnob_customers WHERE bitnob_customer_id = ? OR email = ?').get(id, id);
+      }
+      if (!row && entity === 'deposit') {
+        row = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ? OR provider_reference = ?').get(id, id);
+      }
+      if (!row) return res.status(404).json({ message: 'Record not found.' });
+
+      if (entity === 'card' && row.provider_card_id && row.status !== 'terminated') {
+        await terminateCard({ role: 'superadmin', email: req.user.email }, row.id, null, `${reason}: specific record deletion`);
+      }
+      if (entity === 'customer' && row.bitnob_customer_id) {
+        await bitnobService.deleteCustomer(row.bitnob_customer_id);
+      }
+      if (entity === 'support_ticket') {
+        db.prepare('DELETE FROM support_messages WHERE ticket_id = ?').run(id);
+      }
+
+      db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(row.id);
+      writeAudit({
+        actor: req.user.email,
+        userId: row.user_id || row.email || null,
+        action: 'specific_record_deleted',
+        entityType: entity,
+        entityId: row.id,
+        oldValue: mapRow(row),
+        reason,
+        req
+      });
+      res.json({ ok: true, entity, id: row.id });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Specific record deletion failed.' });
+    }
+  });
+
   app.delete('/api/admin/users/:id', authMiddleware(db), async (req, res) => {
     if (!requireSuperadmin(req, res)) return;
 
@@ -2876,14 +2941,14 @@ export function createApp() {
       const now = nowIso();
       db.prepare(`
         UPDATE deposits
-        SET status = 'awaiting_review',
-            provider_status = 'submitted_by_user',
+        SET status = 'pending_transfer',
+            provider_status = 'waiting_network_confirmation',
             tx_hash = ?,
             updated_at = ?
         WHERE id = ?
       `).run(txHash || null, now, deposit.id);
 
-      createNotification(req.user.email, 'USDC Transfer Submitted', 'Your USDC funding request is awaiting admin verification.', 'deposit', '/dashboard');
+      createNotification(req.user.email, 'Crypto Transfer Saved', 'Your transfer details were saved. Your service balance will update after network confirmation.', 'deposit', '/wallet');
       writeAudit({
         actor: req.user.email,
         userId: req.user.email,
@@ -3137,6 +3202,9 @@ export function createApp() {
       const deposit = db.prepare('SELECT * FROM deposits WHERE id = ?').get(req.params.id);
 
       if (!deposit) return res.status(404).json({ message: 'Deposit not found' });
+      if (String(deposit.payment_method || '').toLowerCase() === 'crypto' && !['deposit_success', 'confirmed', 'completed', 'success'].includes(String(deposit.provider_status || '').toLowerCase())) {
+        return res.status(400).json({ message: 'Crypto deposits are credited automatically after network confirmation. Do not manually approve unconfirmed crypto transfers.' });
+      }
 
       const approved = approveDeposit(deposit, req.user.email);
 

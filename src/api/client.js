@@ -208,7 +208,12 @@ export const apiClient = {
     auditLogs: () => request('/api/admin/audit-logs'),
     deleteAuditLog: (id) => request(`/api/admin/audit-logs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
     system: {
-      clearData: (payload) => request('/api/admin/system/clear-data', { method: 'POST', body: JSON.stringify(payload) })
+      clearData: (payload) => request('/api/admin/system/clear-data', { method: 'POST', body: JSON.stringify(payload) }),
+      deleteRecord: (entity, id, payload) =>
+        request(`/api/admin/system/records/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          body: JSON.stringify(payload || {})
+        })
     }
   }
 };

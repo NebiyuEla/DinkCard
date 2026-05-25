@@ -1,12 +1,13 @@
 export const REFRESH = {
-  user: 15000,
-  admin: 8000,
+  user: 60000,
+  admin: 5000,
   fees: 2000,
   notifications: 3000
 };
 
-export function invalidateOperationalData(queryClient) {
-  [
+export async function invalidateOperationalData(queryClient) {
+  const keys = [
+    'currentUser',
     'feeSettings',
     'wallet',
     'walletTransactions',
@@ -16,19 +17,33 @@ export function invalidateOperationalData(queryClient) {
     'supportTickets',
     'ticketMessages',
     'notifications',
+    'paymentMethods',
     'admin-users',
     'admin-wallet-summary',
     'admin-kyc',
     'admin-deposits',
     'admin-cards',
     'admin-tickets',
+    'admin-users-broadcast',
+    'bitnob-customers',
+    'bitnob-balances',
+    'bitnob-transactions',
+    'provider-status',
     'audit-logs',
     'sa-users',
     'sa-kyc',
     'sa-deposits',
     'sa-cards',
-    'sa-tickets'
-  ].forEach((key) => {
+    'sa-tickets',
+    'sa-wallet-summary'
+  ];
+
+  keys.forEach((key) => {
     queryClient.invalidateQueries({ queryKey: [key] });
+  });
+
+  await queryClient.refetchQueries({
+    type: 'active',
+    predicate: (query) => keys.includes(String(query.queryKey?.[0] || ''))
   });
 }

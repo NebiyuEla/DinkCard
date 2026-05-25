@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { BellRing, Paperclip, Send, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
-import { REFRESH } from '@/lib/realtime';
+import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,7 +37,7 @@ export default function AdminBroadcast() {
     onSuccess: async (result) => {
       toast.success(`Broadcast sent to ${result.sent || 0} user${Number(result.sent || 0) === 1 ? '' : 's'}.`);
       setForm({ audience: 'specific', target: '', title: '', caption: '', attachment_url: '' });
-      await queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      await invalidateOperationalData(queryClient);
     },
     onError: (error) => toast.error(error.message || 'Broadcast failed.')
   });
