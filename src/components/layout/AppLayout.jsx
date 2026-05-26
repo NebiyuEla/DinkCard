@@ -5,6 +5,7 @@ import Sidebar from './Sidebar';
 import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import TermsModal from '@/components/TermsModal';
 import { announceNewNotifications, getNotificationPermission, markNotificationsAsSeen } from '@/lib/deviceNotifications';
+import { invalidateOperationalData } from '@/lib/realtime';
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
@@ -23,6 +24,7 @@ export default function AppLayout() {
 
     events.addEventListener('notification_count', () => {
       queryClient.invalidateQueries({ queryKey: ['notifications', user.email] });
+      invalidateOperationalData(queryClient);
     });
 
     events.onerror = () => {};
@@ -42,8 +44,8 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar user={user} unreadCount={unreadCount} />
-      <main className="lg:ml-64 min-h-screen transition-all duration-300">
-        <div className="max-w-7xl mx-auto p-3 pt-[calc(0.75rem+env(safe-area-inset-top))] pb-24 sm:p-4 lg:p-8 lg:pt-6">
+      <main className="min-h-screen transition-all duration-300 lg:ml-64">
+        <div className="mx-auto w-full max-w-7xl px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 lg:px-8 lg:pb-8 lg:pt-6">
           <Outlet />
         </div>
       </main>

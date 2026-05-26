@@ -11,6 +11,11 @@ const statusColors = {
   pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
   pending_payment: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
   pending_transfer: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+  address_generated: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+  waiting_network_confirmation: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  deposit_detected: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+  deposit_success: 'bg-primary/10 text-primary border-primary/20',
+  underpaid: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
   payment_received: 'bg-primary/10 text-primary border-primary/20',
   processing: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
   awaiting_review: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
@@ -34,7 +39,12 @@ const statusColors = {
 };
 
 const statusLabels = {
-  pending_transfer: 'Waiting Payment',
+  pending_transfer: 'Awaiting Transfer',
+  address_generated: 'Awaiting Transfer',
+  waiting_network_confirmation: 'Confirming',
+  deposit_detected: 'Confirming',
+  deposit_success: 'Confirmed',
+  underpaid: 'Needs Review',
   awaiting_review: 'Processing',
   pending_payment: 'Pending Payment'
 };

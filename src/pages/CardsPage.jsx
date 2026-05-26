@@ -127,7 +127,7 @@ export default function CardsPage() {
   }, [activeCards, selectedCard]);
 
   return (
-    <div className="space-y-5 pb-36 lg:pb-0">
+    <div className="space-y-4 pb-4 lg:pb-0">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
@@ -248,13 +248,13 @@ export default function CardsPage() {
 
               </div>
 
-              <div className="bg-card border border-border rounded-xl p-4 space-y-3 text-sm">
+              <div className="space-y-3 rounded-xl border border-border bg-card p-3 text-sm sm:p-4">
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedStatus} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
                 <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00</span></div>
               </div>
 
-              <div className="rounded-xl border border-border bg-card p-4">
+              <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-sm font-semibold">Card Transactions</p>
                   {cardTransactions.isFetching && <span className="text-xs text-muted-foreground">Loading...</span>}
@@ -276,7 +276,7 @@ export default function CardsPage() {
                 )}
               </div>
 
-              <div className="mb-10 rounded-xl border border-destructive/20 bg-destructive/5 p-4 lg:mb-0">
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 sm:p-4">
                 <p className="text-sm font-semibold text-destructive">Danger Zone</p>
                 <p className="mt-1 text-xs text-muted-foreground">Terminate only when you are done with this card. If you set a PIN, you will need it here too.</p>
                 <Button variant="outline" className="mt-3 text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>

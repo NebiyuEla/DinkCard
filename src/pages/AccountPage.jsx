@@ -165,7 +165,7 @@ export default function AccountPage() {
   });
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-5 pb-24 lg:pb-0">
+    <div className="mx-auto w-full max-w-5xl space-y-5 pb-4 lg:pb-0">
       <div className="flex items-center gap-3">
         <Link to="/dashboard">
           <Button variant="ghost" size="icon"><ArrowLeft className="h-5 w-5" /></Button>

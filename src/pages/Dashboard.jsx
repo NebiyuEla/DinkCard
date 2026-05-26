@@ -82,7 +82,7 @@ export default function Dashboard() {
   }, [queryClient]);
 
   return (
-    <div className="space-y-5 pb-20 sm:space-y-6 lg:pb-0">
+    <div className="space-y-4 pb-4 sm:space-y-6 lg:pb-0">
       <div>
         <h1 className="text-xl font-bold sm:text-2xl">Welcome back{user?.first_name || user?.full_name ? `, ${user?.first_name || user.full_name.split(' ')[0]}` : ''}</h1>
         <p className="mt-1 text-sm text-muted-foreground">Here&apos;s your account overview</p>
@@ -124,20 +124,20 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 md:hidden">
-        <div className="col-span-2 rounded-2xl border border-border bg-card p-3">
+      <div className="grid grid-cols-2 gap-2.5 md:hidden">
+        <div className="col-span-2 rounded-2xl border border-border bg-card p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Balance</p>
           <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="min-w-0 truncate font-mono text-[clamp(1.5rem,8vw,2rem)] font-bold text-primary">{walletLoading ? '...' : `$${balance.toFixed(2)}`}</p>
+            <p className="min-w-0 truncate font-mono text-[clamp(1.35rem,7vw,1.8rem)] font-bold text-primary">{walletLoading ? '...' : `$${balance.toFixed(2)}`}</p>
             <p className="shrink-0 text-right text-[11px] text-muted-foreground">{walletLoading ? 'Loading' : `~ ${etbEstimate.toLocaleString()} ETB`}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-3">
+        <div className="rounded-2xl border border-border bg-card p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Cards</p>
           <p className="mt-2 font-mono text-xl font-bold text-primary">{cardsLoading ? '...' : activeCards.length}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">{frozenCards.length ? `${frozenCards.length} frozen` : 'active'}</p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-3">
+        <div className="rounded-2xl border border-border bg-card p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">KYC</p>
           <p className="mt-2 text-xl font-bold text-primary">{kyc?.status === 'approved' ? `L${kyc.level || 1}` : 'L0'}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">{kyc?.status === 'approved' ? 'verified' : 'pending'}</p>
@@ -155,11 +155,11 @@ export default function Dashboard() {
 
       <div>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</h2>
-        <div className="grid grid-cols-2 gap-3 md:hidden">
+        <div className="grid grid-cols-2 gap-2.5 md:hidden">
           {mobileQuickActions.map((action) => (
             <Link key={action.path} to={action.path}>
-              <div className="flex min-h-[72px] items-center gap-3 rounded-2xl border border-border bg-card px-3 py-3 transition-all hover:border-primary/30">
-                <div className="rounded-xl bg-secondary/40 p-2.5">
+              <div className="flex min-h-[64px] items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-2.5 transition-all hover:border-primary/30">
+                <div className="rounded-xl bg-secondary/40 p-2">
                   <action.icon className={`h-5 w-5 ${action.color}`} />
                 </div>
                 <p className="text-sm font-semibold leading-tight">{action.label}</p>

@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { db } from './db.js';
 import { config } from './config.js';
 import { approveDeposit, debitWallet, creditWallet, getFeeSettings, calculateTopupProviderFeeUsd } from './payments.js';
-import { generateId, money, nowIso, hmacSha512Hex } from './utils.js';
+import { generateId, money, nowIso, hmacSha256Hex, hmacSha512Hex } from './utils.js';
 
 // Bitnob virtual-card docs show balance_amount 5,000,000 with display_amount 5,
 // so virtual-card amounts use 1,000,000 base units for each 1 USD.
@@ -197,6 +197,9 @@ export const bitnobService = {
   getBalances: () => safeBitnob('GET', '/api/balances'),
   generateAddress: (data) => safeBitnob('POST', '/api/addresses', data),
   listAddresses: () => safeBitnob('GET', '/api/addresses'),
+  getAddress: (idOrAddress) => safeBitnob('GET', `/api/addresses/${encodeURIComponent(idOrAddress)}`),
+  listTransactions: (query = 'limit=100&type=credit') => safeBitnob('GET', `/api/transactions?${query}`),
+  getTransaction: (idOrReference) => safeBitnob('GET', `/api/transactions/${encodeURIComponent(idOrReference)}`),
   getSupportedChains: () => safeBitnob('GET', '/api/stablecoins/supported-chains')
 };
 
@@ -558,10 +561,30 @@ export async function getVirtualCardTransactions(user, cardId) {
   return rows.map(normalizeCardTransaction);
 }
 
+function safeSignatureEquals(a, b) {
+  const left = Buffer.from(String(a || '').trim(), 'utf8');
+  const right = Buffer.from(String(b || '').trim(), 'utf8');
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+
+function normalizeWebhookSignature(value) {
+  const raw = String(value || '').trim();
+  return raw.includes('=') ? raw.split('=').pop().trim() : raw;
+}
+
 export function verifyBitnobWebhook(rawBody, headerValue) {
   if (!config.bitnob.webhookSecret && !config.bitnob.clientSecret) return true;
-  const secret = config.bitnob.webhookSecret || config.bitnob.clientSecret;
-  return hmacSha512Hex(secret, rawBody) === headerValue;
+  const provided = normalizeWebhookSignature(headerValue);
+  if (!provided) return false;
+  const secrets = [...new Set([config.bitnob.webhookSecret, config.bitnob.clientSecret].filter(Boolean))];
+  return secrets.some((secret) => {
+    const sha256 = hmacSha256Hex(secret, rawBody);
+    const sha512 = hmacSha512Hex(secret, rawBody);
+    return safeSignatureEquals(provided, sha256)
+      || safeSignatureEquals(String(headerValue || '').trim(), `sha256=${sha256}`)
+      || safeSignatureEquals(provided, sha512)
+      || safeSignatureEquals(String(headerValue || '').trim(), `sha512=${sha512}`);
+  });
 }
 
 function extractProviderCardId(payload) {
@@ -664,10 +687,46 @@ function normalizeCardTransaction(tx = {}) {
 function extractEventAmount(data) {
   if (data.display_amount !== undefined) return Number(data.display_amount);
   if (data.card?.display_amount !== undefined) return Number(data.card.display_amount);
+  if (data.original_amount !== undefined) return extractProviderAmount(data.original_amount);
+  if (data.metadata?.original_amount !== undefined) return extractProviderAmount(data.metadata.original_amount);
+  if (data.metadata?.amount !== undefined) return extractProviderAmount(data.metadata.amount);
   if (data.amount !== undefined) return extractProviderAmount(data.amount);
   if (data.card?.amount !== undefined) return extractProviderAmount(data.card.amount);
   return 0;
 }
+
+const DEPOSIT_COMPLETE_EVENTS = [
+  'deposit.success',
+  'deposit.complete',
+  'deposit.completed',
+  'deposit.confirmed',
+  'deposit.settled',
+  'stablecoin.deposit.success',
+  'stablecoin.deposit.complete',
+  'stablecoin.deposit.completed',
+  'stablecoin.deposit.confirmed',
+  'stablecoin.deposit.settled',
+  'crypto.deposit.success',
+  'crypto.deposit.completed',
+  'crypto.deposit.confirmed',
+  'wallet.deposit.success',
+  'wallet.deposit.confirmed',
+  'transaction.settled',
+  'deposit_confirmed'
+];
+
+const DEPOSIT_PENDING_EVENTS = [
+  'deposit.detected',
+  'deposit.pending',
+  'deposit.processing',
+  'stablecoin.deposit.detected',
+  'stablecoin.deposit.pending',
+  'crypto.deposit.detected',
+  'crypto.deposit.pending',
+  'wallet.deposit.detected',
+  'deposit_pending',
+  'deposit_detected'
+];
 
 function eventIsOneOf(event, names) {
   return names.includes(String(event || '').toLowerCase());
@@ -679,21 +738,29 @@ function providerStatusIsOneOf(payload = {}, data = {}, names = []) {
       || data.state
       || data.payment_status
       || data.transaction_status
+      || data.type
       || payload.status
       || payload.state
       || payload.payment_status
+      || payload.type
       || ''
   ).toLowerCase();
-  return names.includes(status);
+  return names.includes(status) || names.includes(status.replace(/_/g, '.'));
 }
 
 function extractStablecoinAddress(data = {}, payload = {}) {
   return String(
     data.address
+      || data.metadata?.address
+      || data.metadata?.destination_address
+      || data.metadata?.recipient_address
       || data.deposit_address
       || data.wallet_address
       || data.to_address
+      || data.destination_address
+      || data.recipient_address
       || payload.address
+      || payload.metadata?.address
       || ''
   ).trim();
 }
@@ -703,8 +770,14 @@ function extractStablecoinReference(data = {}, payload = {}) {
     data.reference
       || data.tx_ref
       || data.transaction_reference
+      || data.idempotency_key
+      || data.transaction_id
+      || data.metadata?.reference
+      || data.metadata?.request_id
       || payload.reference
       || payload.tx_ref
+      || payload.transaction_reference
+      || payload.idempotency_key
       || ''
   ).trim();
 }
@@ -712,7 +785,9 @@ function extractStablecoinReference(data = {}, payload = {}) {
 function extractStablecoinNetwork(data = {}, payload = {}) {
   return String(
     data.chain
+      || data.metadata?.chain
       || data.network
+      || data.metadata?.network
       || payload.chain
       || payload.network
       || ''
@@ -724,9 +799,13 @@ function extractStablecoinTxHash(data = {}, payload = {}) {
     data.tx_hash
       || data.txHash
       || data.transaction_hash
+      || data.metadata?.tx_hash
+      || data.metadata?.txHash
+      || data.metadata?.transaction_hash
       || data.hash
       || payload.tx_hash
       || payload.txHash
+      || payload.transaction_hash
       || ''
   ).trim();
 }
@@ -735,10 +814,128 @@ function extractStablecoinCurrency(data = {}, payload = {}) {
   return String(
     data.currency
       || data.asset
+      || data.metadata?.currency
+      || data.metadata?.asset
       || payload.currency
       || payload.asset
       || 'USDC'
   ).trim().toUpperCase();
+}
+
+function normalizeProviderList(payload) {
+  const data = payload?.data;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data?.transactions)) return data.transactions;
+  if (Array.isArray(data?.addresses)) return data.addresses;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.results)) return data.results;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.transactions)) return payload.transactions;
+  if (Array.isArray(payload?.addresses)) return payload.addresses;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.results)) return payload.results;
+  return [];
+}
+
+function cryptoPayloadIsComplete(event, payload = {}, data = {}) {
+  const type = String(data.type || payload.type || '').toLowerCase();
+  const state = String(data.state || payload.state || data.status || payload.status || '').toLowerCase();
+  return eventIsOneOf(event, DEPOSIT_COMPLETE_EVENTS)
+    || providerStatusIsOneOf(payload, data, ['success', 'successful', 'complete', 'completed', 'confirmed', 'approved', 'settled'])
+    || (['deposit_confirmed', 'deposit.confirmed', 'deposit.success'].includes(type.replace(/_/g, '.')) && ['settled', 'completed', 'success', 'confirmed'].includes(state));
+}
+
+function cryptoPayloadIsPending(event, payload = {}, data = {}) {
+  const type = String(data.type || payload.type || '').toLowerCase();
+  const state = String(data.state || payload.state || data.status || payload.status || '').toLowerCase();
+  return eventIsOneOf(event, DEPOSIT_PENDING_EVENTS)
+    || providerStatusIsOneOf(payload, data, ['pending', 'detected', 'processing', 'in_progress'])
+    || (['deposit_detected', 'deposit.pending', 'deposit.detected'].includes(type.replace(/_/g, '.')) && ['pending', 'in_progress', 'detected'].includes(state));
+}
+
+function cryptoAmountCoversDeposit(deposit, data = {}, payload = {}) {
+  const expected = Number(deposit.payment_amount || deposit.final_usd_credit || deposit.requested_usd_amount || 0);
+  const received = extractEventAmount(data) || extractEventAmount(payload);
+  if (!Number.isFinite(received) || received <= 0 || !Number.isFinite(expected) || expected <= 0) {
+    return { ok: true, received: 0, expected };
+  }
+  return { ok: received + 0.000001 >= expected, received, expected };
+}
+
+function applyCryptoDepositPayload(deposit, payload = {}, { complete = false, pending = false, source = 'bitnob' } = {}) {
+  if (!deposit || deposit.status === 'approved') return false;
+  const data = payload.data || payload.transaction || payload;
+  const txHash = extractStablecoinTxHash(data, payload);
+  const now = nowIso();
+
+  if (complete) {
+    const coverage = cryptoAmountCoversDeposit(deposit, data, payload);
+    if (!coverage.ok) {
+      db.prepare(`
+        UPDATE deposits
+        SET provider_status = ?,
+            tx_hash = COALESCE(?, tx_hash),
+            provider_payload = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run('underpaid', txHash || null, JSON.stringify({ source, ...payload, received_amount: coverage.received, expected_amount: coverage.expected }), now, deposit.id);
+      writeDepositNotification(deposit.user_id, 'Deposit Needs Review', `We detected ${coverage.received.toFixed(2)} ${deposit.payment_currency || 'USDC'}, which is below the requested ${coverage.expected.toFixed(2)}.`);
+      return false;
+    }
+
+    db.prepare(`
+      UPDATE deposits
+      SET provider_status = ?,
+          tx_hash = COALESCE(?, tx_hash),
+          provider_payload = ?,
+          payment_amount = CASE WHEN ? > 0 THEN ? ELSE payment_amount END,
+          requested_usd_amount = CASE WHEN ? > 0 THEN ? ELSE requested_usd_amount END,
+          final_usd_credit = CASE WHEN ? > 0 THEN ? ELSE final_usd_credit END,
+          etb_amount = CASE WHEN ? > 0 THEN ? * exchange_rate ELSE etb_amount END,
+          total_payable_etb = CASE WHEN ? > 0 THEN ? * exchange_rate ELSE total_payable_etb END,
+          verified_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      'deposit_success',
+      txHash || null,
+      JSON.stringify({ source, ...payload }),
+      coverage.received,
+      money(coverage.received),
+      coverage.received,
+      money(coverage.received),
+      coverage.received,
+      money(coverage.received),
+      coverage.received,
+      money(coverage.received),
+      coverage.received,
+      money(coverage.received),
+      now,
+      now,
+      deposit.id
+    );
+
+    const refreshed = db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id);
+    if (refreshed && refreshed.status !== 'approved') {
+      approveDeposit(refreshed, `system:${source}`);
+      writeDepositNotification(refreshed.user_id, 'Deposit Confirmed', `Your ${Number(refreshed.payment_amount || refreshed.final_usd_credit || 0).toFixed(2)} ${refreshed.payment_currency || 'USDC'} deposit has been credited.`);
+      return true;
+    }
+    return false;
+  }
+
+  if (pending) {
+    db.prepare(`
+      UPDATE deposits
+      SET provider_status = ?,
+          tx_hash = COALESCE(?, tx_hash),
+          provider_payload = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run('deposit_detected', txHash || null, JSON.stringify({ source, ...payload }), now, deposit.id);
+  }
+  return false;
 }
 
 function findCryptoDepositForWebhook(data = {}, payload = {}) {
@@ -791,40 +988,67 @@ function findCryptoDepositForWebhook(data = {}, payload = {}) {
   }) || null;
 }
 
-export function reconcilePendingUsdcDeposits() {
+export async function reconcilePendingUsdcDeposits() {
   const events = db.prepare(`
     SELECT payload FROM webhook_events
     WHERE provider = 'bitnob'
     ORDER BY created_at DESC
     LIMIT 200
   `).all();
+  let credited = 0;
 
   for (const row of events) {
     try {
       const payload = JSON.parse(row.payload || '{}');
       const event = String(payload.event || '').toLowerCase();
       const data = payload.data || {};
-      const completeByEvent = eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'deposit.confirmed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed', 'stablecoin.deposit.confirmed', 'crypto.deposit.success', 'crypto.deposit.completed', 'crypto.deposit.confirmed']);
-      const completeByStatus = providerStatusIsOneOf(payload, data, ['success', 'successful', 'complete', 'completed', 'confirmed', 'approved']);
-      if (!completeByEvent && !completeByStatus) continue;
+      const complete = cryptoPayloadIsComplete(event, payload, data);
+      const pending = cryptoPayloadIsPending(event, payload, data);
+      if (!complete && !pending) continue;
       const deposit = findCryptoDepositForWebhook(data, payload);
-      if (!deposit || deposit.status === 'approved') continue;
-      const txHash = extractStablecoinTxHash(data, payload);
-      db.prepare(`
-        UPDATE deposits
-        SET provider_status = ?,
-            tx_hash = COALESCE(?, tx_hash),
-            provider_payload = ?,
-            verified_at = ?,
-            updated_at = ?
-        WHERE id = ?
-      `).run('deposit_success', txHash || null, JSON.stringify(payload), nowIso(), nowIso(), deposit.id);
-      const refreshed = db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id);
-      if (refreshed && refreshed.status !== 'approved') {
-        approveDeposit(refreshed, 'system:bitnob');
-      }
+      if (!deposit) continue;
+      if (applyCryptoDepositPayload(deposit, payload, { complete, pending, source: 'bitnob-webhook-replay' })) credited += 1;
     } catch {}
   }
+
+  try {
+    const provider = await bitnobService.listTransactions('limit=100&type=credit');
+    const transactions = normalizeProviderList(provider);
+    for (const tx of transactions) {
+      const event = String(tx.event || tx.type || '').toLowerCase();
+      const payload = { event, data: tx };
+      const complete = cryptoPayloadIsComplete(event, payload, tx);
+      const pending = cryptoPayloadIsPending(event, payload, tx);
+      if (!complete && !pending) continue;
+      const deposit = findCryptoDepositForWebhook(tx, payload);
+      if (!deposit) continue;
+      if (applyCryptoDepositPayload(deposit, payload, { complete, pending, source: 'bitnob-transactions' })) credited += 1;
+    }
+  } catch {}
+
+  const stillPending = db.prepare(`
+    SELECT * FROM deposits
+    WHERE payment_method IN ('usdc', 'crypto')
+      AND status IN ('pending_transfer', 'awaiting_review')
+      AND payment_address IS NOT NULL
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all();
+
+  for (const deposit of stillPending) {
+    try {
+      const provider = await bitnobService.getAddress(deposit.payment_address);
+      const data = provider?.data?.address || provider?.data || provider?.address || provider;
+      const event = String(data?.event || data?.type || '').toLowerCase();
+      const payload = { event, data };
+      const complete = cryptoPayloadIsComplete(event, payload, data);
+      const pending = cryptoPayloadIsPending(event, payload, data);
+      if (!complete && !pending) continue;
+      if (applyCryptoDepositPayload(deposit, payload, { complete, pending, source: 'bitnob-address-poll' })) credited += 1;
+    } catch {}
+  }
+
+  return { credited };
 }
 
 function writeDepositNotification(userId, title, message) {
@@ -844,53 +1068,25 @@ function writeCardNotification(card, title, message) {
 export function handleBitnobWebhook(payload) {
   const eventKey = payload.event_id || `${payload.event}:${payload.data?.card?.id || payload.data?.id || Date.now()}`;
   const exists = db.prepare('SELECT id FROM webhook_events WHERE event_key = ?').get(eventKey);
-  if (exists) return;
-  db.prepare('INSERT INTO webhook_events (id, provider, event_key, payload, created_at) VALUES (?, ?, ?, ?, ?)')
-    .run(generateId('whk'), 'bitnob', eventKey, JSON.stringify(payload), nowIso());
+  if (!exists) {
+    db.prepare('INSERT INTO webhook_events (id, provider, event_key, payload, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(generateId('whk'), 'bitnob', eventKey, JSON.stringify(payload), nowIso());
+  }
 
   const event = String(payload.event || '').toLowerCase();
   const cardData = payload.data?.card || payload.data || {};
   const data = payload.data || {};
   const cryptoDeposit = findCryptoDepositForWebhook(data, payload);
-  const cryptoDepositComplete = cryptoDeposit && (
-    eventIsOneOf(event, ['deposit.success', 'deposit.complete', 'deposit.completed', 'deposit.confirmed', 'stablecoin.deposit.success', 'stablecoin.deposit.complete', 'stablecoin.deposit.completed', 'stablecoin.deposit.confirmed', 'crypto.deposit.success', 'crypto.deposit.completed', 'crypto.deposit.confirmed'])
-    || providerStatusIsOneOf(payload, data, ['success', 'successful', 'complete', 'completed', 'confirmed', 'approved'])
-  );
-  const cryptoDepositPending = cryptoDeposit && (
-    eventIsOneOf(event, ['deposit.detected', 'deposit.pending', 'stablecoin.deposit.detected', 'crypto.deposit.detected', 'crypto.deposit.pending'])
-    || providerStatusIsOneOf(payload, data, ['pending', 'detected', 'processing'])
-  );
+  const cryptoDepositComplete = cryptoDeposit && cryptoPayloadIsComplete(event, payload, data);
+  const cryptoDepositPending = cryptoDeposit && cryptoPayloadIsPending(event, payload, data);
 
   if (cryptoDepositComplete) {
-    const txHash = extractStablecoinTxHash(data, payload);
-    db.prepare(`
-      UPDATE deposits
-      SET provider_status = ?,
-          tx_hash = COALESCE(?, tx_hash),
-          provider_payload = ?,
-          verified_at = ?,
-          updated_at = ?
-      WHERE id = ?
-    `).run('deposit_success', txHash || null, JSON.stringify(payload), nowIso(), nowIso(), cryptoDeposit.id);
-
-    const refreshed = db.prepare('SELECT * FROM deposits WHERE id = ?').get(cryptoDeposit.id);
-    if (refreshed && refreshed.status !== 'approved') {
-      approveDeposit(refreshed, 'system:bitnob');
-      writeDepositNotification(refreshed.user_id, 'Deposit Confirmed', `Your ${Number(refreshed.payment_amount || refreshed.final_usd_credit || 0).toFixed(2)} ${refreshed.payment_currency || 'USDC'} funding has been credited.`);
-    }
+    applyCryptoDepositPayload(cryptoDeposit, payload, { complete: true, source: 'bitnob-webhook' });
     return;
   }
 
   if (cryptoDepositPending) {
-    const txHash = extractStablecoinTxHash(data, payload);
-    db.prepare(`
-      UPDATE deposits
-      SET provider_status = ?,
-          tx_hash = COALESCE(?, tx_hash),
-          provider_payload = ?,
-          updated_at = ?
-      WHERE id = ?
-    `).run('deposit_detected', txHash || null, JSON.stringify(payload), nowIso(), cryptoDeposit.id);
+    applyCryptoDepositPayload(cryptoDeposit, payload, { pending: true, source: 'bitnob-webhook' });
     return;
   }
 

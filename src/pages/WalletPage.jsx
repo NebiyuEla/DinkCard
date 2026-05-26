@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/api/client';
-import { invalidateOperationalData } from '@/lib/realtime';
+import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 
@@ -62,7 +62,8 @@ export default function WalletPage() {
   const { data: deposits } = useQuery({
     queryKey: ['deposits', user?.email, 'wallet-view'],
     queryFn: () => apiClient.entities.Deposit.filter({ user_id: user?.email }, '-created_date'),
-    enabled: !!user?.email
+    enabled: !!user?.email,
+    refetchInterval: REFRESH.notifications
   });
 
   const currentCryptoDeposit = deposits?.find((deposit) => ['usdc', 'crypto'].includes(deposit.payment_method) && ['pending_transfer', 'awaiting_review'].includes(deposit.status)) || null;
@@ -140,28 +141,28 @@ export default function WalletPage() {
   };
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
+    <div className="space-y-4 pb-4 lg:pb-0">
       <div className="space-y-3 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
         <div>
-          <h1 className="text-2xl font-bold">Service Balance</h1>
+          <h1 className="text-xl font-bold sm:text-2xl">Service Balance</h1>
           <p className="text-sm text-muted-foreground">Your available platform balance and history</p>
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button variant="outline" className="justify-center" onClick={() => setShareOpen(true)}>
-            <SendHorizontal className="w-4 h-4 mr-2" /> Send Money
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+          <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => setShareOpen(true)}>
+            <SendHorizontal className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Send</span><span className="hidden sm:inline">Send Money</span>
           </Button>
-          <Button variant="outline" className="justify-center" onClick={() => setCryptoOpen(true)}>
-            <QrCode className="w-4 h-4 mr-2" /> Crypto Deposit
+          <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => setCryptoOpen(true)}>
+            <QrCode className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Deposit</span><span className="hidden sm:inline">Crypto Deposit</span>
           </Button>
-          <Link to="/add-money" className="col-span-2 sm:col-span-1">
-          <Button className="w-full justify-center bg-primary text-primary-foreground">
-            <PlusCircle className="w-4 h-4 mr-2" /> Add Money
+          <Link to="/add-money">
+          <Button className="h-10 w-full justify-center bg-primary px-2 text-xs text-primary-foreground sm:px-4 sm:text-sm">
+            <PlusCircle className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Add</span><span className="hidden sm:inline">Add Money</span>
           </Button>
           </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-4">
         <StatCard className="col-span-2 md:col-span-1" title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
         <StatCard title="Locked Balance" value={walletLoading ? '...' : `$${locked.toFixed(2)}`} subtitle="Pending operations" icon={Lock} />
         <StatCard title="History" value={transactionsLoading ? '...' : (transactions?.length || 0)} icon={ArrowDownUp} />
@@ -176,13 +177,13 @@ export default function WalletPage() {
         ) : (
           <div className="bg-card border border-border rounded-xl divide-y divide-border overflow-hidden">
             {transactions.map(tx => (
-              <div key={tx.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 px-3 py-3 sm:flex sm:items-center sm:px-4">
+              <div key={tx.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5 px-3 py-3 sm:flex sm:items-center sm:px-4">
                 <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                   {typeIcons[tx.type] || <ArrowDownUp className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="min-w-0 text-sm font-medium capitalize leading-tight">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
+                    <p className="min-w-0 truncate text-sm font-medium capitalize leading-tight">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
                     <p className={`shrink-0 whitespace-nowrap text-right font-mono text-sm font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
                       {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
                     </p>
@@ -255,7 +256,7 @@ export default function WalletPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Crypto Deposit</DialogTitle>
-            <DialogDescription>Generate a deposit address and add funds with crypto.</DialogDescription>
+            <DialogDescription>Choose an asset, amount, and network to get your deposit address.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {!currentCryptoDeposit ? (
@@ -273,7 +274,7 @@ export default function WalletPage() {
                     </Select>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Amount in USD</Label>
+                    <Label>Amount</Label>
                     <Input type="number" min="5" step="0.01" value={cryptoAmount} onChange={(event) => setCryptoAmount(event.target.value)} />
                   </div>
                   <div className="space-y-1.5">
@@ -300,7 +301,7 @@ export default function WalletPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold">{currentCryptoDeposit.payment_currency || 'Crypto'} deposit</p>
-                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentCryptoDeposit.status} className="text-[10px]" /></p>
+                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentCryptoDeposit.provider_status || currentCryptoDeposit.status} className="text-[10px]" /></p>
                   </div>
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                     {currentCryptoDeposit.payment_network}

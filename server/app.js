@@ -1859,7 +1859,7 @@ export function createApp() {
     try {
       if (req.params.entity === 'Deposit') {
         expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
-        reconcilePendingUsdcDeposits();
+        await reconcilePendingUsdcDeposits();
       }
       if (req.params.entity === 'VirtualCard') {
         await reconcileVirtualCards({ userId: req.user.role === 'user' ? req.user.email : undefined, limit: req.user.role === 'user' ? 20 : 100 });

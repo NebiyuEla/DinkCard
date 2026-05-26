@@ -82,7 +82,7 @@ export default function AddMoney() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 px-1 pb-24 sm:space-y-6 sm:px-0 lg:pb-0">
+    <div className="mx-auto w-full max-w-2xl space-y-4 pb-4 sm:space-y-6 lg:pb-0">
       <div className="flex items-center gap-3">
         <Button type="button" variant="ghost" size="icon" onClick={goBack}><ArrowLeft className="h-5 w-5" /></Button>
         <div>
