@@ -7,12 +7,14 @@ import { BrowserRouter as Router, Navigate, Outlet, Route, Routes, useLocation }
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import PageNotFound from './lib/PageNotFound';
+import SEO from './components/SEO';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import LegalPage from './pages/LegalPage';
+import MarketingPage from './pages/MarketingPage';
 import Dashboard from './pages/Dashboard';
 import AddMoney from './pages/AddMoney';
 import WalletPage from './pages/WalletPage';
@@ -118,7 +120,10 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
-      {['terms', 'privacy', 'refund-policy', 'fee-disclosure', 'kyc-compliance', 'acceptable-use', 'risk-disclosure', 'contact-support', 'account-deletion', 'complaints'].map((slug) => (
+      <Route path="/services" element={<MarketingPage />} />
+      <Route path="/about" element={<MarketingPage />} />
+      <Route path="/contact" element={<MarketingPage />} />
+      {['terms', 'privacy', 'privacy-policy', 'refund-policy', 'fee-disclosure', 'kyc-compliance', 'acceptable-use', 'risk-disclosure', 'contact-support', 'account-deletion', 'complaints'].map((slug) => (
         <Route key={slug} path={`/${slug}`} element={<LegalPage />} />
       ))}
       <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
@@ -183,6 +188,7 @@ export default function App() {
         <AuthProvider>
           <QueryClientProvider client={queryClientInstance}>
             <Router>
+              <SEO />
               <AppRoutes />
             </Router>
             <Toaster />

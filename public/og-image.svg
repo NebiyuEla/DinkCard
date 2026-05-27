@@ -1,0 +1,23 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="630" fill="#071511"/>
+  <circle cx="1030" cy="90" r="260" fill="#0f766e" opacity="0.24"/>
+  <circle cx="160" cy="560" r="250" fill="#34d399" opacity="0.12"/>
+  <path d="M84 90H1116V540H84V90Z" fill="url(#panel)" stroke="#1f4f45" stroke-width="2"/>
+  <path d="M0 420C180 350 290 350 460 420C645 496 793 490 1200 320V630H0V420Z" fill="#0f766e" opacity="0.12"/>
+  <rect x="106" y="112" width="72" height="72" rx="18" fill="#0f766e"/>
+  <path d="M133 154V132H158C170 132 179 141 179 154C179 167 170 176 158 176H133V154ZM151 151V157H158C160 157 162 156 162 154C162 152 160 151 158 151H151Z" fill="white"/>
+  <text x="204" y="160" fill="white" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800">Dink Card</text>
+  <text x="106" y="292" fill="white" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="900">Virtual Visa Card Solution</text>
+  <text x="106" y="366" fill="#A7F3D0" font-family="Inter, Arial, sans-serif" font-size="64" font-weight="900">in Ethiopia</text>
+  <text x="106" y="432" fill="#B6C7C1" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="500">Secure online payments, subscriptions, and digital services.</text>
+  <rect x="795" y="205" width="270" height="170" rx="26" fill="#0b1b18" stroke="#34d399" stroke-opacity="0.45"/>
+  <text x="825" y="255" fill="#A7F3D0" font-family="Inter, Arial, sans-serif" font-size="20" font-weight="700">Dink Card</text>
+  <text x="825" y="310" fill="white" font-family="monospace" font-size="27" letter-spacing="4">**** 4242</text>
+  <text x="825" y="345" fill="#91AFA7" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">ETHIOPIA</text>
+  <defs>
+    <linearGradient id="panel" x1="84" y1="90" x2="1116" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0A1714"/>
+      <stop offset="1" stop-color="#08110F"/>
+    </linearGradient>
+  </defs>
+</svg>

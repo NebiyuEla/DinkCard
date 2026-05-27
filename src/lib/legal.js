@@ -8,13 +8,13 @@ export const LAST_UPDATED = 'May 23, 2026';
 
 export const legalLinks = [
   { label: 'Terms', path: '/terms' },
-  { label: 'Privacy', path: '/privacy' },
+  { label: 'Privacy', path: '/privacy-policy' },
   { label: 'Refunds', path: '/refund-policy' },
   { label: 'Fees', path: '/fee-disclosure' },
   { label: 'KYC & Compliance', path: '/kyc-compliance' },
   { label: 'Acceptable Use', path: '/acceptable-use' },
   { label: 'Card Usage Notice', path: '/risk-disclosure' },
-  { label: 'Support', path: '/contact-support' },
+  { label: 'Contact', path: '/contact' },
   { label: 'Account Deletion', path: '/account-deletion' },
   { label: 'Complaints', path: '/complaints' }
 ];

@@ -8,6 +8,7 @@ import { BRAND_NAME, footerDisclaimer, policies } from '@/lib/legal';
 const routeMap = {
   terms: 'terms',
   privacy: 'privacy',
+  'privacy-policy': 'privacy',
   'refund-policy': 'refunds',
   'fee-disclosure': 'feeDisclosure',
   'kyc-compliance': 'kyc',

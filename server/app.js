@@ -13,6 +13,7 @@ import { sanitizeUser, parseJson, generateId, money, nowIso, normalizeEthiopianP
 import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, creditWallet, debitWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import { buildTwoFactorRecoverySummary, formatSecretForDisplay, getOtpAuthUrl, getTwoFactorSetupForUser, isTwoFactorEnabled, readEncryptedTwoFactorSecret, replacementRecoveryState, verifyTotp, verifyTwoFactorCode } from './two-factor.js';
+import { buildSeoStructuredData, getSeoForPath, SEO_BRAND_NAME } from '../src/lib/seo.js';
 import {
   bitnobService,
   changeCardStatus,
@@ -240,12 +241,60 @@ function uploadUrlFor(filename) {
   return `/uploads/${filename}`;
 }
 
+function escapeSeoHtml(value = '') {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function safeJsonLd(payload) {
+  return JSON.stringify(payload).replaceAll('<', '\\u003c');
+}
+
+function buildSeoHead(pathname) {
+  const page = getSeoForPath(pathname);
+  const keywords = page.keywords.join(', ');
+  const structuredData = buildSeoStructuredData()
+    .map((schema, index) => `<script id="seo-jsonld-${index}" type="application/ld+json">${safeJsonLd(schema)}</script>`);
+
+  return [
+    `<title>${escapeSeoHtml(page.title)}</title>`,
+    `<meta name="description" content="${escapeSeoHtml(page.description)}" />`,
+    `<meta name="keywords" content="${escapeSeoHtml(keywords)}" />`,
+    `<meta name="application-name" content="${escapeSeoHtml(SEO_BRAND_NAME)}" />`,
+    '<meta name="robots" content="index, follow" />',
+    `<link rel="canonical" href="${escapeSeoHtml(page.url)}" />`,
+    `<meta property="og:title" content="${escapeSeoHtml(page.title)}" />`,
+    `<meta property="og:description" content="${escapeSeoHtml(page.description)}" />`,
+    `<meta property="og:type" content="${escapeSeoHtml(page.type)}" />`,
+    `<meta property="og:url" content="${escapeSeoHtml(page.url)}" />`,
+    `<meta property="og:image" content="${escapeSeoHtml(page.image)}" />`,
+    `<meta property="og:site_name" content="${escapeSeoHtml(SEO_BRAND_NAME)}" />`,
+    '<meta name="twitter:card" content="summary_large_image" />',
+    `<meta name="twitter:title" content="${escapeSeoHtml(page.title)}" />`,
+    `<meta name="twitter:description" content="${escapeSeoHtml(page.description)}" />`,
+    `<meta name="twitter:image" content="${escapeSeoHtml(page.image)}" />`,
+    ...structuredData
+  ].join('\n    ');
+}
+
+function injectSeoHead(html, pathname) {
+  const seoBlock = `<!--seo-start-->\n    ${buildSeoHead(pathname)}\n    <!--seo-end-->`;
+  if (/<!--seo-start-->[\s\S]*?<!--seo-end-->/.test(html)) {
+    return html.replace(/<!--seo-start-->[\s\S]*?<!--seo-end-->/, seoBlock);
+  }
+  return html.replace('</head>', `    ${seoBlock}\n  </head>`);
+}
+
 function serveIndex(req, res) {
   if (!fs.existsSync(indexHtml)) {
     return res.status(200).send('Dink Card API is running. Open the frontend on http://localhost:5173');
   }
 
-  const html = fs.readFileSync(indexHtml, 'utf8')
+  const html = injectSeoHead(fs.readFileSync(indexHtml, 'utf8'), req.path)
     .replace('<script type="module" crossorigin ', '<script defer ')
     .replace('<link rel="stylesheet" crossorigin ', '<link rel="stylesheet" ');
 
@@ -3694,7 +3743,7 @@ export function createApp() {
   });
 
   if (fs.existsSync(distDir)) {
-    app.use(express.static(distDir));
+    app.use(express.static(distDir, { index: false }));
 
     app.use((req, res, next) => {
       const looksLikeAsset = path.extname(req.path) !== '';

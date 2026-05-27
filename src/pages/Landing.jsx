@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
 import BrandLogo from '@/components/BrandLogo';
 import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
+import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 import {
   ArrowRight,
   CheckCircle,
@@ -58,6 +59,13 @@ export default function Landing() {
       <nav className="fixed top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <BrandLogo to="/" imageClassName="h-8 w-8 rounded-lg" />
+          <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
+            {PUBLIC_NAV_LINKS.filter((item) => ['Services', 'About', 'Contact'].includes(item.label)).map((item) => (
+              <Link key={item.path} to={item.path} className="hover:text-primary">
+                {item.label}
+              </Link>
+            ))}
+          </nav>
           <div className="flex items-center gap-3">
             <Link to="/login">
               <Button variant="ghost" size="sm">Sign In</Button>
@@ -82,10 +90,10 @@ export default function Landing() {
               Built for Ethiopian users
             </motion.div>
             <motion.h1 variants={fadeUp} className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-              Simple virtual card access from Ethiopia
+              Virtual card solution for secure online payments in Ethiopia
             </motion.h1>
             <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Pay in ETB, complete verification, and manage supported virtual card services with a clean and reliable flow.
+              Create and manage supported virtual cards for online payments, subscriptions, and digital services with a clean flow built for Ethiopia.
             </motion.p>
             <motion.div variants={fadeUp} className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/register">
@@ -246,6 +254,13 @@ export default function Landing() {
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 md:flex-row">
           <BrandLogo to="/" imageClassName="h-7 w-7 rounded-md" labelClassName="font-bold text-base" />
           <div className="space-y-3">
+            <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground" aria-label="Footer navigation">
+              {PUBLIC_NAV_LINKS.map((item) => (
+                <Link key={item.path} to={item.path} className="hover:text-primary hover:underline">
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
             <LegalLinks />
             <p className="max-w-2xl text-center text-xs text-muted-foreground">{footerDisclaimer}</p>
           </div>
