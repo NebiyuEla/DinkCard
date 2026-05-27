@@ -36,7 +36,8 @@ export default function SAOverview() {
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: async (result) => {
       await invalidateOperationalData(queryClient);
-      toast.success(`Synced ${result?.importedCustomers || result?.imported || 0} customers, ${result?.importedCards || 0} cards, removed ${result?.deletedCustomers || 0} stale records`);
+      const skipped = Number(result?.skippedCustomers || 0) + Number(result?.skippedCards || 0);
+      toast.success(`Synced ${result?.importedCustomers || result?.imported || 0}/${result?.providerCustomerCount ?? '?'} customers and ${result?.importedCards || 0} cards${skipped ? `, skipped ${skipped}` : ''}.`);
     },
     onError: (error) => toast.error(error.message || 'Sync failed')
   });

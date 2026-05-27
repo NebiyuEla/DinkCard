@@ -526,15 +526,86 @@ function extractProviderData(payload) {
 }
 
 function normalizeProviderList(payload) {
-  const data = payload?.data;
-  if (Array.isArray(data)) return data;
-  if (Array.isArray(data?.cards)) return data.cards;
-  if (Array.isArray(data?.customers)) return data.customers;
-  if (Array.isArray(data?.transactions)) return data.transactions;
-  if (Array.isArray(payload?.cards)) return payload.cards;
-  if (Array.isArray(payload?.customers)) return payload.customers;
-  if (Array.isArray(payload?.transactions)) return payload.transactions;
-  return [];
+  const preferredKeys = ['customers', 'cards', 'transactions', 'addresses', 'items', 'results', 'records', 'docs', 'rows', 'data'];
+  const seen = new Set();
+
+  function visit(value, depth = 0) {
+    if (!value || depth > 5) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value !== 'object' || seen.has(value)) return [];
+    seen.add(value);
+
+    for (const key of preferredKeys) {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) continue;
+      const result = visit(value[key], depth + 1);
+      if (result.length || Array.isArray(value[key])) return result;
+    }
+
+    for (const child of Object.values(value)) {
+      const result = visit(child, depth + 1);
+      if (result.length) return result;
+    }
+
+    return [];
+  }
+
+  return visit(payload);
+}
+
+function providerCollectionExists(payload, collectionKeys = []) {
+  const preferredKeys = [...collectionKeys, 'data', 'items', 'results', 'records', 'docs', 'rows'];
+  const seen = new Set();
+
+  function visit(value, depth = 0) {
+    if (!value || depth > 5) return false;
+    if (Array.isArray(value)) return true;
+    if (typeof value !== 'object' || seen.has(value)) return false;
+    seen.add(value);
+
+    return preferredKeys.some((key) => {
+      if (!Object.prototype.hasOwnProperty.call(value, key)) return false;
+      return visit(value[key], depth + 1);
+    });
+  }
+
+  return visit(payload);
+}
+
+function getProviderEntityId(entity = {}) {
+  return entity.id
+    || entity.uuid
+    || entity.uid
+    || entity.customer_id
+    || entity.customerId
+    || entity.bitnob_customer_id
+    || entity.card_id
+    || entity.cardId
+    || entity.reference
+    || '';
+}
+
+function getProviderCardId(entity = {}) {
+  return entity.id
+    || entity.uuid
+    || entity.uid
+    || entity.card_id
+    || entity.cardId
+    || entity.provider_card_id
+    || entity.virtual_card_id
+    || entity.virtualCardId
+    || '';
+}
+
+function providerResponseShape(payload) {
+  if (Array.isArray(payload)) return { type: 'array', length: payload.length };
+  if (!payload || typeof payload !== 'object') return { type: typeof payload };
+  const data = payload.data;
+  return {
+    keys: Object.keys(payload).slice(0, 12),
+    dataKeys: data && typeof data === 'object' && !Array.isArray(data) ? Object.keys(data).slice(0, 12) : [],
+    dataIsArray: Array.isArray(data),
+    dataLength: Array.isArray(data) ? data.length : undefined
+  };
 }
 
 const ASSET_AMOUNT_SCALES = {
@@ -703,7 +774,7 @@ function normalizeBitnobPhone(phoneValue) {
 
 function saveBitnobCustomer({ payload = {}, providerResponse, providerCustomer, userId }) {
   const customer = providerCustomer || extractProviderData(providerResponse);
-  const bitnobCustomerId = customer.id || customer.customer_id || customer.customerId || payload.bitnob_customer_id;
+  const bitnobCustomerId = getProviderEntityId(customer) || payload.bitnob_customer_id;
   if (!bitnobCustomerId) throw new Error('Provider did not return a customer ID.');
 
   const environment = config.bitnob.env;
@@ -885,7 +956,7 @@ async function ensureBitnobCustomerForKyc({ kyc, user, actor, reason, req }) {
 
 function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPayload }) {
   const now = nowIso();
-  const providerCardId = card.id || card.card_id || card.cardId;
+  const providerCardId = getProviderCardId(card);
   if (!providerCardId) throw new Error('Card provider did not return a card ID.');
 
   const customerId = card.customer_id || card.customerId || customer?.bitnob_customer_id || customer?.id || '';
@@ -1991,26 +2062,46 @@ export function createApp() {
         bitnobService.listCards()
       ]);
       const providerCustomers = normalizeProviderList(customersProvider);
-      const providerSyncAuthoritative = Array.isArray(customersProvider?.data) ||
-        Array.isArray(customersProvider?.data?.customers) ||
-        Array.isArray(customersProvider?.customers);
-      const savedCustomers = providerCustomers.map((customer) => saveBitnobCustomer({ providerResponse: customer, providerCustomer: customer }));
+      const providerSyncAuthoritative = providerCollectionExists(customersProvider, ['customers']);
+      const savedCustomers = [];
+      const skippedCustomers = [];
+      providerCustomers.forEach((customer, index) => {
+        try {
+          savedCustomers.push(saveBitnobCustomer({ providerResponse: customer, providerCustomer: customer }));
+        } catch (error) {
+          skippedCustomers.push({
+            index,
+            reason: error.message,
+            keys: customer && typeof customer === 'object' ? Object.keys(customer).slice(0, 12) : []
+          });
+        }
+      });
       const customerByBitnobId = new Map(savedCustomers.map((customer) => [customer.bitnob_customer_id, customer]));
       const providerCustomerIds = new Set(
         providerCustomers
-          .map((customer) => customer.id || customer.customer_id || customer.customerId)
+          .map((customer) => getProviderEntityId(customer))
           .filter(Boolean)
       );
       const providerCards = normalizeProviderList(cardsProvider);
-      const savedCards = providerCards.map((card) => {
-        const providerCustomerId = card.customer_id || card.customerId || '';
-        return providerCardToDb({
-          card,
-          customer: customerByBitnobId.get(providerCustomerId),
-          fallbackUserId: customerByBitnobId.get(providerCustomerId)?.user_id || card.customer_email || card.email || '',
-          nickname: card.name || 'Virtual Card',
-          providerPayload: card
-        });
+      const savedCards = [];
+      const skippedCards = [];
+      providerCards.forEach((card, index) => {
+        try {
+          const providerCustomerId = card.customer_id || card.customerId || '';
+          savedCards.push(providerCardToDb({
+            card,
+            customer: customerByBitnobId.get(providerCustomerId),
+            fallbackUserId: customerByBitnobId.get(providerCustomerId)?.user_id || card.customer_email || card.email || '',
+            nickname: card.name || 'Virtual Card',
+            providerPayload: card
+          }));
+        } catch (error) {
+          skippedCards.push({
+            index,
+            reason: error.message,
+            keys: card && typeof card === 'object' ? Object.keys(card).slice(0, 12) : []
+          });
+        }
       });
 
       let deletedCustomers = 0;
@@ -2044,17 +2135,38 @@ export function createApp() {
         environment: config.bitnob.env,
         provider: 'bitnob',
         providerStatus: 'success',
-        providerResponse: { importedCustomers: savedCustomers.length, importedCards: savedCards.length, deletedCustomers, archivedCustomers },
+        providerResponse: {
+          providerCustomerCount: providerCustomers.length,
+          providerCardCount: providerCards.length,
+          importedCustomers: savedCustomers.length,
+          importedCards: savedCards.length,
+          skippedCustomers,
+          skippedCards,
+          deletedCustomers,
+          archivedCustomers,
+          customerResponseShape: providerResponseShape(customersProvider),
+          cardResponseShape: providerResponseShape(cardsProvider)
+        },
         req
       });
       res.json({
+        providerCustomerCount: providerCustomers.length,
+        providerCardCount: providerCards.length,
         imported: savedCustomers.length,
         importedCustomers: savedCustomers.length,
         importedCards: savedCards.length,
+        skippedCustomers: skippedCustomers.length,
+        skippedCards: skippedCards.length,
         deletedCustomers,
         archivedCustomers,
         customers: savedCustomers,
-        cards: savedCards
+        cards: savedCards,
+        diagnostics: {
+          customerResponseShape: providerResponseShape(customersProvider),
+          cardResponseShape: providerResponseShape(cardsProvider),
+          skippedCustomers,
+          skippedCards
+        }
       });
     } catch (error) {
       writeAudit({ actor: req.user?.email, userId: req.user?.email, action: 'bitnob_sync_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, req });
