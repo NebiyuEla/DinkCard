@@ -30,7 +30,6 @@ const EMPTY_CUSTOMER = {
 };
 
 const CARD_TABS = [
-  { value: 'overview', label: 'Overview' },
   { value: 'customers', label: 'Customers' },
   { value: 'cards', label: 'Cards' },
   { value: 'funding', label: 'Funding' },
@@ -172,6 +171,7 @@ export default function AdminCards() {
       if (action === 'withdraw') return apiClient.admin.cards.withdraw(actionCard.id, { amount: Number(actionForm.amount), reason: actionForm.reason });
       if (action === 'freeze') return apiClient.admin.cards.freeze(actionCard.id, { reason: actionForm.reason });
       if (action === 'unfreeze') return apiClient.admin.cards.unfreeze(actionCard.id, { reason: actionForm.reason });
+      if (action === 'terminate') return apiClient.admin.cards.terminate(actionCard.id, actionForm.reason);
       if (action === 'secure') return apiClient.admin.cards.secure(actionCard.id);
       throw new Error('Unsupported card action');
     },
@@ -247,16 +247,12 @@ export default function AdminCards() {
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers or cards..." className="pl-9 h-9" />
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-3">
+      <Tabs defaultValue="cards" className="space-y-3">
         <TabsList className="h-auto flex-wrap justify-start">
           {CARD_TABS.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value} className="text-xs">{tab.label}</TabsTrigger>
           ))}
         </TabsList>
-
-        <TabsContent value="overview" className="space-y-3">
-          <CompactCards cards={filteredCards.slice(0, 6)} onAction={openCardAction} />
-        </TabsContent>
 
         <TabsContent value="customers">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -402,13 +398,28 @@ export default function AdminCards() {
 
       <Dialog open={Boolean(actionCard)} onOpenChange={(open) => !open && setActionCard(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle className="capitalize">{action} card</DialogTitle><DialogDescription>{actionCard?.card_nickname} {actionCard?.masked_pan || ''}</DialogDescription></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="capitalize">{action} card</DialogTitle>
+            <DialogDescription>
+              {action === 'terminate'
+                ? 'This permanently terminates the card and removes it from active use.'
+                : `${actionCard?.card_nickname || 'Virtual Card'} ${actionCard?.masked_pan || ''}`}
+            </DialogDescription>
+          </DialogHeader>
           {['fund', 'withdraw'].includes(action) && <div><Label className="text-xs">Amount USD</Label><Input type="number" min="1" step="0.01" value={actionForm.amount} onChange={(event) => setActionForm((current) => ({ ...current, amount: event.target.value }))} /></div>}
           {!secureDetails && <div className="mt-3"><Label className="text-xs">Reason</Label><Textarea value={actionForm.reason} onChange={(event) => setActionForm((current) => ({ ...current, reason: event.target.value }))} rows={2} /></div>}
           {secureDetails && <pre className="max-h-64 overflow-auto rounded bg-secondary p-3 text-xs">{JSON.stringify(secureDetails, null, 2)}</pre>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setActionCard(null)}>Close</Button>
-            {!secureDetails && <Button onClick={() => cardAction.mutate()} disabled={cardAction.isPending || (!actionForm.reason && action !== 'secure')}>{cardAction.isPending ? 'Processing...' : 'Confirm'}</Button>}
+            {!secureDetails && (
+              <Button
+                variant={action === 'terminate' ? 'destructive' : 'default'}
+                onClick={() => cardAction.mutate()}
+                disabled={cardAction.isPending || (!actionForm.reason && action !== 'secure')}
+              >
+                {cardAction.isPending ? 'Processing...' : action === 'terminate' ? 'Terminate Card' : 'Confirm'}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -436,6 +447,11 @@ function CompactCards({ cards, onAction }) {
                   <Button size="sm" variant="outline" onClick={() => onAction(card, 'fund')}>Fund</Button>
                   <Button size="sm" variant="outline" onClick={() => onAction(card, card.status === 'frozen' ? 'unfreeze' : 'freeze')}>{card.status === 'frozen' ? 'Unfreeze' : 'Freeze'}</Button>
                   <Button size="sm" variant="outline" onClick={() => onAction(card, 'secure')}><Eye className="h-3.5 w-3.5" /></Button>
+                  {card.status !== 'terminated' && (
+                    <Button size="sm" variant="destructive" onClick={() => onAction(card, 'terminate')}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </td>
             </tr>

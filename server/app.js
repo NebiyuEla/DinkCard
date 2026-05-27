@@ -2276,10 +2276,9 @@ export function createApp() {
       if (!requireAdmin(req, res)) return;
       const card = db.prepare('SELECT * FROM virtual_cards WHERE (id = ? OR provider_card_id = ?) AND environment = ?').get(req.params.cardId, req.params.cardId, config.bitnob.env);
       if (!card) return res.status(404).json({ message: 'Card not found' });
-      const provider = await bitnobService.freezeCard(card.provider_card_id);
-      db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run('frozen', nowIso(), card.id);
-      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_frozen', entityType: 'virtual_card', entityId: card.id, environment: config.bitnob.env, provider: 'bitnob', providerStatus: provider?.status || provider?.message || 'success', providerResponse: provider, reason: req.body.reason || null, req });
-      res.json({ ok: true, provider });
+      await changeCardStatus(req.user, card.id, 'frozen');
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_frozen', entityType: 'virtual_card', entityId: card.id, environment: config.bitnob.env, provider: 'bitnob', providerStatus: card.provider_card_id ? 'success' : 'local_only', reason: req.body.reason || null, req });
+      res.json({ ok: true });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Card freeze failed.' });
     }
@@ -2290,10 +2289,9 @@ export function createApp() {
       if (!requireAdmin(req, res)) return;
       const card = db.prepare('SELECT * FROM virtual_cards WHERE (id = ? OR provider_card_id = ?) AND environment = ?').get(req.params.cardId, req.params.cardId, config.bitnob.env);
       if (!card) return res.status(404).json({ message: 'Card not found' });
-      const provider = await bitnobService.unfreezeCard(card.provider_card_id);
-      db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run('active', nowIso(), card.id);
-      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_unfrozen', entityType: 'virtual_card', entityId: card.id, environment: config.bitnob.env, provider: 'bitnob', providerStatus: provider?.status || provider?.message || 'success', providerResponse: provider, reason: req.body.reason || null, req });
-      res.json({ ok: true, provider });
+      await changeCardStatus(req.user, card.id, 'active');
+      writeAudit({ actor: req.user.email, userId: card.user_id, action: 'card_unfrozen', entityType: 'virtual_card', entityId: card.id, environment: config.bitnob.env, provider: 'bitnob', providerStatus: card.provider_card_id ? 'success' : 'local_only', reason: req.body.reason || null, req });
+      res.json({ ok: true });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Card unfreeze failed.' });
     }

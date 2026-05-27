@@ -11,7 +11,30 @@ const statusStyles = {
   pending: 'border-muted-foreground/30'
 };
 
+function parseMeta(meta) {
+  if (!meta) return {};
+  if (typeof meta === 'object') return meta;
+  try {
+    return JSON.parse(meta);
+  } catch {
+    return {};
+  }
+}
+
 export default function VirtualCardDisplay({ card, showDetails = false, compact = false }) {
+  const meta = parseMeta(card.meta);
+  const cardholderName = [
+    card.first_name || meta.first_name,
+    card.last_name || meta.last_name
+  ].filter(Boolean).join(' ').trim()
+    || card.cardholder_name
+    || card.card_holder
+    || card.preferred_name
+    || card.name
+    || meta.preferred_name
+    || meta.name
+    || meta.cardholder_name
+    || 'Cardholder';
   const masked = card.masked_pan || card.maskedPan || `**** **** **** ${card.last_four || '----'}`;
   const balance = Number(card.balance || 0);
   const cardNumber = showDetails && card.card_number_encrypted ? card.card_number_encrypted : masked;
@@ -51,8 +74,10 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
               <CreditCard className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-sm">{card.card_nickname}</p>
-              <p className="text-xs text-muted-foreground font-mono">**** {card.last_four || '----'}</p>
+              <p className="truncate text-sm font-semibold">{cardholderName}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {card.card_nickname || 'Virtual Card'} <span className="font-mono">**** {card.last_four || '----'}</span>
+              </p>
             </div>
           </div>
           <div className="shrink-0 text-right">
@@ -103,7 +128,8 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
 
       <div className="relative flex items-start justify-between">
         <div>
-          <p className="text-xs text-muted-foreground">{card.card_nickname}</p>
+          <p className="max-w-[180px] truncate text-sm font-semibold text-foreground/90">{cardholderName}</p>
+          <p className="max-w-[180px] truncate text-[11px] text-muted-foreground">{card.card_nickname || 'Virtual Card'}</p>
           <div className="mt-2">
             <span className={cn(
               'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase',
