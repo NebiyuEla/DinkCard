@@ -226,7 +226,7 @@ export default function Dashboard() {
               className="rounded-xl border border-border bg-card py-10"
             />
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {[...activeCards, ...frozenCards].slice(0, 3).map((card) => (
                 <Link key={card.id} to={`/cards?id=${card.id}`}>
                   <VirtualCardDisplay card={card} compact />

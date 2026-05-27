@@ -459,8 +459,9 @@ export async function changeCardStatus(user, cardId, status, pin) {
     const validPin = await bcrypt.compare(normalizedPin, card.card_pin_hash);
     if (!validPin) throw new Error('Incorrect card PIN.');
   }
-  if (!card.provider_card_id) throw new Error('Card provider reference is not available yet.');
-  await bitnobRequest('POST', `/api/cards/${card.provider_card_id}/status`, { status });
+  if (card.provider_card_id) {
+    await bitnobRequest('POST', `/api/cards/${card.provider_card_id}/status`, { status });
+  }
   db.prepare('UPDATE virtual_cards SET status = ?, updated_at = ? WHERE id = ?').run(status, nowIso(), card.id);
   writeCardNotification(card, status === 'frozen' ? 'Card Locked' : 'Card Unlocked', status === 'frozen' ? 'Your card was locked successfully.' : 'Your card is active again.');
 }
