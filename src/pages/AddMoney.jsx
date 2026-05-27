@@ -12,6 +12,7 @@ import { calculateDepositFees } from '@/lib/feeCalculator';
 import { checkoutAgreement } from '@/lib/legal';
 import { invalidateOperationalData } from '@/lib/realtime';
 import LegalLinks from '@/components/LegalLinks';
+import KycRequiredNotice from '@/components/KycRequiredNotice';
 import { toast } from 'sonner';
 
 export default function AddMoney() {
@@ -19,9 +20,8 @@ export default function AddMoney() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
   const { data: settings } = useFeeSettings();
-  const { data: kyc } = useKYCStatus(user?.email);
+  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const { data: deposits } = useDeposits(user?.email);
-  const [paymentMethod, setPaymentMethod] = useState('chapa');
   const [amountMode, setAmountMode] = useState('usd');
   const [enteredAmount, setEnteredAmount] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(user?.phone || '');
@@ -73,6 +73,12 @@ export default function AddMoney() {
     }
   });
 
+  const handleCheckoutSubmit = (event) => {
+    event.preventDefault();
+    if (!kycApproved || !fees || !phoneNumber || !acceptedNotice || startCheckout.isPending) return;
+    startCheckout.mutate();
+  };
+
   const goBack = () => {
     if (window.history.length > 1) {
       navigate(-1);
@@ -97,14 +103,10 @@ export default function AddMoney() {
         </div>
       )}
 
-      {!kycApproved && (
-        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-600">
-          Complete and get your KYC approved before adding funds.
-        </div>
-      )}
+      {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
       <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-        <div className="space-y-4 sm:space-y-5">
+        <form onSubmit={handleCheckoutSubmit} className="space-y-4 sm:space-y-5">
           <div>
             <Label className="text-sm font-medium">Amount</Label>
             <div className="mt-1.5 grid grid-cols-2 gap-2">
@@ -199,14 +201,14 @@ export default function AddMoney() {
           <LegalLinks />
 
           <Button
+            type="submit"
             className="h-12 w-full bg-primary text-primary-foreground"
             disabled={!kycApproved || !fees || !phoneNumber || !acceptedNotice || startCheckout.isPending}
-            onClick={() => startCheckout.mutate()}
           >
             {startCheckout.isPending ? 'Opening checkout...' : 'Continue to Secure Checkout'}
             {!startCheckout.isPending && <ExternalLink className="ml-2 h-4 w-4" />}
           </Button>
-        </div>
+        </form>
       </div>
 
       {latestDeposit && (

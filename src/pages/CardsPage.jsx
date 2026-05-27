@@ -5,14 +5,15 @@ import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, S
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/client';
-import { useCurrentUser, useCards } from '@/hooks/useAppData';
+import { useCurrentUser, useCards, useKYCStatus } from '@/hooks/useAppData';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { invalidateOperationalData } from '@/lib/realtime';
+import SecretInput from '@/components/SecretInput';
+import KycRequiredNotice from '@/components/KycRequiredNotice';
 
 function parseJson(value, fallback = {}) {
   if (!value) return fallback;
@@ -47,6 +48,7 @@ export default function CardsPage() {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const { data: cards } = useCards(user?.email);
+  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const [selectedCard, setSelectedCard] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [pin, setPin] = useState('');
@@ -109,6 +111,7 @@ export default function CardsPage() {
   };
 
   const activeCards = useMemo(() => cards?.filter((card) => normalizeCardStatus(card.status) !== 'terminated') || [], [cards]);
+  const kycApproved = kyc?.status === 'approved';
   const selectedBillingAddress = parseJson(selectedCard?.billing_address);
   const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
   const selectedStatus = normalizeCardStatus(selectedCard?.status);
@@ -133,20 +136,22 @@ export default function CardsPage() {
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
           <p className="text-sm text-muted-foreground">Manage virtual cards for supported online payments.</p>
         </div>
-        <Link to="/cards/create">
+        <Link to={kycApproved ? '/cards/create' : '/kyc'}>
           <Button className="bg-primary text-primary-foreground">
-            <Plus className="w-4 h-4 mr-2" /> Request Card
+            <Plus className="w-4 h-4 mr-2" /> {kycApproved ? 'Request Card' : 'Complete KYC'}
           </Button>
         </Link>
       </div>
+
+      {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
       {activeCards.length === 0 ? (
         <EmptyState
           icon={CreditCard}
           title="No virtual cards"
-          description="Create your first virtual card to start paying online."
-          actionLabel="Request Card"
-          onAction={() => navigate('/cards/create')}
+          description={kycApproved ? 'Create your first virtual card to start paying online.' : 'Complete KYC first, then request your card.'}
+          actionLabel={kycApproved ? 'Request Card' : 'Complete KYC'}
+          onAction={() => navigate(kycApproved ? '/cards/create' : '/kyc')}
         />
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-6">
@@ -251,7 +256,6 @@ export default function CardsPage() {
               <div className="space-y-3 rounded-xl border border-border bg-card p-3 text-sm sm:p-4">
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedStatus} /></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
-                <div className="flex justify-between gap-4"><span className="text-muted-foreground">Dink Card usage fee</span><span className="text-right font-medium">$0.00</span></div>
               </div>
 
               <div className="rounded-xl border border-border bg-card p-3 sm:p-4">
@@ -294,7 +298,19 @@ export default function CardsPage() {
             <DialogTitle>Enter card PIN</DialogTitle>
             <DialogDescription>Use your 4-digit card PIN before showing sensitive card details.</DialogDescription>
           </DialogHeader>
-          <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
+          <SecretInput
+            numeric
+            maxLength={4}
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && pin && !revealCard.isPending) {
+                e.preventDefault();
+                revealCard.mutate();
+              }
+            }}
+            placeholder="4-digit card PIN"
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
             <Button onClick={() => revealCard.mutate()} className="bg-primary text-primary-foreground" disabled={!pin || revealCard.isPending}>
@@ -311,8 +327,20 @@ export default function CardsPage() {
             <DialogDescription>This 4-digit PIN is used to reveal, lock, and unlock the card.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Enter 4-digit PIN" maxLength={4} />
-            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={confirmPin} onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Confirm 4-digit PIN" maxLength={4} />
+            <SecretInput numeric maxLength={4} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="Enter 4-digit PIN" />
+            <SecretInput
+              numeric
+              maxLength={4}
+              value={confirmPin}
+              onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && /^\d{4}$/.test(newPin) && newPin === confirmPin && !setCardPin.isPending) {
+                  e.preventDefault();
+                  setCardPin.mutate();
+                }
+              }}
+              placeholder="Confirm 4-digit PIN"
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
@@ -329,7 +357,19 @@ export default function CardsPage() {
             <DialogTitle>{confirmDialog === 'freeze' ? 'Lock card' : 'Unlock card'}</DialogTitle>
             <DialogDescription>Enter your 4-digit card PIN to continue.</DialogDescription>
           </DialogHeader>
-          <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
+          <SecretInput
+            numeric
+            maxLength={4}
+            value={pin}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && pin && !updateStatus.isPending) {
+                e.preventDefault();
+                updateStatus.mutate({ cardId: selectedCard.id, status: confirmDialog === 'freeze' ? 'frozen' : 'active', pinCode: pin });
+              }
+            }}
+            placeholder="4-digit card PIN"
+          />
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
             <Button
@@ -352,7 +392,19 @@ export default function CardsPage() {
             <DialogDescription>This action is permanent. Any refundable remaining balance will be returned to your available service balance after the provider confirms termination.</DialogDescription>
           </DialogHeader>
           {selectedCard?.card_pin_enabled_at && (
-            <Input type="password" inputMode="numeric" pattern="[0-9]*" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="4-digit card PIN" maxLength={4} />
+            <SecretInput
+              numeric
+              maxLength={4}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && pin.length === 4 && !terminateCard.isPending) {
+                  e.preventDefault();
+                  terminateCard.mutate({ cardId: selectedCard.id, pin });
+                }
+              }}
+              placeholder="4-digit card PIN"
+            />
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>

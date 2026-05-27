@@ -29,6 +29,15 @@ const EMPTY_CUSTOMER = {
   reason: ''
 };
 
+const CARD_TABS = [
+  { value: 'overview', label: 'Overview' },
+  { value: 'customers', label: 'Customers' },
+  { value: 'cards', label: 'Cards' },
+  { value: 'funding', label: 'Funding' },
+  { value: 'activity', label: 'Activity' },
+  { value: 'settings', label: 'Settings' }
+];
+
 function money(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
@@ -118,17 +127,17 @@ export default function AdminCards() {
 
   const syncCustomers = useMutation({
     mutationFn: apiClient.admin.customers.syncBitnob,
-    onSuccess: (result) => {
-      toast.success(`Synced ${result.importedCustomers || result.imported || 0} customers and ${result.importedCards || 0} cards`);
-      invalidateOperationalData(queryClient);
+    onSuccess: async (result) => {
+      await invalidateOperationalData(queryClient);
+      toast.success(`Synced ${result.importedCustomers || result.imported || 0} customers, ${result.importedCards || 0} cards, removed ${result.deletedCustomers || 0} stale records`);
     },
-    onError: (error) => toast.error(error.message || 'Bitnob sync failed')
+    onError: (error) => toast.error(error.message || 'Provider sync failed')
   });
 
   const testConnection = useMutation({
     mutationFn: apiClient.admin.bitnob.whoami,
-    onSuccess: (result) => toast.success(result.message || 'Connected to Bitnob successfully'),
-    onError: (error) => toast.error(error.message || 'Bitnob authentication failed')
+    onSuccess: (result) => toast.success(result.message || 'Connected to provider successfully'),
+    onError: (error) => toast.error(error.message || 'Provider authentication failed')
   });
 
   const deleteCustomerMutation = useMutation({
@@ -137,7 +146,7 @@ export default function AdminCards() {
       return apiClient.admin.customers.delete(deleteCustomer.id, { reason: deleteReason });
     },
     onSuccess: () => {
-      toast.success('Customer deleted from Bitnob and Dink Card');
+      toast.success('Customer deleted from provider and Dink Card');
       setDeleteCustomer(null);
       setDeleteReason('');
       invalidateOperationalData(queryClient);
@@ -197,17 +206,17 @@ export default function AdminCards() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold">Bitnob Card Operations</h2>
+            <h2 className="text-lg font-bold">Card Operations</h2>
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase ${environment === 'live' ? 'bg-emerald-500/15 text-emerald-600' : 'bg-yellow-500/15 text-yellow-700'}`}>{environment}</span>
           </div>
-          <p className="text-xs text-muted-foreground">Provider-backed customers, cards, funding, transactions, and audit logs.</p>
+          <p className="text-xs text-muted-foreground">Customers, cards, funding, transactions, and admin activity.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="outline" onClick={() => balancesQuery.refetch()}>
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
           <Button size="sm" variant="outline" onClick={() => syncCustomers.mutate()} disabled={syncCustomers.isPending}>
-            <RefreshCw className="h-3.5 w-3.5" /> {syncCustomers.isPending ? 'Syncing...' : 'Sync Bitnob'}
+            <RefreshCw className="h-3.5 w-3.5" /> {syncCustomers.isPending ? 'Syncing...' : 'Sync Provider'}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setShowCustomer(true)}>
             <Plus className="h-3.5 w-3.5" /> Create Customer
@@ -229,7 +238,7 @@ export default function AdminCards() {
 
       {lowBalance && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700">
-          Insufficient company wallet balance may block card creation. Sandbox balance is not preloaded. Use Bitnob sandbox deposit simulation or ask Bitnob to fund the sandbox wallet.
+          Insufficient company wallet balance may block card creation. Sandbox balance may not be preloaded; fund the sandbox wallet before testing card creation.
         </div>
       )}
 
@@ -240,8 +249,8 @@ export default function AdminCards() {
 
       <Tabs defaultValue="overview" className="space-y-3">
         <TabsList className="h-auto flex-wrap justify-start">
-          {['overview', 'customers', 'cards', 'funding', 'transactions', 'audit logs', 'settings'].map((tab) => (
-            <TabsTrigger key={tab} value={tab.replace(' ', '-')} className="text-xs capitalize">{tab}</TabsTrigger>
+          {CARD_TABS.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value} className="text-xs">{tab.label}</TabsTrigger>
           ))}
         </TabsList>
 
@@ -292,12 +301,15 @@ export default function AdminCards() {
           ))}
         </TabsContent>
 
-        <TabsContent value="transactions">
-          <SimpleRows rows={transactions} empty="No card transactions returned by provider yet." />
-        </TabsContent>
-
-        <TabsContent value="audit-logs">
-          <SimpleRows rows={auditLogs} empty="No audit logs yet." />
+        <TabsContent value="activity" className="grid gap-3 lg:grid-cols-2">
+          <div>
+            <p className="mb-2 text-sm font-semibold">Card transactions</p>
+            <SimpleRows rows={transactions} empty="No card transactions returned yet." />
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold">Audit logs</p>
+            <SimpleRows rows={auditLogs} empty="No audit logs yet." />
+          </div>
         </TabsContent>
 
         <TabsContent value="settings">
@@ -305,9 +317,9 @@ export default function AdminCards() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold">Provider Settings</p>
-                <p className="text-xs text-muted-foreground">Bitnob mode and keys are controlled by backend environment variables. Secrets are never exposed.</p>
+                <p className="text-xs text-muted-foreground">Provider mode and keys are controlled by backend environment variables. Secrets are never exposed.</p>
               </div>
-              <Button size="sm" variant="outline" onClick={() => testConnection.mutate()} disabled={testConnection.isPending}>{testConnection.isPending ? 'Testing...' : 'Test Bitnob Connection'}</Button>
+              <Button size="sm" variant="outline" onClick={() => testConnection.mutate()} disabled={testConnection.isPending}>{testConnection.isPending ? 'Testing...' : 'Test Connection'}</Button>
             </div>
             <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
               <InfoRow label="Environment" value={providerStatusQuery.data?.environment || environment} />
@@ -321,7 +333,7 @@ export default function AdminCards() {
 
       <Dialog open={showCustomer} onOpenChange={setShowCustomer}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Create Bitnob Customer</DialogTitle><DialogDescription>Customer creation does not require company wallet balance.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Create Customer</DialogTitle><DialogDescription>Customer creation does not require company wallet balance.</DialogDescription></DialogHeader>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {[
               ['first_name', 'First name'], ['last_name', 'Last name'], ['email', 'Email'], ['date_of_birth', 'Date of birth'],
@@ -365,8 +377,8 @@ export default function AdminCards() {
       <Dialog open={Boolean(deleteCustomer)} onOpenChange={(open) => !open && setDeleteCustomer(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete Bitnob Customer</DialogTitle>
-            <DialogDescription>This deletes the customer from Bitnob and removes the linked Dink Card customer record. Active cards must be handled first.</DialogDescription>
+            <DialogTitle>Delete Customer</DialogTitle>
+            <DialogDescription>This deletes the customer from the provider and removes the linked Dink Card customer record. Active cards must be handled first.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="rounded-lg border border-border bg-secondary/20 p-3 text-sm">

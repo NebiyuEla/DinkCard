@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCurrentUser, useSupportTickets } from '@/hooks/useAppData';
 import { apiClient } from '@/api/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -38,6 +38,7 @@ export default function SupportPage() {
   const [replyAttachment, setReplyAttachment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [reply, setReply] = useState('');
+  const messagesEndRef = useRef(null);
 
   const { data: messages } = useQuery({
     queryKey: ['ticketMessages', selectedTicket?.id],
@@ -89,8 +90,13 @@ export default function SupportPage() {
       queryClient.invalidateQueries({ queryKey: ['ticketMessages'] });
       setReply('');
       setReplyAttachment('');
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 50);
     }
   });
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [selectedTicket?.id, messages?.length]);
 
   const uploadAttachment = async (file, setter) => {
     setUploading(true);
@@ -169,13 +175,25 @@ export default function SupportPage() {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {!['solved', 'closed'].includes(selectedTicket.status) && (
               <div className="p-3 border-t border-border space-y-2">
                 <FilePreview url={replyAttachment} label="Reply attachment" />
                 <div className="flex gap-2">
-                  <Input value={reply} onChange={e => setReply(e.target.value)} placeholder="Type your message..." className="flex-1" onKeyDown={e => e.key === 'Enter' && reply.trim() && sendReply.mutate()} />
+                  <Input
+                    value={reply}
+                    onChange={e => setReply(e.target.value)}
+                    placeholder="Type your message..."
+                    className="flex-1"
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && !e.shiftKey && reply.trim() && !sendReply.isPending) {
+                        e.preventDefault();
+                        sendReply.mutate();
+                      }
+                    }}
+                  />
                   <FileUploadControl
                     disabled={uploading}
                     onFile={(file) => uploadAttachment(file, setReplyAttachment)}

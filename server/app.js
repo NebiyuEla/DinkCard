@@ -548,7 +548,6 @@ function normalizeAssetBalanceAmount(amount, asset, row = {}) {
   if (!Number.isFinite(numeric)) return null;
 
   const raw = String(amount ?? '');
-  if (raw.includes('.')) return numeric;
 
   const explicitDecimals = Number(row.decimals ?? row.asset?.decimals ?? row.currency?.decimals);
   if (Number.isInteger(explicitDecimals) && explicitDecimals > 0 && explicitDecimals <= 18 && Math.abs(numeric) >= 1000) {
@@ -564,6 +563,8 @@ function normalizeAssetBalanceAmount(amount, asset, row = {}) {
   if (scale && Number.isInteger(numeric) && Math.abs(numeric) >= threshold) {
     return numeric / scale;
   }
+
+  if (raw.includes('.')) return numeric;
 
   return numeric;
 }
@@ -583,7 +584,8 @@ function findAssetBalance(payload, asset = 'USDC') {
       value.asset || value.currency || value.symbol || value.code || value.name || value.ticker || value.asset_code || '';
     const symbol = String(symbolValue).toUpperCase();
     if (symbol === target) {
-      const amount = value.available ?? value.available_balance ?? value.availableBalance ??
+      const amount = value.display_amount ?? value.displayAmount ?? value.available_display_amount ?? value.availableDisplayAmount ??
+        value.available ?? value.available_balance ?? value.availableBalance ??
         value.spendable ?? value.balance ?? value.amount ?? value.value ?? value.total;
       const numeric = normalizeAssetBalanceAmount(amount, target, value);
       if (Number.isFinite(numeric)) found.push(numeric);
@@ -1947,7 +1949,11 @@ export function createApp() {
   app.get('/api/admin/customers', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
-      const rows = db.prepare('SELECT * FROM bitnob_customers WHERE environment = ? ORDER BY created_at DESC LIMIT 500').all(config.bitnob.env).map(mapRow);
+      const rows = db.prepare(`
+        SELECT * FROM bitnob_customers
+        WHERE environment = ? AND ifnull(status, 'active') NOT IN ('deleted_remote', 'deleted', 'archived')
+        ORDER BY created_at DESC LIMIT 500
+      `).all(config.bitnob.env).map(mapRow);
       res.json(rows);
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list customers.' });
@@ -1985,8 +1991,16 @@ export function createApp() {
         bitnobService.listCards()
       ]);
       const providerCustomers = normalizeProviderList(customersProvider);
+      const providerSyncAuthoritative = Array.isArray(customersProvider?.data) ||
+        Array.isArray(customersProvider?.data?.customers) ||
+        Array.isArray(customersProvider?.customers);
       const savedCustomers = providerCustomers.map((customer) => saveBitnobCustomer({ providerResponse: customer, providerCustomer: customer }));
       const customerByBitnobId = new Map(savedCustomers.map((customer) => [customer.bitnob_customer_id, customer]));
+      const providerCustomerIds = new Set(
+        providerCustomers
+          .map((customer) => customer.id || customer.customer_id || customer.customerId)
+          .filter(Boolean)
+      );
       const providerCards = normalizeProviderList(cardsProvider);
       const savedCards = providerCards.map((card) => {
         const providerCustomerId = card.customer_id || card.customerId || '';
@@ -1998,6 +2012,30 @@ export function createApp() {
           providerPayload: card
         });
       });
+
+      let deletedCustomers = 0;
+      let archivedCustomers = 0;
+      if (providerSyncAuthoritative) {
+        const localProviderCustomers = db.prepare(`
+          SELECT * FROM bitnob_customers
+          WHERE environment = ? AND provider = 'bitnob' AND bitnob_customer_id IS NOT NULL
+        `).all(config.bitnob.env);
+        localProviderCustomers.forEach((customer) => {
+          if (providerCustomerIds.has(customer.bitnob_customer_id)) return;
+          const linkedCards = db.prepare(`
+            SELECT COUNT(*) AS total FROM virtual_cards
+            WHERE environment = ? AND bitnob_customer_id = ? AND status != 'terminated'
+          `).get(config.bitnob.env, customer.bitnob_customer_id);
+          if (linkedCards.total > 0) {
+            db.prepare("UPDATE bitnob_customers SET status = 'deleted_remote', updated_at = ? WHERE id = ?").run(nowIso(), customer.id);
+            archivedCustomers += 1;
+            return;
+          }
+          db.prepare('DELETE FROM bitnob_customers WHERE id = ?').run(customer.id);
+          deletedCustomers += 1;
+        });
+      }
+
       writeAudit({
         actor: req.user.email,
         userId: req.user.email,
@@ -2006,10 +2044,18 @@ export function createApp() {
         environment: config.bitnob.env,
         provider: 'bitnob',
         providerStatus: 'success',
-        providerResponse: { importedCustomers: savedCustomers.length, importedCards: savedCards.length },
+        providerResponse: { importedCustomers: savedCustomers.length, importedCards: savedCards.length, deletedCustomers, archivedCustomers },
         req
       });
-      res.json({ imported: savedCustomers.length, importedCustomers: savedCustomers.length, importedCards: savedCards.length, customers: savedCustomers, cards: savedCards });
+      res.json({
+        imported: savedCustomers.length,
+        importedCustomers: savedCustomers.length,
+        importedCards: savedCards.length,
+        deletedCustomers,
+        archivedCustomers,
+        customers: savedCustomers,
+        cards: savedCards
+      });
     } catch (error) {
       writeAudit({ actor: req.user?.email, userId: req.user?.email, action: 'bitnob_sync_failed', entityType: 'bitnob_customer', environment: config.bitnob.env, provider: 'bitnob', providerStatus: error.providerStatus || 'failed', providerResponse: error.providerResponse || { message: error.message }, req });
       res.status(400).json({ message: error.message || 'Bitnob customer sync failed.' });
@@ -3202,8 +3248,12 @@ export function createApp() {
       const deposit = db.prepare('SELECT * FROM deposits WHERE id = ?').get(req.params.id);
 
       if (!deposit) return res.status(404).json({ message: 'Deposit not found' });
-      if (String(deposit.payment_method || '').toLowerCase() === 'crypto' && !['deposit_success', 'confirmed', 'completed', 'success'].includes(String(deposit.provider_status || '').toLowerCase())) {
-        return res.status(400).json({ message: 'Crypto deposits are credited automatically after network confirmation. Do not manually approve unconfirmed crypto transfers.' });
+      if (
+        String(deposit.payment_method || '').toLowerCase() === 'crypto' &&
+        !['deposit_success', 'confirmed', 'completed', 'success'].includes(String(deposit.provider_status || '').toLowerCase()) &&
+        req.user.role !== 'superadmin'
+      ) {
+        return res.status(400).json({ message: 'Only a superadmin can manually approve an unconfirmed crypto transfer.' });
       }
 
       const approved = approveDeposit(deposit, req.user.email);

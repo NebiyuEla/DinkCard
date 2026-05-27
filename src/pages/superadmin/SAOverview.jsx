@@ -25,6 +25,8 @@ export default function SAOverview() {
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
+  const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
+  const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
   const netProfitEtb = (deposits || [])
     .filter((deposit) => deposit.status === 'approved')
     .reduce((sum, deposit) => sum + Math.max(0, Number(deposit.service_fee_etb || 0) - Number(deposit.gateway_fee_etb || 0)), 0);
@@ -34,7 +36,7 @@ export default function SAOverview() {
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: async (result) => {
       await invalidateOperationalData(queryClient);
-      toast.success(`Synced ${result?.imported || 0} imported and ${result?.updated || 0} updated records`);
+      toast.success(`Synced ${result?.importedCustomers || result?.imported || 0} customers, ${result?.importedCards || 0} cards, removed ${result?.deletedCustomers || 0} stale records`);
     },
     onError: (error) => toast.error(error.message || 'Sync failed')
   });
@@ -75,13 +77,14 @@ export default function SAOverview() {
         All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
       </div>
 
-      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-3 md:grid-cols-3 xl:grid-cols-7">
+      <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
         <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
         <StatCard title="Net Profit" value={`${netProfitEtb.toLocaleString()} ETB`} subtitle={`Avg ${averageProfitEtb.toFixed(0)} ETB / approved deposit`} icon={DollarSign} />
-        <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
+        <StatCard title="Total Cards" value={cards?.length || 0} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
+        <StatCard title="Approved Deposits" value={approvedDepositCount} icon={DollarSign} />
         <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
       </div>
 

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { useCurrentUser, useWallet, useWalletTransactions, useFeeSettings } from '@/hooks/useAppData';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useCurrentUser, useWallet, useWalletTransactions, useFeeSettings, useKYCStatus } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
@@ -15,13 +15,16 @@ import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
+import KycRequiredNotice from '@/components/KycRequiredNotice';
 
 export default function WalletPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: user } = useCurrentUser();
   const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
   const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
   const { data: settings } = useFeeSettings();
+  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const [shareOpen, setShareOpen] = useState(false);
   const [recipientInput, setRecipientInput] = useState('');
   const [recipient, setRecipient] = useState(null);
@@ -35,6 +38,7 @@ export default function WalletPage() {
   const balance = Number(wallet?.available_balance || 0);
   const locked = Number(wallet?.locked_balance || 0);
   const rate = settings?.usd_to_etb_rate || 135;
+  const kycApproved = kyc?.status === 'approved';
 
   const typeIcons = {
     deposit: <PlusCircle className="w-4 h-4 text-primary" />,
@@ -68,6 +72,16 @@ export default function WalletPage() {
 
   const currentCryptoDeposit = deposits?.find((deposit) => ['usdc', 'crypto'].includes(deposit.payment_method) && ['pending_transfer', 'awaiting_review'].includes(deposit.status)) || null;
   const cryptoNetworks = cryptoNetworksQuery.data?.networks || [];
+
+  useEffect(() => {
+    if (searchParams.get('openCrypto') === '1') {
+      setCryptoOpen(true);
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get('openSend') === '1') {
+      setShareOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (cryptoNetworks.length) {
@@ -151,7 +165,7 @@ export default function WalletPage() {
           <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => setShareOpen(true)}>
             <SendHorizontal className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Send</span><span className="hidden sm:inline">Send Money</span>
           </Button>
-          <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => setCryptoOpen(true)}>
+          <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => kycApproved ? setCryptoOpen(true) : toast.info('Complete your KYC verification before making deposits.')}>
             <QrCode className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Deposit</span><span className="hidden sm:inline">Crypto Deposit</span>
           </Button>
           <Link to="/add-money">
@@ -161,6 +175,8 @@ export default function WalletPage() {
           </Link>
         </div>
       </div>
+
+      {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-4">
         <StatCard className="col-span-2 md:col-span-1" title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
@@ -220,7 +236,17 @@ export default function WalletPage() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Receiver</Label>
-                <Input value={recipientInput} onChange={(event) => setRecipientInput(event.target.value)} placeholder="email, phone, or username" />
+                <Input
+                  value={recipientInput}
+                  onChange={(event) => setRecipientInput(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && recipientInput.trim() && !lookupRecipient.isPending) {
+                      event.preventDefault();
+                      lookupRecipient.mutate();
+                    }
+                  }}
+                  placeholder="email, phone, or username"
+                />
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShareOpen(false)}>Cancel</Button>
@@ -238,7 +264,19 @@ export default function WalletPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Amount in USD</Label>
-                <Input type="number" min="0.01" step="0.01" value={shareAmount} onChange={(event) => setShareAmount(event.target.value)} />
+                <Input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={shareAmount}
+                  onChange={(event) => setShareAmount(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' && Number(shareAmount) && Number(shareAmount) <= balance && !shareBalance.isPending) {
+                      event.preventDefault();
+                      shareBalance.mutate();
+                    }
+                  }}
+                />
               </div>
               <p className="text-xs text-muted-foreground">No fee is charged for this transfer.</p>
               <DialogFooter>
@@ -275,7 +313,19 @@ export default function WalletPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Amount</Label>
-                    <Input type="number" min="5" step="0.01" value={cryptoAmount} onChange={(event) => setCryptoAmount(event.target.value)} />
+                    <Input
+                      type="number"
+                      min="5"
+                      step="0.01"
+                      value={cryptoAmount}
+                      onChange={(event) => setCryptoAmount(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && cryptoAmount && cryptoNetwork && !createCryptoAddress.isPending) {
+                          event.preventDefault();
+                          createCryptoAddress.mutate();
+                        }
+                      }}
+                    />
                   </div>
                   <div className="space-y-1.5">
                     <Label>Network</Label>

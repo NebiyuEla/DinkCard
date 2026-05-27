@@ -60,13 +60,15 @@ export default function AdminDashboard() {
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const totalUsableBalance = Number(walletSummary?.totalUsableBalance || 0);
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
+  const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
+  const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
 
   const isOverview = location.pathname === '/admin';
   const syncProvider = useMutation({
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: async (result) => {
       await invalidateOperationalData(queryClient);
-      toast.success(`Synced ${result?.imported || 0} imported and ${result?.updated || 0} updated records`);
+      toast.success(`Synced ${result?.importedCustomers || result?.imported || 0} customers, ${result?.importedCards || 0} cards, removed ${result?.deletedCustomers || 0} stale records`);
     },
     onError: (error) => toast.error(error.message || 'Sync failed')
   });
@@ -135,13 +137,14 @@ export default function AdminDashboard() {
           <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-500">
             All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
           </div>
-          <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid-cols-3 lg:grid-cols-6">
+          <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
             <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
-            <StatCard title="Platform Bal." value={`$${totalUsableBalance.toFixed(0)}`} icon={Activity} />
-            <StatCard title="Total Cards" value={cards?.length || 0} icon={CreditCard} />
+            <StatCard title="Platform Balance" value={`$${totalUsableBalance.toFixed(2)}`} icon={Activity} />
+            <StatCard title="Total Cards" value={cards?.length || 0} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
+            <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
           </div>
 
           {/* Recent deposits needing review */}

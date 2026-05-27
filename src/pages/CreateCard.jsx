@@ -13,6 +13,7 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { checkoutAgreement } from '@/lib/legal';
 import { invalidateOperationalData } from '@/lib/realtime';
+import KycRequiredNotice from '@/components/KycRequiredNotice';
 
 const DEFAULT_CARD_NICKNAME = 'Virtual Card';
 
@@ -22,7 +23,7 @@ export default function CreateCard() {
   const { data: user } = useCurrentUser();
   const { data: wallet } = useWallet(user?.email);
   const { data: cards } = useCards(user?.email);
-  const { data: kyc } = useKYCStatus(user?.email);
+  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
 
   const [fundingAmount, setFundingAmount] = useState('3');
@@ -68,16 +69,7 @@ export default function CreateCard() {
         </div>
       </div>
 
-      {!kycApproved && (
-        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 flex gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-500 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-yellow-500">KYC Required</p>
-            <p className="text-xs text-muted-foreground">Complete KYC verification before creating cards.</p>
-            <Link to="/kyc"><Button size="sm" variant="outline" className="mt-2">Complete KYC</Button></Link>
-          </div>
-        </div>
-      )}
+      {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
       {activeCardCount >= maxCards && (
         <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex gap-3">
@@ -94,6 +86,12 @@ export default function CreateCard() {
               type="number"
               value={fundingAmount}
               onChange={e => setFundingAmount(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && canCreate && !createCard.isPending) {
+                  e.preventDefault();
+                  createCard.mutate();
+                }
+              }}
               className="font-mono"
               min={minFunding}
               max={maxFunding}

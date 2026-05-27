@@ -57,9 +57,9 @@ export default function Sidebar({ user, unreadCount = 0 }) {
       )}>
         <div className="flex h-16 items-center border-b border-border px-4">
           {!collapsed ? (
-            <BrandLogo imageClassName="h-8 w-8 rounded-lg" />
+            <BrandLogo to="/dashboard" imageClassName="h-8 w-8 rounded-lg" />
           ) : (
-            <BrandLogo className="mx-auto" imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
+            <BrandLogo to="/dashboard" className="mx-auto" imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
           )}
         </div>
 

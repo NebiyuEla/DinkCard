@@ -26,9 +26,7 @@ export default function AdminDeposits() {
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const canManuallyApprove = (deposit) => {
-    if (!deposit || !MANUAL_APPROVAL_STATUSES.has(deposit.status)) return false;
-    if (String(deposit.payment_method || '').toLowerCase() !== 'crypto') return true;
-    return CONFIRMED_CRYPTO_STATUSES.has(String(deposit.provider_status || '').toLowerCase());
+    return Boolean(deposit && MANUAL_APPROVAL_STATUSES.has(deposit.status));
   };
 
   const approveDeposit = useMutation({
@@ -56,46 +54,42 @@ export default function AdminDeposits() {
       <h2 className="text-lg font-bold">Deposit Management</h2>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-secondary/30">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Method</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Source</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">USD</th>
-                <th className="text-right px-4 py-3 font-medium text-muted-foreground">ETB</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ref</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Date</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {(deposits || []).map(d => (
-                <tr key={d.id} className="hover:bg-secondary/20 transition-colors">
-                  <td className="px-4 py-3 text-xs">{d.user_id}</td>
-                  <td className="px-4 py-3 capitalize text-xs">{d.payment_method}</td>
-                  <td className="px-4 py-3 text-xs">{d.source === 'dinkcard' || !d.source ? 'Dink Card' : d.source}</td>
-                  <td className="px-4 py-3 text-right font-mono">${d.requested_usd_amount?.toFixed(2)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">{d.total_payable_etb?.toLocaleString()}</td>
-                  <td className="px-4 py-3 font-mono text-xs">{d.transaction_reference}</td>
-                  <td className="px-4 py-3"><StatusBadge status={d.status} className="text-[10px]" /></td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setSelected(d)}>
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => window.open(apiClient.payments.invoiceUrl(d.transaction_reference), '_blank')}>
-                        Invoice
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="hidden divide-y divide-border md:block">
+          {(deposits || []).map(d => (
+            <div key={d.id} className="grid grid-cols-[minmax(0,1.3fr)_0.8fr_0.8fr_0.9fr_1fr_auto] items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-secondary/20">
+              <div className="min-w-0">
+                <p className="break-words text-xs font-medium">{d.user_id}</p>
+                <p className="text-[11px] text-muted-foreground">{d.created_date ? format(new Date(d.created_date), 'MMM d, h:mm a') : ''}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">Method</p>
+                <p className="text-xs capitalize">{d.payment_method}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">USD</p>
+                <p className="font-mono">${d.requested_usd_amount?.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">ETB</p>
+                <p className="font-mono text-xs">{d.total_payable_etb?.toLocaleString()}</p>
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-muted-foreground">Reference</p>
+                <p className="break-all font-mono text-[11px]">{d.transaction_reference}</p>
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <StatusBadge status={d.status} className="text-[10px]" />
+                <Button variant="ghost" size="sm" onClick={() => setSelected(d)}>
+                  <Eye className="w-4 h-4" />
+                </Button>
+                {canManuallyApprove(d) && (
+                  <Button size="sm" onClick={() => approveDeposit.mutate(d)} disabled={approveDeposit.isPending} className="bg-primary text-primary-foreground">
+                    Approve
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
         <div className="md:hidden divide-y divide-border">
           {(deposits || []).map(d => (
@@ -161,8 +155,8 @@ export default function AdminDeposits() {
               )}
 
               {String(selected.payment_method || '').toLowerCase() === 'crypto' && !CONFIRMED_CRYPTO_STATUSES.has(String(selected.provider_status || '').toLowerCase()) && (
-                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-muted-foreground">
-                  Crypto deposits are credited automatically after network confirmation. Manual approval is disabled until the provider confirms the transfer.
+                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-muted-foreground">
+                  This crypto transfer is not provider-confirmed yet. Use manual approval only after checking the transfer yourself.
                 </div>
               )}
 

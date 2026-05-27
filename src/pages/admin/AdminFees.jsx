@@ -22,9 +22,11 @@ export default function AdminFees() {
   });
 
   const [form, setForm] = useState(DEFAULT_SETTINGS);
+  const [previewAmount, setPreviewAmount] = useState('50');
   const [clearScope, setClearScope] = useState('notifications');
   const [specificDelete, setSpecificDelete] = useState({ entity: 'deposit', id: '', reason: '' });
-  const preview = calculateDepositFees(50, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
+  const previewUsd = Math.max(0.01, Number(previewAmount || 50));
+  const preview = calculateDepositFees(previewUsd, form.usd_to_etb_rate || DEFAULT_SETTINGS.usd_to_etb_rate, form);
   const effectiveMinCreation = getEffectiveMinCardCreation(form);
   const effectiveMinFunding = getEffectiveMinCardFunding(form);
 
@@ -118,9 +120,20 @@ export default function AdminFees() {
       <div className="bg-card border border-border rounded-xl p-6">
         <div className="mb-5 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
           <p className="font-semibold text-primary">Checkout preview</p>
+          <div className="mt-3 max-w-xs">
+            <Label className="text-xs text-muted-foreground">Preview amount in USD</Label>
+            <Input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={previewAmount}
+              onChange={(event) => setPreviewAmount(event.target.value)}
+              className="mt-1 font-mono"
+            />
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">$50 preview</p>
+              <p className="text-muted-foreground">${previewUsd.toFixed(2)} preview</p>
               <p className="font-mono font-semibold">{preview.totalPayableEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">

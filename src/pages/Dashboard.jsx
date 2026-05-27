@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { motion } from 'framer-motion';
-import { AlertCircle, ArrowDownUp, ArrowUpRight, CreditCard, DollarSign, HeadphonesIcon, PlusCircle, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
+import { ArrowDownUp, CreditCard, DollarSign, HeadphonesIcon, PlusCircle, QrCode, SendHorizontal, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { useCards, useCurrentUser, useDeposits, useFeeSettings, useKYCStatus, useWallet, useWalletTransactions } from '@/hooks/useAppData';
@@ -12,16 +11,22 @@ import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { invalidateOperationalData } from '@/lib/realtime';
+import KycRequiredNotice from '@/components/KycRequiredNotice';
 
-const quickActions = [
-  { label: 'Add Money', path: '/add-money', icon: PlusCircle, color: 'text-primary' },
-  { label: 'Request Card', path: '/cards/create', icon: CreditCard, color: 'text-accent' },
-  { label: 'Fund Card', path: '/cards', icon: DollarSign, color: 'text-yellow-500', desktopOnly: true },
-  { label: 'Transactions', path: '/transactions', icon: ArrowDownUp, color: 'text-muted-foreground', desktopOnly: true },
-  { label: 'KYC', path: '/kyc', icon: ShieldCheck, color: 'text-primary' },
-  { label: 'Support', path: '/support', icon: HeadphonesIcon, color: 'text-accent' },
-  { label: 'Account', path: '/account', icon: UserRound, color: 'text-muted-foreground' }
+const QUICK_ACTION_STORAGE_KEY = 'dinkcard_quick_actions';
+const DEFAULT_QUICK_ACTION_IDS = ['add-money', 'crypto-deposit', 'request-card', 'send-money', 'kyc', 'support'];
+const quickActionCatalog = [
+  { id: 'add-money', label: 'Add Money', path: '/add-money', icon: PlusCircle, color: 'text-primary', requiresKyc: true },
+  { id: 'crypto-deposit', label: 'Crypto Deposit', path: '/wallet?openCrypto=1', icon: QrCode, color: 'text-primary', requiresKyc: true },
+  { id: 'request-card', label: 'Request Card', path: '/cards/create', icon: CreditCard, color: 'text-accent', requiresKyc: true },
+  { id: 'send-money', label: 'Send Money', path: '/wallet?openSend=1', icon: SendHorizontal, color: 'text-primary' },
+  { id: 'fund-card', label: 'Fund Card', path: '/cards', icon: DollarSign, color: 'text-yellow-500' },
+  { id: 'transactions', label: 'Transactions', path: '/transactions', icon: ArrowDownUp, color: 'text-muted-foreground' },
+  { id: 'kyc', label: 'KYC', path: '/kyc', icon: ShieldCheck, color: 'text-primary' },
+  { id: 'support', label: 'Support', path: '/support', icon: HeadphonesIcon, color: 'text-accent' },
+  { id: 'account', label: 'Account', path: '/account', icon: UserRound, color: 'text-muted-foreground' }
 ];
 
 function normalizeStatus(status) {
@@ -35,6 +40,14 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [paymentBanner, setPaymentBanner] = useState(null);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [quickActionIds, setQuickActionIds] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(QUICK_ACTION_STORAGE_KEY) || 'null');
+      if (Array.isArray(stored) && stored.length) return stored;
+    } catch {}
+    return DEFAULT_QUICK_ACTION_IDS;
+  });
   const { data: user } = useCurrentUser();
   const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
   const { data: cards, isLoading: cardsLoading } = useCards(user?.email);
@@ -53,7 +66,25 @@ export default function Dashboard() {
   const cardRefunds = transactions?.filter((tx) => tx.type === 'refund' && tx.status === 'completed' && String(tx.description || '').toLowerCase().includes('card')).reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
-  const mobileQuickActions = quickActions.filter((action) => !action.desktopOnly && action.label !== 'Account');
+  const kycApproved = kyc?.status === 'approved';
+  const quickActions = quickActionIds
+    .map((id) => quickActionCatalog.find((action) => action.id === id))
+    .filter(Boolean);
+
+  const actionPath = (action) => action.requiresKyc && !kycApproved ? '/kyc' : action.path;
+
+  const toggleQuickAction = (id) => {
+    setQuickActionIds((current) => {
+      const selected = new Set(current);
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      return quickActionCatalog.filter((action) => selected.has(action.id)).map((action) => action.id);
+    });
+  };
+
+  useEffect(() => {
+    localStorage.setItem(QUICK_ACTION_STORAGE_KEY, JSON.stringify(quickActionIds));
+  }, [quickActionIds]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -105,24 +136,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {!kycLoading && (!kyc || kyc.status !== 'approved') && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-start gap-3 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4"
-        >
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-500" />
-          <div>
-            <p className="text-sm font-medium text-yellow-500">Complete your KYC verification</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">You need to verify your identity before creating cards or making deposits.</p>
-            <Link to="/kyc">
-              <Button size="sm" variant="outline" className="mt-2 border-yellow-500/30 text-yellow-500 hover:bg-yellow-500/10">
-                Complete KYC <ArrowUpRight className="ml-1 h-3 w-3" />
-              </Button>
-            </Link>
-          </div>
-        </motion.div>
-      )}
+      {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
       <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <div className="col-span-2 rounded-2xl border border-border bg-card p-3.5">
@@ -154,10 +168,27 @@ export default function Dashboard() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</h2>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</h2>
+          <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setCustomizeOpen((current) => !current)}>
+            <Settings2 className="mr-1.5 h-3.5 w-3.5" />Customize
+          </Button>
+        </div>
+        {customizeOpen && (
+          <div className="mb-3 rounded-2xl border border-border bg-card p-3">
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {quickActionCatalog.map((action) => (
+                <label key={action.id} className="flex cursor-pointer items-center gap-2 rounded-xl border border-border bg-secondary/20 px-3 py-2 text-sm">
+                  <Checkbox checked={quickActionIds.includes(action.id)} onCheckedChange={() => toggleQuickAction(action.id)} />
+                  <span>{action.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2.5 md:hidden">
-          {mobileQuickActions.map((action) => (
-            <Link key={action.path} to={action.path}>
+          {quickActions.map((action) => (
+            <Link key={action.id} to={actionPath(action)}>
               <div className="flex min-h-[64px] items-center gap-2.5 rounded-2xl border border-border bg-card px-3 py-2.5 transition-all hover:border-primary/30">
                 <div className="rounded-xl bg-secondary/40 p-2">
                   <action.icon className={`h-5 w-5 ${action.color}`} />
@@ -169,7 +200,7 @@ export default function Dashboard() {
         </div>
         <div className="hidden gap-3 md:grid md:grid-cols-7">
           {quickActions.map((action) => (
-            <Link key={action.path} to={action.path} className={action.desktopOnly ? 'hidden md:block' : ''}>
+            <Link key={action.id} to={actionPath(action)}>
               <div className="group flex h-full min-h-[96px] flex-col items-center justify-center rounded-xl border border-border bg-card p-4 text-center transition-all hover:border-primary/30">
                 <action.icon className={`mx-auto mb-2 h-6 w-6 ${action.color} transition-transform group-hover:scale-110`} />
                 <p className="text-xs font-medium">{action.label}</p>

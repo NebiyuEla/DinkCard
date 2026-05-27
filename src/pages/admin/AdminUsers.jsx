@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
+import SecretInput from '@/components/SecretInput';
 
 function getActionCopy(action, user) {
   if (!action || !user) return {};
@@ -446,7 +447,7 @@ export default function AdminUsers() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input type="password" value={staffForm.password} onChange={(event) => setStaffForm((current) => ({ ...current, password: event.target.value }))} />
+                <SecretInput value={staffForm.password} onChange={(event) => setStaffForm((current) => ({ ...current, password: event.target.value }))} autoComplete="new-password" />
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>

@@ -12,6 +12,7 @@ import TermsContent from '@/components/TermsContent';
 import LegalLinks from '@/components/LegalLinks';
 import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 import BrandLogo from '@/components/BrandLogo';
+import SecretInput from '@/components/SecretInput';
 
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
@@ -59,7 +60,7 @@ export default function Register() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <BrandLogo className="justify-center mb-4" imageClassName="h-14 w-14 rounded-2xl" showLabel={false} />
+          <BrandLogo to="/" className="justify-center mb-4" imageClassName="h-14 w-14 rounded-2xl" showLabel={false} />
           <h1 className="text-3xl font-bold">Create your account</h1>
           <p className="text-sm text-muted-foreground mt-2">Agree to the Terms & Conditions before using the platform.</p>
         </div>
@@ -88,7 +89,7 @@ export default function Register() {
           </div>
           <div>
             <Label>Password</Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" />
+            <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" autoComplete="new-password" />
           </div>
           <label className="flex items-start gap-3 text-sm">
             <Checkbox checked={acceptedTerms} onCheckedChange={handleTermsChange} className="mt-0.5" />

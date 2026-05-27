@@ -14,10 +14,6 @@ export default function AppLayout() {
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
 
   useEffect(() => {
-    document.documentElement.classList.toggle('liquid-motion', localStorage.getItem('dinkcard_motion') === 'on');
-  }, []);
-
-  useEffect(() => {
     if (!user?.email || !window.EventSource) return undefined;
     const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
     const events = new EventSource(`${baseUrl}/api/events`, { withCredentials: true });

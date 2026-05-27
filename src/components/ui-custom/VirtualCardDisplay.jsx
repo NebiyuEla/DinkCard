@@ -33,19 +33,21 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
   if (compact) {
     return (
       <div className={cn(
-        'bg-gradient-to-br from-secondary to-card border rounded-xl p-4 cursor-pointer hover:border-primary/30 transition-all',
-        'min-h-[86px]',
+        'bg-gradient-to-br from-secondary to-card border rounded-2xl p-5 cursor-pointer hover:border-primary/30 transition-all',
+        'min-h-[104px]',
         statusStyles[card.status]
       )}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CreditCard className="w-5 h-5 text-primary" />
-            <div>
+        <div className="flex h-full items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="rounded-xl bg-primary/10 p-2">
+              <CreditCard className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0">
               <p className="font-medium text-sm">{card.card_nickname}</p>
               <p className="text-xs text-muted-foreground font-mono">**** {card.last_four || '----'}</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <p className="font-bold font-mono text-sm">${balance.toFixed(2)}</p>
             <div className="flex items-center gap-1 mt-0.5">
               {card.status === 'frozen' && <Snowflake className="w-3 h-3 text-accent" />}

@@ -188,7 +188,7 @@ export default function AdminKYC() {
               {APPROVABLE_KYC_STATUSES.has(selected.status) && (
                 <div className="flex gap-2">
                   <Button onClick={() => approveKYC.mutate(selected)} disabled={approveKYC.isPending} className="flex-1 bg-primary text-primary-foreground">
-                    <Check className="w-4 h-4 mr-2" /> {approveKYC.isPending ? 'Approving...' : 'Manual Approve'}
+                    <Check className="w-4 h-4 mr-2" /> {approveKYC.isPending ? 'Approving...' : 'Approve'}
                   </Button>
                   <Button variant="destructive" onClick={openCorrectionDialog} disabled={approveKYC.isPending || rejectKYC.isPending} className="flex-1">
                     <X className="w-4 h-4 mr-2" /> Request Fix

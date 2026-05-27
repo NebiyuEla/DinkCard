@@ -22,9 +22,15 @@ export default function ForgotPassword() {
     onError: (err) => setError(err.message || 'Could not request password reset.')
   });
 
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!identifier || !lastName || !dateOfBirth || requestReset.isPending) return;
+    requestReset.mutate();
+  };
+
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-4">
+      <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-border bg-card p-6 space-y-4">
         <div>
           <h1 className="text-2xl font-bold">Reset your password</h1>
           <p className="mt-1 text-sm text-muted-foreground">Confirm your account with your last name and date of birth. If this fails, contact admin.</p>
@@ -44,19 +50,24 @@ export default function ForgotPassword() {
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
+        {result?.message && !result?.resetUrl && (
+          <div className="rounded-xl border border-border bg-secondary/30 p-4 text-sm text-muted-foreground">
+            {result.message}
+          </div>
+        )}
         {result?.resetUrl && (
           <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
             <p className="font-medium">Password reset ready</p>
             <a href={result.resetUrl} className="mt-2 block break-all text-primary hover:underline">{result.resetUrl}</a>
           </div>
         )}
-        <Button className="w-full bg-primary text-primary-foreground" disabled={!identifier || !lastName || !dateOfBirth || requestReset.isPending} onClick={() => requestReset.mutate()}>
+        <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={!identifier || !lastName || !dateOfBirth || requestReset.isPending}>
           {requestReset.isPending ? 'Preparing...' : 'Request password reset'}
         </Button>
         <p className="text-sm text-center text-muted-foreground">
           <Link to="/login" className="text-primary hover:underline">Back to sign in</Link>
         </p>
-      </div>
+      </form>
     </div>
   );
 }
