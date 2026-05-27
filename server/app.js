@@ -718,20 +718,13 @@ function findAssetBalance(payload, asset = 'USDC') {
   return found.length ? Math.max(...found) : 0;
 }
 
-const BITNOB_SUPPORTED_CHAINS = [
-  { chain: 'arbitrum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'avalanche', native_token: { symbol: 'AVAX', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'base', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDC', decimals: 6 }] },
-  { chain: 'bitcoin', native_token: { symbol: 'BTC', decimals: 8 }, stablecoins: [] },
-  { chain: 'bsc', native_token: { symbol: 'BNB', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'ethereum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'optimism', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'plasma', native_token: { symbol: 'XPL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }] },
-  { chain: 'polygon', native_token: { symbol: 'POL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'solana', native_token: { symbol: 'SOL', decimals: 9 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
-  { chain: 'stellar', native_token: { symbol: 'XLM', decimals: 7 }, stablecoins: [{ symbol: 'USDC', decimals: 6 }] },
-  { chain: 'tron', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }] }
+const STABLECOIN_DEPOSIT_CHAINS = [
+  { chain: 'tron', label: 'TRON', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'bsc', label: 'BSC', native_token: { symbol: 'BNB', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'polygon', label: 'Polygon', native_token: { symbol: 'POL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'ethereum', label: 'Ethereum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] }
 ];
+const STABLECOIN_DEPOSIT_CHAIN_VALUES = new Set(STABLECOIN_DEPOSIT_CHAINS.map((entry) => entry.chain.toUpperCase()));
 
 function normalizeStablecoinChains(payload, currency = 'USDC') {
   const target = String(currency || 'USDC').toUpperCase();
@@ -768,7 +761,7 @@ function normalizeStablecoinChains(payload, currency = 'USDC') {
     seen.add(key);
     return [{
       value: chainValue,
-      label: chainValue.replace(/_/g, ' '),
+      label: entry?.label || chainValue.replace(/_/g, ' '),
       currency: target
     }];
   });
@@ -785,14 +778,16 @@ function mergeCryptoNetworks(...groups) {
 }
 
 async function getCryptoNetworksForCurrency(currency) {
+  if (!['USDC', 'USDT'].includes(String(currency || '').toUpperCase())) return [];
   let providerNetworks = [];
   try {
     providerNetworks = normalizeStablecoinChains(await bitnobService.getSupportedChains(), currency);
   } catch {
     providerNetworks = [];
   }
-  const fallbackNetworks = normalizeStablecoinChains({ data: { chains: BITNOB_SUPPORTED_CHAINS } }, currency);
-  return mergeCryptoNetworks(providerNetworks, fallbackNetworks);
+  const fallbackNetworks = normalizeStablecoinChains({ data: { chains: STABLECOIN_DEPOSIT_CHAINS } }, currency);
+  return mergeCryptoNetworks(fallbackNetworks, providerNetworks)
+    .filter((network) => STABLECOIN_DEPOSIT_CHAIN_VALUES.has(String(network.value || '').toUpperCase()));
 }
 
 function extractGeneratedAddress(payload) {
@@ -830,10 +825,20 @@ function shouldRetryAddressGeneration(error) {
   return /customer|email|validation|address|enabled|not enabled|unsupported|unknown|extra|field/.test(message);
 }
 
-async function generateCryptoDepositAddress({ chain, currency, userEmail, reference }) {
-  const label = `Dink Card ${currency} ${String(chain || '').replace(/_/g, ' ')}`;
+function buildDepositAddressLabel(userId, userEmail) {
+  const seed = String(userId || userEmail || 'user')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48) || 'user';
+  return `dinkcard_${seed}_deposit`;
+}
+
+async function generateCryptoDepositAddress({ chain, userId, userEmail, reference }) {
+  const label = buildDepositAddressLabel(userId, userEmail);
   const basePayload = { chain, label, reference };
   const attempts = [
+    userEmail ? { ...basePayload, customerEmail: userEmail } : null,
     userEmail ? { ...basePayload, customer_email: userEmail } : null,
     basePayload
   ].filter(Boolean);
@@ -3109,8 +3114,8 @@ export function createApp() {
   app.get('/api/payments/crypto/networks', authMiddleware(db), async (req, res) => {
     try {
       const currency = String(req.query.currency || 'USDC').toUpperCase();
-      if (!['USDC', 'USDT', 'BTC'].includes(currency)) {
-        return res.status(400).json({ message: 'Choose USDC, USDT, or BTC.' });
+      if (!['USDC', 'USDT'].includes(currency)) {
+        return res.status(400).json({ message: 'Choose USDC or USDT.' });
       }
       const networks = await getCryptoNetworksForCurrency(currency);
       res.json({ currency, networks });
@@ -3134,8 +3139,8 @@ export function createApp() {
       const amountUsd = Number(req.body?.amountUsd || 0);
       const network = String(req.body?.network || '').trim();
       const currency = String(req.body?.currency || 'USDC').toUpperCase();
-      if (!['USDC', 'USDT', 'BTC'].includes(currency)) {
-        return res.status(400).json({ message: 'Choose USDC, USDT, or BTC.' });
+      if (!['USDC', 'USDT'].includes(currency)) {
+        return res.status(400).json({ message: 'Choose USDC or USDT.' });
       }
       if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
         return res.status(400).json({ message: 'Enter a valid USD amount.' });
@@ -3160,7 +3165,7 @@ export function createApp() {
         UPDATE deposits
         SET status = 'cancelled',
             provider_status = 'replaced',
-            rejection_reason = 'Replaced by a newer USDC funding request.',
+            rejection_reason = 'Replaced by a newer stablecoin funding request.',
             updated_at = ?
         WHERE user_id = ?
           AND payment_method = 'crypto'
@@ -3170,7 +3175,7 @@ export function createApp() {
       const txRef = `dinkcard_${currency.toLowerCase()}_${generateId('tx')}`;
       const { providerResponse, requestedPayload, reused } = await generateCryptoDepositAddress({
         chain: selectedNetwork.value,
-        currency,
+        userId: req.user.id,
         userEmail: req.user.email,
         reference: txRef
       });

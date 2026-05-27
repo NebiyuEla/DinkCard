@@ -307,7 +307,6 @@ export default function WalletPage() {
                       <SelectContent>
                         <SelectItem value="USDC">USDC</SelectItem>
                         <SelectItem value="USDT">USDT</SelectItem>
-                        <SelectItem value="BTC">BTC</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
