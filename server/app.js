@@ -808,6 +808,62 @@ function extractGeneratedAddress(payload) {
   ).trim();
 }
 
+function extractGeneratedAddressRecord(payload) {
+  const direct = extractProviderData(payload);
+  if (direct?.address || direct?.wallet_address || direct?.deposit_address || direct?.account) return direct;
+  return {};
+}
+
+function findReusableAddress(payload, chain) {
+  const targetChain = String(chain || '').trim().toLowerCase();
+  if (!targetChain) return null;
+  return normalizeProviderList(payload).find((address) => {
+    const addressValue = String(address?.address || address?.wallet_address || address?.deposit_address || address?.account || '').trim();
+    const chainValue = String(address?.chain || address?.network || '').trim().toLowerCase();
+    const status = String(address?.status || 'active').trim().toLowerCase();
+    return addressValue && chainValue === targetChain && !['inactive', 'disabled', 'deleted'].includes(status);
+  }) || null;
+}
+
+function shouldRetryAddressGeneration(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return /customer|email|validation|address|enabled|not enabled|unsupported|unknown|extra|field/.test(message);
+}
+
+async function generateCryptoDepositAddress({ chain, currency, userEmail, reference }) {
+  const label = `Dink Card ${currency} ${String(chain || '').replace(/_/g, ' ')}`;
+  const basePayload = { chain, label, reference };
+  const attempts = [
+    userEmail ? { ...basePayload, customer_email: userEmail } : null,
+    basePayload
+  ].filter(Boolean);
+
+  let lastError = null;
+  for (const payload of attempts) {
+    try {
+      const providerResponse = await bitnobService.generateAddress(payload);
+      return { providerResponse, requestedPayload: payload, reused: false };
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryAddressGeneration(error)) break;
+    }
+  }
+
+  try {
+    const listed = await bitnobService.listAddresses();
+    const reusable = findReusableAddress(listed, chain);
+    if (reusable) {
+      return {
+        providerResponse: { success: true, data: reusable, source: 'existing_address' },
+        requestedPayload: basePayload,
+        reused: true
+      };
+    }
+  } catch {}
+
+  throw lastError || new Error('Unable to generate a deposit address right now.');
+}
+
 function buildBitnobCustomerPayload(payload = {}) {
   const { phoneNumber, dialCode } = normalizeBitnobPhone(payload.phone || payload.phone_number);
   const addressParts = [
@@ -3112,18 +3168,17 @@ export function createApp() {
       `).run(nowIso(), req.user.email);
 
       const txRef = `dinkcard_${currency.toLowerCase()}_${generateId('tx')}`;
-      const providerResponse = await bitnobService.generateAddress({
+      const { providerResponse, requestedPayload, reused } = await generateCryptoDepositAddress({
         chain: selectedNetwork.value,
         currency,
-        asset: currency,
-        customer_email: req.user.email,
-        label: `Dink Card ${currency} ${selectedNetwork.label}`,
+        userEmail: req.user.email,
         reference: txRef
       });
       const address = extractGeneratedAddress(providerResponse);
       if (!address) {
         return res.status(400).json({ message: 'A deposit address was not returned for that network.' });
       }
+      const addressRecord = extractGeneratedAddressRecord(providerResponse);
 
       const rate = Number(settings.usd_to_etb_rate || 190);
       const etbEquivalent = money(amountUsd * rate);
@@ -3151,7 +3206,11 @@ export function createApp() {
         req.user.full_name || req.user.email,
         req.user.phone || '',
         txRef,
-        JSON.stringify(providerResponse || {}),
+        JSON.stringify({
+          ...(providerResponse || {}),
+          requested_payload: requestedPayload,
+          reused_existing_address: reused
+        }),
         now,
         now
       );
@@ -3160,7 +3219,7 @@ export function createApp() {
         id: depositId,
         reference: txRef,
         currency,
-        network: selectedNetwork.value,
+        network: addressRecord.chain || selectedNetwork.value,
         address,
         amountUsd: money(amountUsd),
         amountCrypto: money(amountUsd)
