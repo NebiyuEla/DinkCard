@@ -669,6 +669,21 @@ function findAssetBalance(payload, asset = 'USDC') {
   return found.length ? Math.max(...found) : 0;
 }
 
+const BITNOB_SUPPORTED_CHAINS = [
+  { chain: 'arbitrum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'avalanche', native_token: { symbol: 'AVAX', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'base', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDC', decimals: 6 }] },
+  { chain: 'bitcoin', native_token: { symbol: 'BTC', decimals: 8 }, stablecoins: [] },
+  { chain: 'bsc', native_token: { symbol: 'BNB', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'ethereum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'optimism', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'plasma', native_token: { symbol: 'XPL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }] },
+  { chain: 'polygon', native_token: { symbol: 'POL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'solana', native_token: { symbol: 'SOL', decimals: 9 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'stellar', native_token: { symbol: 'XLM', decimals: 7 }, stablecoins: [{ symbol: 'USDC', decimals: 6 }] },
+  { chain: 'tron', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }] }
+];
+
 function normalizeStablecoinChains(payload, currency = 'USDC') {
   const target = String(currency || 'USDC').toUpperCase();
   const data = payload?.data;
@@ -690,10 +705,11 @@ function normalizeStablecoinChains(payload, currency = 'USDC') {
       entry?.currency,
       entry?.ticker
     ].map((value) => String(value || '').toUpperCase());
+    const nativeSymbol = String(entry?.native_token?.symbol || entry?.nativeToken?.symbol || '').toUpperCase();
     const supportsTarget = stablecoins.some((coin) => {
       const symbol = String(coin?.symbol || coin?.code || coin?.asset || coin || '').toUpperCase();
       return symbol === target;
-    }) || entrySymbols.includes(target);
+    }) || entrySymbols.includes(target) || nativeSymbol === target;
     if (!supportsTarget) return [];
 
     const chainValue = String(entry?.name || entry?.chain || entry?.network || entry?.code || '').trim();
@@ -707,6 +723,27 @@ function normalizeStablecoinChains(payload, currency = 'USDC') {
       currency: target
     }];
   });
+}
+
+function mergeCryptoNetworks(...groups) {
+  const seen = new Set();
+  return groups.flat().filter((network) => {
+    const key = String(network?.value || '').toUpperCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function getCryptoNetworksForCurrency(currency) {
+  let providerNetworks = [];
+  try {
+    providerNetworks = normalizeStablecoinChains(await bitnobService.getSupportedChains(), currency);
+  } catch {
+    providerNetworks = [];
+  }
+  const fallbackNetworks = normalizeStablecoinChains({ data: { chains: BITNOB_SUPPORTED_CHAINS } }, currency);
+  return mergeCryptoNetworks(providerNetworks, fallbackNetworks);
 }
 
 function extractGeneratedAddress(payload) {
@@ -2970,8 +3007,7 @@ export function createApp() {
       if (!['USDC', 'USDT', 'BTC'].includes(currency)) {
         return res.status(400).json({ message: 'Choose USDC, USDT, or BTC.' });
       }
-      const supportedChains = await bitnobService.getSupportedChains();
-      const networks = normalizeStablecoinChains(supportedChains, currency);
+      const networks = await getCryptoNetworksForCurrency(currency);
       res.json({ currency, networks });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to load deposit networks right now.' });
@@ -3009,8 +3045,7 @@ export function createApp() {
         return res.status(400).json({ message: `Choose a ${currency} network first.` });
       }
 
-      const supportedChains = await bitnobService.getSupportedChains();
-      const networks = normalizeStablecoinChains(supportedChains, currency);
+      const networks = await getCryptoNetworksForCurrency(currency);
       const selectedNetwork = networks.find((item) => item.value.toUpperCase() === network.toUpperCase());
       if (!selectedNetwork) {
         return res.status(400).json({ message: `That ${currency} network is not available right now.` });

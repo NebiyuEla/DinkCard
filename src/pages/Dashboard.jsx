@@ -71,12 +71,24 @@ export default function Dashboard() {
   const recentTx = (transactions || []).slice(0, 5);
   const kycApproved = kyc?.status === 'approved';
   const hasUsableFunds = balance >= Math.max(3, Number(settings?.min_card_creation_usd || 3));
+  const hasFundingHistory = totalDeposited > 0 || (transactions || []).some((tx) => {
+    const type = String(tx.type || '').toLowerCase();
+    return Number(tx.amount || 0) > 0 && [
+      'deposit',
+      'manual_credit',
+      'admin_credit',
+      'balance_set',
+      'balance_adjustment',
+      'balance_share_received'
+    ].includes(type);
+  });
+  const hasFundStep = hasUsableFunds || hasFundingHistory;
   const hasAnyCard = (cards || []).some((card) => !['terminated', 'deleted', 'closed', 'cancelled', 'canceled'].includes(String(card.status || '').toLowerCase()));
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
-  const currentStepIndex = [true, kycApproved, hasUsableFunds, hasAnyCard, twoFactorEnabled].filter(Boolean).length;
+  const currentStepIndex = [true, kycApproved, hasFundStep, hasAnyCard, twoFactorEnabled].filter(Boolean).length;
   const onboardingProgress = Math.round((currentStepIndex / 5) * 100);
-  const nextStepPath = !kycApproved ? '/kyc' : !hasUsableFunds ? '/add-money' : !hasAnyCard ? '/cards/create' : !twoFactorEnabled ? '/account' : '/cards';
-  const nextStepLabel = !kycApproved ? 'Complete KYC' : !hasUsableFunds ? 'Add Funds' : !hasAnyCard ? 'Request Card' : !twoFactorEnabled ? 'Enable 2FA' : 'Manage Cards';
+  const nextStepPath = !kycApproved ? '/kyc' : !hasFundStep ? '/add-money' : !hasAnyCard ? (hasUsableFunds ? '/cards/create' : '/add-money') : !twoFactorEnabled ? '/account' : '/cards';
+  const nextStepLabel = !kycApproved ? 'Complete KYC' : !hasFundStep ? 'Add Funds' : !hasAnyCard ? (hasUsableFunds ? 'Request Card' : 'Add Funds') : !twoFactorEnabled ? 'Enable 2FA' : 'Manage Cards';
   const moneyText = (value) => showBalances ? `$${Number(value || 0).toFixed(2)}` : '$••••';
   const etbText = showBalances ? `~ ${etbEstimate.toLocaleString()} ETB` : 'Hidden';
   const quickActions = quickActionIds
@@ -161,6 +173,7 @@ export default function Dashboard() {
 
       {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
+      {currentStepIndex < 5 && (
       <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
@@ -184,7 +197,7 @@ export default function Dashboard() {
             {[
               { label: 'Account', done: true },
               { label: 'KYC', done: kycApproved },
-              { label: 'Add fund', done: hasUsableFunds },
+              { label: 'Add fund', done: hasFundStep },
               { label: 'Card', done: hasAnyCard },
               { label: '2FA', done: twoFactorEnabled }
             ].map((step, index) => (
@@ -198,6 +211,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <div className="col-span-2 rounded-2xl border border-border bg-card p-3.5">

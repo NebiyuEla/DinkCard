@@ -65,10 +65,10 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
         {isFrozen && (
           <>
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(125,211,252,0.18),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08)_0_1px,transparent_1px_10px)]" />
-            <Snowflake className="pointer-events-none absolute right-4 top-4 h-5 w-5 animate-pulse text-cyan-200/70" />
+            <Snowflake className="pointer-events-none absolute -bottom-4 -right-3 h-16 w-16 rotate-12 animate-pulse text-cyan-200/10" />
           </>
         )}
-        <div className="relative flex h-full items-center justify-between gap-4">
+        <div className="relative z-10 flex h-full items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3.5">
             <div className="rounded-xl bg-primary/10 p-2">
               <CreditCard className="h-5 w-5 text-primary" />
@@ -80,9 +80,9 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
               </p>
             </div>
           </div>
-          <div className="shrink-0 text-right">
-            <p className="font-bold font-mono text-sm">${balance.toFixed(2)}</p>
-            <div className="flex items-center gap-1 mt-0.5">
+          <div className="min-w-[104px] shrink-0 rounded-xl bg-background/25 px-2.5 py-1.5 text-right backdrop-blur-sm">
+            <p className="whitespace-nowrap font-mono text-sm font-bold">${balance.toFixed(2)}</p>
+            <div className="mt-0.5 flex items-center justify-end gap-1">
               {card.status === 'frozen' && <Snowflake className="w-3 h-3 text-accent" />}
               <span className={cn(
                 'text-xs capitalize',

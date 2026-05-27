@@ -609,6 +609,8 @@ async function refreshLocalCardFromProvider(card) {
     const cardData = getBitnobCard(response);
     if (!cardData || !Object.keys(cardData).length) return card;
     const maskedPan = cardData.masked_pan || cardData.maskedPan || card.masked_pan || '';
+    const previousStatus = normalizeProviderCardStatus(card.status, card.status);
+    const nextStatus = normalizeProviderCardStatus(cardData.status || cardData.state, card.status);
     const previousAddress = (() => {
       try {
         return JSON.parse(card.billing_address || '{}');
@@ -621,7 +623,7 @@ async function refreshLocalCardFromProvider(card) {
       SET status = ?, masked_pan = ?, last_four = ?, expiry_month = ?, expiry_year = ?, balance = ?, billing_address = ?, meta = ?, updated_at = ?
       WHERE id = ?
     `).run(
-      normalizeProviderCardStatus(cardData.status || cardData.state, card.status),
+      nextStatus,
       maskedPan,
       cardData.last_four_digit || cardData.last_four || maskedPan.replace(/\D/g, '').slice(-4) || card.last_four,
       cardData.expiry_month || cardData.exp_month || card.expiry_month || '',
@@ -632,7 +634,11 @@ async function refreshLocalCardFromProvider(card) {
       nowIso(),
       card.id
     );
-    return db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id) || card;
+    const refreshed = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id) || card;
+    if (previousStatus !== 'active' && nextStatus === 'active') {
+      writeCardNotification(refreshed, 'Virtual Card Active', 'Your virtual card is active and ready to use.');
+    }
+    return refreshed;
   } catch {
     return card;
   }
