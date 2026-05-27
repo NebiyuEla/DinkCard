@@ -5,7 +5,7 @@ import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, S
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/client';
-import { useCurrentUser, useCards, useKYCStatus } from '@/hooks/useAppData';
+import { useCurrentUser, useCards, useKYCStatus, useWallet } from '@/hooks/useAppData';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
@@ -48,6 +48,7 @@ export default function CardsPage() {
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
   const { data: cards } = useCards(user?.email);
+  const { data: wallet } = useWallet(user?.email);
   const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const [selectedCard, setSelectedCard] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -112,6 +113,9 @@ export default function CardsPage() {
 
   const activeCards = useMemo(() => cards?.filter((card) => normalizeCardStatus(card.status) !== 'terminated') || [], [cards]);
   const kycApproved = kyc?.status === 'approved';
+  const hasUsableFunds = Number(wallet?.available_balance || 0) > 0;
+  const requestCardPath = !kycApproved ? '/kyc' : hasUsableFunds ? '/cards/create' : '/add-money';
+  const requestCardLabel = !kycApproved ? 'Complete KYC' : hasUsableFunds ? 'Request Card' : 'Add Funds';
   const selectedBillingAddress = parseJson(selectedCard?.billing_address);
   const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
   const selectedStatus = normalizeCardStatus(selectedCard?.status);
@@ -136,9 +140,9 @@ export default function CardsPage() {
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
           <p className="text-sm text-muted-foreground">Manage virtual cards for supported online payments.</p>
         </div>
-        <Link to={kycApproved ? '/cards/create' : '/kyc'}>
+        <Link to={requestCardPath}>
           <Button className="bg-primary text-primary-foreground">
-            <Plus className="w-4 h-4 mr-2" /> {kycApproved ? 'Request Card' : 'Complete KYC'}
+            <Plus className="w-4 h-4 mr-2" /> {requestCardLabel}
           </Button>
         </Link>
       </div>
@@ -150,8 +154,8 @@ export default function CardsPage() {
           icon={CreditCard}
           title="No virtual cards"
           description={kycApproved ? 'Create your first virtual card to start paying online.' : 'Complete KYC first, then request your card.'}
-          actionLabel={kycApproved ? 'Request Card' : 'Complete KYC'}
-          onAction={() => navigate(kycApproved ? '/cards/create' : '/kyc')}
+          actionLabel={requestCardLabel}
+          onAction={() => navigate(requestCardPath)}
         />
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-6">

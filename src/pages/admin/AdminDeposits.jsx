@@ -144,7 +144,7 @@ export default function AdminDeposits() {
                 className="w-full"
                 onClick={() => window.open(apiClient.payments.invoiceUrl(selected.transaction_reference), '_blank')}
               >
-                Download invoice
+                Download Chapa receipt
               </Button>
 
               {selected.proof_url && (

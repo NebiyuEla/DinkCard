@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { ArrowDownUp, CreditCard, DollarSign, HeadphonesIcon, PlusCircle, QrCode, SendHorizontal, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
+import { ArrowDownUp, CheckCircle2, CreditCard, DollarSign, Eye, EyeOff, HeadphonesIcon, LockKeyhole, PlusCircle, QrCode, SendHorizontal, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { useCards, useCurrentUser, useDeposits, useFeeSettings, useKYCStatus, useWallet, useWalletTransactions } from '@/hooks/useAppData';
@@ -29,6 +29,8 @@ const quickActionCatalog = [
   { id: 'account', label: 'Account', path: '/account', icon: UserRound, color: 'text-muted-foreground' }
 ];
 
+const BALANCE_VISIBILITY_KEY = 'dinkcard_show_balances';
+
 function normalizeStatus(status) {
   const value = String(status || '').toLowerCase();
   if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
@@ -41,6 +43,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [paymentBanner, setPaymentBanner] = useState(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [showBalances, setShowBalances] = useState(() => localStorage.getItem(BALANCE_VISIBILITY_KEY) !== '0');
   const [quickActionIds, setQuickActionIds] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(QUICK_ACTION_STORAGE_KEY) || 'null');
@@ -67,11 +70,27 @@ export default function Dashboard() {
   const totalSpent = Math.max(0, totalCardDebits - cardRefunds);
   const recentTx = (transactions || []).slice(0, 5);
   const kycApproved = kyc?.status === 'approved';
+  const hasUsableFunds = balance >= Math.max(3, Number(settings?.min_card_creation_usd || 3));
+  const hasAnyCard = (cards || []).some((card) => !['terminated', 'deleted', 'closed', 'cancelled', 'canceled'].includes(String(card.status || '').toLowerCase()));
+  const twoFactorEnabled = Boolean(user?.two_factor_enabled);
+  const currentStepIndex = [true, kycApproved, hasUsableFunds, hasAnyCard, twoFactorEnabled].filter(Boolean).length;
+  const onboardingProgress = Math.round((currentStepIndex / 5) * 100);
+  const nextStepPath = !kycApproved ? '/kyc' : !hasUsableFunds ? '/add-money' : !hasAnyCard ? '/cards/create' : !twoFactorEnabled ? '/account' : '/cards';
+  const nextStepLabel = !kycApproved ? 'Complete KYC' : !hasUsableFunds ? 'Add Funds' : !hasAnyCard ? 'Request Card' : !twoFactorEnabled ? 'Enable 2FA' : 'Manage Cards';
+  const moneyText = (value) => showBalances ? `$${Number(value || 0).toFixed(2)}` : '$••••';
+  const etbText = showBalances ? `~ ${etbEstimate.toLocaleString()} ETB` : 'Hidden';
   const quickActions = quickActionIds
     .map((id) => quickActionCatalog.find((action) => action.id === id))
     .filter(Boolean);
 
-  const actionPath = (action) => action.requiresKyc && !kycApproved ? '/kyc' : action.path;
+  const actionPath = (action) => {
+    if (action.requiresKyc && !kycApproved) return '/kyc';
+    if (action.id === 'request-card' && !hasUsableFunds) return '/add-money';
+    return action.path;
+  };
+
+  const requestCardPath = !kycApproved ? '/kyc' : !hasUsableFunds ? '/add-money' : '/cards/create';
+  const requestCardLabel = !kycApproved ? 'Complete KYC' : !hasUsableFunds ? 'Add Funds' : 'Request Card';
 
   const toggleQuickAction = (id) => {
     setQuickActionIds((current) => {
@@ -85,6 +104,10 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem(QUICK_ACTION_STORAGE_KEY, JSON.stringify(quickActionIds));
   }, [quickActionIds]);
+
+  useEffect(() => {
+    localStorage.setItem(BALANCE_VISIBILITY_KEY, showBalances ? '1' : '0');
+  }, [showBalances]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -130,7 +153,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{paymentBanner.message}</span>
             <Button type="button" variant="outline" size="sm" onClick={() => window.open(apiClient.payments.invoiceUrl(paymentBanner.txRef), '_blank')}>
-              Download invoice
+              Download Chapa receipt
             </Button>
           </div>
         </div>
@@ -138,12 +161,55 @@ export default function Dashboard() {
 
       {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
+      <div className="overflow-hidden rounded-3xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4">
+            <div
+              className="relative grid h-20 w-20 shrink-0 place-items-center rounded-full"
+              style={{ background: `conic-gradient(hsl(var(--primary)) ${onboardingProgress * 3.6}deg, hsl(var(--secondary)) 0deg)` }}
+            >
+              <div className="grid h-16 w-16 place-items-center rounded-full bg-background text-center">
+                <span className="font-mono text-lg font-bold text-primary">{onboardingProgress}%</span>
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold">Your Dink Card setup</p>
+              <p className="mt-1 text-sm text-muted-foreground">{currentStepIndex === 5 ? 'Everything is ready. Keep your account secure and funded.' : `Next step: ${nextStepLabel}`}</p>
+              <Link to={nextStepPath}>
+                <Button size="sm" className="mt-3 bg-primary text-primary-foreground">{nextStepLabel}</Button>
+              </Link>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-5 lg:min-w-[560px]">
+            {[
+              { label: 'Account', done: true },
+              { label: 'KYC', done: kycApproved },
+              { label: 'Add fund', done: hasUsableFunds },
+              { label: 'Card', done: hasAnyCard },
+              { label: '2FA', done: twoFactorEnabled }
+            ].map((step, index) => (
+              <div key={step.label} className={`rounded-2xl border px-3 py-2 transition-all ${step.done ? 'border-primary/25 bg-primary/10 text-primary' : 'border-border bg-secondary/20 text-muted-foreground'}`}>
+                <div className="flex items-center gap-2">
+                  {step.done ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <LockKeyhole className="h-4 w-4 shrink-0" />}
+                  <span className="truncate text-xs font-semibold">{index + 1}. {step.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <div className="col-span-2 rounded-2xl border border-border bg-card p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Balance</p>
           <div className="mt-2 flex items-end justify-between gap-3">
-            <p className="min-w-0 truncate font-mono text-[clamp(1.35rem,7vw,1.8rem)] font-bold text-primary">{walletLoading ? '...' : `$${balance.toFixed(2)}`}</p>
-            <p className="shrink-0 text-right text-[11px] text-muted-foreground">{walletLoading ? 'Loading' : `~ ${etbEstimate.toLocaleString()} ETB`}</p>
+            <p className="min-w-0 truncate font-mono text-[clamp(1.35rem,7vw,1.8rem)] font-bold text-primary">{walletLoading ? '...' : moneyText(balance)}</p>
+            <div className="flex shrink-0 items-center gap-2">
+              <p className="text-right text-[11px] text-muted-foreground">{walletLoading ? 'Loading' : etbText}</p>
+              <button type="button" className="rounded-lg border border-border p-1.5 text-muted-foreground" onClick={() => setShowBalances((current) => !current)} aria-label={showBalances ? 'Hide balance' : 'Show balance'}>
+                {showBalances ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              </button>
+            </div>
           </div>
         </div>
         <div className="rounded-2xl border border-border bg-card p-3.5">
@@ -159,12 +225,18 @@ export default function Dashboard() {
       </div>
 
       <div className="hidden auto-rows-fr grid-cols-2 items-stretch gap-4 md:grid md:grid-cols-3 lg:grid-cols-6">
-        <StatCard title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `~ ${etbEstimate.toLocaleString()} ETB`} icon={Wallet} />
-        <div className="hidden h-full md:block"><StatCard title="Total Deposited" value={`$${totalDeposited.toFixed(2)}`} icon={TrendingUp} /></div>
-        <div className="hidden h-full md:block"><StatCard title="Card Service Spend" value={`$${totalSpent.toFixed(2)}`} icon={DollarSign} /></div>
+        <StatCard title="Available Service Balance" value={walletLoading ? '...' : moneyText(balance)} subtitle={walletLoading ? 'Loading' : etbText} icon={Wallet} />
+        <div className="hidden h-full md:block"><StatCard title="Total Deposited" value={moneyText(totalDeposited)} icon={TrendingUp} /></div>
+        <div className="hidden h-full md:block"><StatCard title="Card Service Spend" value={moneyText(totalSpent)} icon={DollarSign} /></div>
         <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
         <div className="hidden h-full md:block"><StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} /></div>
         <StatCard title="KYC Level" value={kyc?.status === 'approved' ? `Level ${kyc.level || 1}` : 'Level 0'} icon={ShieldCheck} />
+      </div>
+      <div className="hidden justify-end md:flex">
+        <Button type="button" variant="outline" size="sm" onClick={() => setShowBalances((current) => !current)}>
+          {showBalances ? <EyeOff className="mr-2 h-4 w-4" /> : <Eye className="mr-2 h-4 w-4" />}
+          {showBalances ? 'Hide balance' : 'Show balance'}
+        </Button>
       </div>
 
       <div>
@@ -221,8 +293,8 @@ export default function Dashboard() {
               icon={CreditCard}
               title="No cards yet"
               description="Request your first virtual card for supported online payments."
-              actionLabel="Request Card"
-              onAction={() => navigate('/cards/create')}
+              actionLabel={requestCardLabel}
+              onAction={() => navigate(requestCardPath)}
               className="rounded-xl border border-border bg-card py-10"
             />
           ) : (
@@ -260,7 +332,7 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <p className={`font-mono text-sm font-semibold ${tx.amount >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                      {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
+                      {showBalances ? `${Number(tx.amount || 0) >= 0 ? '+' : ''}${Number(tx.amount || 0).toFixed(2)} USD` : '•••• USD'}
                     </p>
                     <StatusBadge status={tx.status} className="text-[10px]" />
                   </div>

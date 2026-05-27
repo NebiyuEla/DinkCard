@@ -86,10 +86,6 @@ function getActionCopy(action, user) {
 }
 
 function UserActions({ user, onAction, onView }) {
-  if (user.role === 'superadmin') {
-    return <span className="text-xs text-muted-foreground">Owner protected</span>;
-  }
-
   const isActive = (user.account_status || 'active') === 'active';
   const isAdmin = user.role === 'admin';
 
@@ -123,6 +119,19 @@ function UserActions({ user, onAction, onView }) {
   );
 }
 
+const roleRank = {
+  user: 0,
+  support: 1,
+  support_response: 1,
+  kyc_checker: 2,
+  admin: 3,
+  superadmin: 99
+};
+
+function displayRole(role) {
+  return role === 'support_response' ? 'support' : role || 'user';
+}
+
 export default function AdminUsers() {
   const queryClient = useQueryClient();
   const { data: users } = useQuery({
@@ -152,7 +161,14 @@ export default function AdminUsers() {
   const [manualAmount, setManualAmount] = useState('');
   const [manualCard, setManualCard] = useState({ nickname: 'Virtual Card', balance: '', lastFour: '' });
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
-  const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support_response' });
+  const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support' });
+  const visibleUsers = (users || [])
+    .filter((user) => user.role !== 'superadmin')
+    .sort((a, b) => {
+      const rank = (roleRank[a.role] ?? 0) - (roleRank[b.role] ?? 0);
+      if (rank !== 0) return rank;
+      return String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''));
+    });
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
@@ -205,7 +221,7 @@ export default function AdminUsers() {
       invalidateOperationalData(queryClient);
       toast.success('Staff account created.');
       setStaffDialogOpen(false);
-      setStaffForm({ fullName: '', email: '', username: '', password: '', role: 'support_response' });
+      setStaffForm({ fullName: '', email: '', username: '', password: '', role: 'support' });
     },
     onError: (error) => toast.error(error.message || 'Could not create staff account.')
   });
@@ -225,7 +241,7 @@ export default function AdminUsers() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-bold">Users ({users?.length || 0})</h2>
+        <h2 className="text-lg font-bold">Users ({visibleUsers.length})</h2>
         <Button type="button" onClick={() => setStaffDialogOpen(true)}>
           <UserCog className="mr-2 h-4 w-4" />Add admin or support
         </Button>
@@ -245,11 +261,11 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {(users || []).map(user => (
+              {visibleUsers.map(user => (
                 <tr key={user.id} className="hover:bg-secondary/20">
                   <td className="px-4 py-3 font-medium">{user.full_name || '-'}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{user.email}</td>
-                  <td className="px-4 py-3"><StatusBadge status={user.role || 'user'} /></td>
+                  <td className="px-4 py-3"><StatusBadge status={displayRole(user.role)} /></td>
                   <td className="px-4 py-3 font-mono text-primary">${Number(walletByUser.get(user.email)?.available_balance || 0).toFixed(2)}</td>
                   <td className="px-4 py-3">
                     <div className="space-y-1">
@@ -265,7 +281,7 @@ export default function AdminUsers() {
           </table>
         </div>
         <div className="md:hidden divide-y divide-border">
-          {(users || []).map(user => (
+          {visibleUsers.map(user => (
             <div key={user.id} className="p-4 space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -275,7 +291,7 @@ export default function AdminUsers() {
                 <StatusBadge status={user.account_status || 'active'} className="shrink-0" />
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <StatusBadge status={user.role || 'user'} />
+                <StatusBadge status={displayRole(user.role)} />
                 <span className="font-mono text-primary">${Number(walletByUser.get(user.email)?.available_balance || 0).toFixed(2)}</span>
                 <span>{user.created_date ? format(new Date(user.created_date), 'MMM d, yyyy') : ''}</span>
               </div>
@@ -304,7 +320,7 @@ export default function AdminUsers() {
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/30 p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Role</p>
-                    <p className="mt-2 font-semibold capitalize">{String(detailUser.role || 'user').replace(/_/g, ' ')}</p>
+                    <p className="mt-2 font-semibold capitalize">{String(displayRole(detailUser.role)).replace(/_/g, ' ')}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{detailUser.username ? `@${detailUser.username}` : 'No username yet'}</p>
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/30 p-4">
@@ -456,7 +472,6 @@ export default function AdminUsers() {
                   onChange={(event) => setStaffForm((current) => ({ ...current, role: event.target.value }))}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  <option value="support_response">Support Response</option>
                   <option value="support">Support</option>
                   <option value="kyc_checker">KYC Checker</option>
                   <option value="admin">Admin</option>

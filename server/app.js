@@ -1079,6 +1079,7 @@ function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
   const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
   const isStablecoinDeposit = ['usdc', 'crypto'].includes(String(deposit.payment_method || '').toLowerCase());
+  const receiptTitle = isStablecoinDeposit ? 'Funding Receipt' : 'Chapa Payment Receipt';
   const rows = isStablecoinDeposit
     ? [
         ['Payment reference', deposit.transaction_reference],
@@ -1106,7 +1107,7 @@ function invoiceHtml(deposit) {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Dink Card Receipt ${escapeHtml(deposit.transaction_reference)}</title>
+  <title>${escapeHtml(receiptTitle)} ${escapeHtml(deposit.transaction_reference)}</title>
   <style>
     body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
     .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
@@ -1124,8 +1125,8 @@ function invoiceHtml(deposit) {
   <section class="invoice">
     <div class="brand">
       <div>
-        <h1>Dink Card Receipt</h1>
-        <p>${escapeHtml(isStablecoinDeposit ? 'USDC funding request receipt' : 'Hosted checkout payment receipt')}</p>
+        <h1>${escapeHtml(receiptTitle)}</h1>
+        <p>${escapeHtml(receiptTitle)}</p>
       </div>
       <div>
         <p class="status">${escapeHtml(status)}</p>
@@ -2508,7 +2509,7 @@ export function createApp() {
     if (!target) return res.status(404).json({ message: 'User not found' });
     if (target.role === 'superadmin') return res.status(400).json({ message: 'Superadmin role cannot be changed here.' });
 
-    const allowedRoles = new Set(['user', 'support', 'support_response', 'kyc_checker', 'admin', 'superadmin']);
+    const allowedRoles = new Set(['user', 'support', 'kyc_checker', 'admin', 'superadmin']);
     const requestedRole = String(req.body.role || '').trim().toLowerCase();
     const nextRole = allowedRoles.has(requestedRole) ? requestedRole : 'user';
     const now = nowIso();
@@ -2537,14 +2538,15 @@ export function createApp() {
       const email = String(req.body.email || '').trim().toLowerCase();
       const username = normalizeUsername(req.body.username);
       const password = String(req.body.password || '');
-      const role = String(req.body.role || '').trim().toLowerCase();
-      const allowedRoles = new Set(['support', 'support_response', 'kyc_checker', 'admin', 'superadmin']);
+      const requestedRole = String(req.body.role || '').trim().toLowerCase();
+      const role = requestedRole === 'support_response' ? 'support' : requestedRole;
+      const allowedRoles = new Set(['support', 'kyc_checker', 'admin', 'superadmin']);
 
       if (!fullName || !email || !username || !password) {
         return res.status(400).json({ message: 'Full name, email, username, and password are required.' });
       }
       if (!allowedRoles.has(role)) {
-        return res.status(400).json({ message: 'Role must be support, support response, KYC checker, admin, or superadmin.' });
+        return res.status(400).json({ message: 'Role must be support, KYC checker, admin, or superadmin.' });
       }
       if (password.length < 8) {
         return res.status(400).json({ message: 'Password must be at least 8 characters.' });
@@ -3135,9 +3137,10 @@ export function createApp() {
     try {
       expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
       const deposit = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ? OR id = ?').get(req.params.txRef, req.params.txRef);
-      if (!deposit) return res.status(404).json({ message: 'Invoice not found' });
+      if (!deposit) return res.status(404).json({ message: 'Receipt not found' });
       if (!canReadDepositInvoice(req.user, deposit)) return res.status(403).json({ message: 'Forbidden' });
-      const filename = `dinkcard-invoice-${String(deposit.transaction_reference || deposit.id).replace(/[^a-zA-Z0-9_-]/g, '')}.html`;
+      const prefix = String(deposit.payment_method || '').toLowerCase() === 'chapa' ? 'chapa-receipt' : 'funding-receipt';
+      const filename = `${prefix}-${String(deposit.transaction_reference || deposit.id).replace(/[^a-zA-Z0-9_-]/g, '')}.html`;
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(invoiceHtml(deposit));
