@@ -2324,9 +2324,6 @@ export function createApp() {
             return res.status(400).json({ message: error.message || 'Could not send the email reply.' });
           }
         }
-        if (ticket?.user_id) {
-          createNotification(ticket.user_id, 'Support replied', `A new reply was added to your support ticket: ${ticket.subject || 'Support Ticket'}.`, 'support', '/support');
-        }
       }
       if (req.params.entity === 'KYCSubmission') {
         notifyAdmins('New KYC Submission', `${req.user.full_name || req.user.email} submitted KYC for review.`, 'kyc', '/admin/kyc');

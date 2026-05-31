@@ -58,8 +58,8 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <nav className="fixed top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4">
-          <BrandLogo to="/" imageClassName="h-8 w-8 rounded-lg" />
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+          <BrandLogo to="/" imageClassName="h-8 w-8 rounded-lg" labelClassName="hidden text-base font-semibold min-[380px]:inline" />
           <nav className="hidden items-center justify-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
             {PUBLIC_NAV_LINKS.filter((item) => ['Services', 'About', 'Contact'].includes(item.label)).map((item) => (
               <Link key={item.path} to={item.path} className="hover:text-primary">
@@ -67,13 +67,13 @@ export default function Landing() {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center justify-end gap-3">
+          <div className="flex shrink-0 items-center justify-end gap-2">
             <ThemeToggle compact />
             <Link to="/login">
-              <Button variant="ghost" size="sm">Sign In</Button>
+              <Button variant="ghost" size="sm" className="px-3">Sign In</Button>
             </Link>
             <Link to="/register">
-              <Button size="sm">Get Started</Button>
+              <Button size="sm" className="px-3">Get Started</Button>
             </Link>
           </div>
         </div>
