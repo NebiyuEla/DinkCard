@@ -5,13 +5,13 @@ import BrandLogo from '@/components/BrandLogo';
 import LegalLinks from '@/components/LegalLinks';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { contactEmailLine, footerDisclaimer, INFO_EMAIL, SECURITY_EMAIL, SUPPORT_EMAIL } from '@/lib/legal';
+import { footerDisclaimer, INFO_EMAIL, SECURITY_EMAIL, SUPPORT_EMAIL } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 
 const pageContent = {
   '/services': {
     eyebrow: 'Dink Card Services',
-    title: 'Virtual card services built for everyday online payments',
+    title: 'Virtual card services for everyday online payments',
     description: 'Dink Card helps Ethiopian users access supported virtual card services for subscriptions, digital tools, app stores, ads, shopping, and secure online payments.',
     cards: [
       { icon: CreditCard, title: 'Virtual Cards', text: 'Request and manage supported virtual cards after identity verification and funding.' },
@@ -24,7 +24,7 @@ const pageContent = {
     title: 'A digital payment access platform made for Ethiopia',
     description: 'Dink Card is designed to make online payment access clearer for Ethiopian users through a guided account, funding, verification, and virtual card management experience.',
     cards: [
-      { icon: MapPin, title: 'Built for Ethiopia', text: 'The platform focuses on ETB pricing, local user needs, and simple digital service access.' },
+      { icon: MapPin, title: 'ETB Pricing', text: 'The platform focuses on clear ETB totals, local payment flow, and simple digital service access.' },
       { icon: LockKeyhole, title: 'Trust-Focused', text: 'We use verification, account protection, and secure backend handling for sensitive actions.' },
       { icon: Smartphone, title: 'Mobile Friendly', text: 'Dink Card is made to work smoothly from mobile browsers and installed web apps.' }
     ]
@@ -48,16 +48,16 @@ export default function MarketingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <div className="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4">
           <BrandLogo to="/" imageClassName="h-8 w-8 rounded-lg" />
-          <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
+          <nav className="hidden items-center justify-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
             {PUBLIC_NAV_LINKS.filter((item) => ['Services', 'About', 'Contact'].includes(item.label)).map((item) => (
               <Link key={item.path} to={item.path} className="hover:text-primary">
                 {item.label}
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <ThemeToggle compact />
             <Link to="/login"><Button variant="ghost" size="sm">Sign In</Button></Link>
             <Link to="/register"><Button size="sm">Get Started</Button></Link>
@@ -110,7 +110,11 @@ export default function MarketingPage() {
             ))}
           </nav>
           <LegalLinks />
-          <p className="text-xs text-muted-foreground">{contactEmailLine}</p>
+          <p className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <a href={`mailto:${INFO_EMAIL}`} className="hover:text-primary hover:underline">{INFO_EMAIL}</a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-primary hover:underline">{SUPPORT_EMAIL}</a>
+            <a href={`mailto:${SECURITY_EMAIL}`} className="hover:text-primary hover:underline">{SECURITY_EMAIL}</a>
+          </p>
           <p className="max-w-2xl text-xs text-muted-foreground">{footerDisclaimer}</p>
         </div>
       </footer>

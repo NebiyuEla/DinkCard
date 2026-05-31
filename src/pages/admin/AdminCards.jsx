@@ -78,6 +78,7 @@ export default function AdminCards() {
   const [actionForm, setActionForm] = useState({ amount: '', reason: '' });
   const [deleteReason, setDeleteReason] = useState('');
   const [secureDetails, setSecureDetails] = useState(null);
+  const [activeTab, setActiveTab] = useState('cards');
 
   const customersQuery = useQuery({ queryKey: ['bitnob-customers'], queryFn: apiClient.admin.customers.list, refetchInterval: REFRESH.admin });
   const cardsQuery = useQuery({ queryKey: ['admin-cards'], queryFn: apiClient.admin.cards.list, refetchInterval: REFRESH.admin });
@@ -201,6 +202,10 @@ export default function AdminCards() {
   const companyStableBalance = Number(balancesQuery.data?.totalUsd || balancesQuery.data?.stableUsd || 0);
   const lowBalance = companyStableBalance < 7;
   const environment = providerStatusQuery.data?.environment || balancesQuery.data?.environment || 'sandbox';
+  const changeTab = (value) => {
+    setActiveTab(value);
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+  };
 
   return (
     <div className="space-y-4">
@@ -248,7 +253,7 @@ export default function AdminCards() {
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers or cards..." className="pl-9 h-9" />
       </div>
 
-      <Tabs defaultValue="cards" className="space-y-3">
+      <Tabs value={activeTab} onValueChange={changeTab} className="space-y-3">
         <TabsList className="h-auto flex-wrap justify-start">
           {CARD_TABS.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value} className="text-xs">{tab.label}</TabsTrigger>
@@ -430,8 +435,8 @@ export default function AdminCards() {
 
 function CompactCards({ cards, onAction }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <table className="w-full text-xs">
+    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+      <table className="w-full min-w-[760px] text-xs">
         <thead className="bg-secondary/40 text-muted-foreground">
           <tr><th className="px-3 py-2 text-left">Holder</th><th className="px-3 py-2 text-left">Card</th><th className="px-3 py-2 text-left">Env</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Actions</th></tr>
         </thead>
@@ -479,11 +484,13 @@ function SimpleRows({ rows, empty }) {
       {!rows.length ? <div className="p-8 text-center text-sm text-muted-foreground">{empty}</div> : (
         <div className="divide-y divide-border">
           {rows.slice(0, 80).map((row, index) => (
-            <div key={row.id || row.reference || row.created_date || index} className="grid grid-cols-1 gap-1 px-3 py-2 text-xs md:grid-cols-4">
-              <p className="font-medium">{row.action || row.type || row.description || row.event || 'Record'}</p>
-              <p className="text-muted-foreground">{row.user_id || row.customer_id || row.card_id || row.entity_id || ''}</p>
-              <p className="text-muted-foreground">{row.status || row.provider || row.entity_type || ''}</p>
-              <p className="text-right text-muted-foreground">{row.created_date ? format(new Date(row.created_date), 'MMM d, HH:mm') : row.created_at || ''}</p>
+            <div key={row.id || row.reference || row.created_date || index} className="grid gap-2 px-3 py-2.5 text-xs sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] sm:items-center">
+              <div className="min-w-0">
+                <p className="truncate font-medium">{row.action || row.type || row.description || row.event || 'Record'}</p>
+                <p className="mt-0.5 truncate text-muted-foreground">{row.provider || row.entity_type || row.status || ''}</p>
+              </div>
+              <p className="min-w-0 break-all text-muted-foreground">{row.user_id || row.customer_id || row.card_id || row.entity_id || row.reference || ''}</p>
+              <p className="whitespace-nowrap text-left text-muted-foreground sm:text-right">{row.created_date ? format(new Date(row.created_date), 'MMM d, HH:mm') : row.created_at || ''}</p>
             </div>
           ))}
         </div>

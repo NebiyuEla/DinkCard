@@ -35,8 +35,8 @@ const navItems = [
 
 const mobileNavItems = [
   { label: 'Home', path: '/dashboard', icon: LayoutDashboard },
+  { label: 'Add', path: '/add-money', icon: PlusCircle },
   { label: 'Cards', path: '/cards', icon: CreditCard },
-  { label: 'Balance', path: '/wallet', icon: Wallet },
   { label: 'Alerts', path: '/notifications', icon: Bell },
   { label: 'Account', path: '/account', icon: UserRound }
 ];

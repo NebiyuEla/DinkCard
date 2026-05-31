@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { ArrowDownUp, CheckCircle2, CreditCard, DollarSign, Eye, EyeOff, HeadphonesIcon, LockKeyhole, PlusCircle, QrCode, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
+import { ArrowDownUp, CheckCircle2, CreditCard, DollarSign, Eye, EyeOff, HeadphonesIcon, LockKeyhole, PlusCircle, QrCode, Settings2, ShieldCheck, Smartphone, TrendingUp, UserRound, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { useCards, useCurrentUser, useDeposits, useFeeSettings, useKYCStatus, useWallet, useWalletTransactions } from '@/hooks/useAppData';
@@ -29,6 +29,7 @@ const quickActionCatalog = [
 ];
 
 const BALANCE_VISIBILITY_KEY = 'dinkcard_show_balances';
+const INSTALL_STEP_DONE_KEY = 'dinkcard_install_step_done';
 
 function normalizeStatus(status) {
   const value = String(status || '').toLowerCase();
@@ -43,6 +44,8 @@ export default function Dashboard() {
   const [paymentBanner, setPaymentBanner] = useState(null);
   const [customizeOpen, setCustomizeOpen] = useState(false);
   const [showBalances, setShowBalances] = useState(() => localStorage.getItem(BALANCE_VISIBILITY_KEY) !== '0');
+  const [installDone, setInstallDone] = useState(() => localStorage.getItem(INSTALL_STEP_DONE_KEY) === '1');
+  const [installPrompt, setInstallPrompt] = useState(null);
   const [quickActionIds, setQuickActionIds] = useState(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(QUICK_ACTION_STORAGE_KEY) || 'null');
@@ -87,6 +90,8 @@ export default function Dashboard() {
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const currentStepIndex = [true, kycApproved, hasFundStep, hasAnyCard, twoFactorEnabled].filter(Boolean).length;
   const onboardingProgress = Math.round((currentStepIndex / 5) * 100);
+  const maxCards = Math.min(Number(settings?.max_cards_per_user || 3), 3);
+  const setupComplete = currentStepIndex >= 5;
   const nextStepPath = !kycApproved ? '/kyc' : !hasFundStep ? '/add-money' : !hasAnyCard ? (hasUsableFunds ? '/cards/create' : '/add-money') : !twoFactorEnabled ? '/account' : '/cards';
   const nextStepLabel = !kycApproved ? 'Complete KYC' : !hasFundStep ? 'Add Funds' : !hasAnyCard ? (hasUsableFunds ? 'Request Card' : 'Add Funds') : !twoFactorEnabled ? 'Enable 2FA' : 'Manage Cards';
   const moneyText = (value) => showBalances ? `$${Number(value || 0).toFixed(2)}` : '$••••';
@@ -120,6 +125,31 @@ export default function Dashboard() {
   useEffect(() => {
     localStorage.setItem(BALANCE_VISIBILITY_KEY, showBalances ? '1' : '0');
   }, [showBalances]);
+
+  useEffect(() => {
+    const handleInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPrompt(event);
+    };
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+  }, []);
+
+  const finishInstallStep = () => {
+    localStorage.setItem(INSTALL_STEP_DONE_KEY, '1');
+    setInstallDone(true);
+  };
+
+  const promptInstall = async () => {
+    if (installPrompt?.prompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice.catch(() => null);
+      setInstallPrompt(null);
+      finishInstallStep();
+      return;
+    }
+    toast.info('Use your browser menu and choose Add to Home screen. You can finish this step any time.');
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -213,6 +243,26 @@ export default function Dashboard() {
       </div>
       )}
 
+      {setupComplete && !installDone && (
+        <div className="rounded-3xl border border-primary/15 bg-card p-4 shadow-sm sm:p-5">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
+                <Smartphone className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Install Dink Card on your device</p>
+                <p className="mt-1 text-sm text-muted-foreground">Optional: add the platform to your home screen for faster access.</p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="button" className="bg-primary text-primary-foreground" onClick={promptInstall}>Add to home screen</Button>
+              <Button type="button" variant="outline" onClick={finishInstallStep}>Finish</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2.5 md:hidden">
         <div className="col-span-2 rounded-2xl border border-border bg-card p-3.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Balance</p>
@@ -242,7 +292,7 @@ export default function Dashboard() {
         <StatCard title="Available Service Balance" value={walletLoading ? '...' : moneyText(balance)} subtitle={walletLoading ? 'Loading' : etbText} icon={Wallet} />
         <div className="hidden h-full md:block"><StatCard title="Total Deposited" value={moneyText(totalDeposited)} icon={TrendingUp} /></div>
         <div className="hidden h-full md:block"><StatCard title="Card Service Spend" value={moneyText(totalSpent)} icon={DollarSign} /></div>
-        <StatCard title="Active Cards" value={activeCards.length} subtitle={frozenCards.length ? `${frozenCards.length} frozen` : undefined} icon={CreditCard} />
+        <StatCard title="Active Cards" value={activeCards.length} subtitle={`Created ${visibleCards.length}/${maxCards}${frozenCards.length ? ` / ${frozenCards.length} frozen` : ''}`} icon={CreditCard} />
         <div className="hidden h-full md:block"><StatCard title="Pending" value={pendingDeposits.length} subtitle="deposits" icon={PlusCircle} /></div>
         <StatCard title="KYC Level" value={kyc?.status === 'approved' ? `Level ${kyc.level || 1}` : 'Level 0'} icon={ShieldCheck} />
       </div>

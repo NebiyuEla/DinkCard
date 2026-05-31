@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
-import { BRAND_NAME, contactEmailLine, footerDisclaimer, policies } from '@/lib/legal';
+import { BRAND_NAME, footerDisclaimer, INFO_EMAIL, SECURITY_EMAIL, SUPPORT_EMAIL, policies } from '@/lib/legal';
 
 const routeMap = {
   terms: 'terms',
@@ -70,7 +70,11 @@ export default function LegalPage() {
       <footer className="border-t border-border py-8 px-4">
         <div className="max-w-4xl mx-auto space-y-4">
           <LegalLinks />
-          <p className="text-xs text-muted-foreground text-center">{contactEmailLine}</p>
+          <p className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <a href={`mailto:${INFO_EMAIL}`} className="hover:text-primary hover:underline">{INFO_EMAIL}</a>
+            <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-primary hover:underline">{SUPPORT_EMAIL}</a>
+            <a href={`mailto:${SECURITY_EMAIL}`} className="hover:text-primary hover:underline">{SECURITY_EMAIL}</a>
+          </p>
           <p className="text-xs text-muted-foreground text-center">{footerDisclaimer}</p>
         </div>
       </footer>

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
 import BrandLogo from '@/components/BrandLogo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { contactEmailLine, footerDisclaimer, platformDisclaimer } from '@/lib/legal';
+import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 import {
   ArrowRight,
@@ -14,10 +14,10 @@ import {
   CreditCard,
   DollarSign,
   Globe,
+  HeadphonesIcon,
   Lock,
   Shield,
   Smartphone,
-  Zap
 } from 'lucide-react';
 
 const fadeUp = {
@@ -58,16 +58,16 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <nav className="fixed top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
+        <div className="mx-auto grid h-16 max-w-6xl grid-cols-[1fr_auto_1fr] items-center px-4">
           <BrandLogo to="/" imageClassName="h-8 w-8 rounded-lg" />
-          <nav className="hidden items-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
+          <nav className="hidden items-center justify-center gap-5 text-sm text-muted-foreground md:flex" aria-label="Main navigation">
             {PUBLIC_NAV_LINKS.filter((item) => ['Services', 'About', 'Contact'].includes(item.label)).map((item) => (
               <Link key={item.path} to={item.path} className="hover:text-primary">
                 {item.label}
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3">
             <ThemeToggle compact />
             <Link to="/login">
               <Button variant="ghost" size="sm">Sign In</Button>
@@ -87,15 +87,14 @@ export default function Landing() {
           variants={stagger}
         >
           <div className="mx-auto max-w-3xl">
-            <motion.div variants={fadeUp} className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
-              <Zap className="h-3.5 w-3.5" />
-              Built for Ethiopian users
+            <motion.div variants={fadeUp} className="mb-5 inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
+              Simple online payment access
             </motion.div>
             <motion.h1 variants={fadeUp} className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Virtual card solution for secure online payments in Ethiopia
             </motion.h1>
             <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Create and manage supported virtual cards for online payments, subscriptions, and digital services with a clean flow built for Ethiopia.
+              Create and manage supported virtual cards for online payments, subscriptions, and digital services through a clear verified flow.
             </motion.p>
             <motion.div variants={fadeUp} className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/register">
@@ -252,22 +251,42 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className="border-t border-border px-4 py-10">
+        <div className="mx-auto flex max-w-3xl flex-col items-center gap-4 rounded-3xl border border-border bg-card p-6 text-center sm:p-8">
+          <HeadphonesIcon className="h-9 w-9 text-primary" />
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">Contact us</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              Need help with an account, payment, verification, or card request? Use the contact page or email support directly.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 text-sm sm:flex-row">
+            <Link to="/contact" className="font-semibold text-primary hover:underline">Open contact page</Link>
+            <a href="mailto:support@dinkcard.et" className="font-semibold text-primary hover:underline">support@dinkcard.et</a>
+          </div>
+        </div>
+      </section>
+
       <footer className="border-t border-border px-4 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-5 md:flex-row">
+        <div className="mx-auto grid max-w-6xl items-center gap-5 text-center md:grid-cols-[1fr_2fr_1fr]">
           <BrandLogo to="/" imageClassName="h-7 w-7 rounded-md" labelClassName="font-bold text-base" />
           <div className="space-y-3">
             <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm text-muted-foreground" aria-label="Footer navigation">
-              {PUBLIC_NAV_LINKS.map((item) => (
-                <Link key={item.path} to={item.path} className="hover:text-primary hover:underline">
-                  {item.label}
-                </Link>
+            {PUBLIC_NAV_LINKS.map((item) => (
+              <Link key={item.path} to={item.path} className="hover:text-primary hover:underline">
+                {item.label}
+              </Link>
               ))}
             </nav>
             <LegalLinks />
-            <p className="text-center text-xs text-muted-foreground">{contactEmailLine}</p>
+            <p className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-center text-xs text-muted-foreground">
+              <a href="mailto:info@dinkcard.et" className="hover:text-primary hover:underline">info@dinkcard.et</a>
+              <a href="mailto:support@dinkcard.et" className="hover:text-primary hover:underline">support@dinkcard.et</a>
+              <a href="mailto:security@dinkcard.et" className="hover:text-primary hover:underline">security@dinkcard.et</a>
+            </p>
             <p className="max-w-2xl text-center text-xs text-muted-foreground">{footerDisclaimer}</p>
           </div>
-          <p className="text-xs text-muted-foreground">(c) {new Date().getFullYear()} Dink Card</p>
+          <p className="text-xs text-muted-foreground md:text-right">(c) {new Date().getFullYear()} Dink Card</p>
         </div>
       </footer>
     </div>

@@ -28,7 +28,6 @@ export const serviceCreditDisclaimer = `Any balance or credit shown inside ${BRA
 export const p2pRestrictionNotice = `${BRAND_NAME} does not support peer-to-peer transfers, user-to-user balance transfers, balance resale, third-party payments, cash-out, crypto trading, money exchange, or remittance activity.`;
 
 export const footerDisclaimer = `${BRAND_NAME} is operated by ${LEGAL_BUSINESS_NAME}. ${platformDisclaimer} Merchant acceptance is not guaranteed.`;
-export const contactEmailLine = `General: ${INFO_EMAIL} | Support: ${SUPPORT_EMAIL} | Security: ${SECURITY_EMAIL}`;
 
 export const appStoreDescription = `${BRAND_NAME} helps users in Ethiopia access supported virtual card-related services with clear ETB pricing, exchange-rate visibility, and simple service processing.`;
 

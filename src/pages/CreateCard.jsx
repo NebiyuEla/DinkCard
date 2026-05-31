@@ -66,6 +66,7 @@ export default function CreateCard() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Request Virtual Card</h1>
           <p className="text-sm text-muted-foreground">Request a USD virtual card for supported online payments.</p>
+          <p className="mt-1 text-xs font-semibold text-primary">Cards created: {createdCardCount}/{maxCards}</p>
         </div>
       </div>
 

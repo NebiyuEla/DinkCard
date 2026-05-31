@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle, DollarSign, ExternalLink } from 'lucide-react';
+import { ArrowLeft, CheckCircle, DollarSign, ExternalLink, QrCode } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -89,12 +89,17 @@ export default function AddMoney() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 pb-4 sm:space-y-6 lg:pb-0">
-      <div className="flex items-center gap-3">
-        <Button type="button" variant="ghost" size="icon" onClick={goBack}><ArrowLeft className="h-5 w-5" /></Button>
-        <div>
-          <h1 className="text-xl font-bold sm:text-2xl">Add Funds</h1>
-          <p className="text-sm text-muted-foreground">Choose ETB checkout or direct USDC funding.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Button type="button" variant="ghost" size="icon" onClick={goBack}><ArrowLeft className="h-5 w-5" /></Button>
+          <div>
+            <h1 className="text-xl font-bold sm:text-2xl">Add Funds</h1>
+            <p className="text-sm text-muted-foreground">Choose ETB checkout or crypto deposit.</p>
+          </div>
         </div>
+        <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => kycApproved ? navigate('/wallet?openCrypto=1') : navigate('/kyc')}>
+          <QrCode className="mr-2 h-4 w-4" /> Crypto deposit
+        </Button>
       </div>
 
       {statusMessage && (

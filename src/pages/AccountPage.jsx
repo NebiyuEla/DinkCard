@@ -49,6 +49,9 @@ export default function AccountPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     if (!user) return;
@@ -155,6 +158,17 @@ export default function AccountPage() {
       await apiClient.auth.logout('/');
     },
     onError: (error) => setDeleteError(error.message || 'Could not delete account.')
+  });
+
+  const changePassword = useMutation({
+    mutationFn: () => apiClient.auth.changePassword(passwordForm),
+    onSuccess: () => {
+      setPasswordDialogOpen(false);
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setPasswordError('');
+      toast.success('Password changed.');
+    },
+    onError: (error) => setPasswordError(error.message || 'Could not change password.')
   });
 
   return (
@@ -316,7 +330,10 @@ export default function AccountPage() {
               </div>
             </div>
             <div className="mt-4 text-right">
-              <Link to="/forgot-password" className="text-sm text-primary hover:underline">Request password reset</Link>
+              <Button type="button" variant="outline" size="sm" onClick={() => { setPasswordDialogOpen(true); setPasswordError(''); }}>
+                Change password
+              </Button>
+              <Link to="/forgot-password" className="ml-3 text-sm text-primary hover:underline">Request password reset</Link>
             </div>
           </div>
         </div>
@@ -420,6 +437,49 @@ export default function AccountPage() {
             <Button type="button" variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
             <Button type="button" variant="destructive" onClick={() => deleteAccount.mutate()} disabled={!deletePassword || deleteAccount.isPending}>
               {deleteAccount.isPending ? 'Deleting...' : 'Delete account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change password</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Current password</Label>
+              <SecretInput value={passwordForm.currentPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, currentPassword: event.target.value }))} autoComplete="current-password" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>New password</Label>
+              <SecretInput value={passwordForm.newPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, newPassword: event.target.value }))} autoComplete="new-password" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Confirm new password</Label>
+              <SecretInput
+                value={passwordForm.confirmPassword}
+                onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && passwordForm.currentPassword && passwordForm.newPassword && passwordForm.confirmPassword && !changePassword.isPending) {
+                    event.preventDefault();
+                    changePassword.mutate();
+                  }
+                }}
+                autoComplete="new-password"
+              />
+            </div>
+            {passwordError && <p className="text-sm text-destructive">{passwordError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={() => changePassword.mutate()}
+              disabled={!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword || changePassword.isPending}
+            >
+              {changePassword.isPending ? 'Saving...' : 'Save password'}
             </Button>
           </DialogFooter>
         </DialogContent>

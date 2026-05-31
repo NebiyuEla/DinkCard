@@ -76,6 +76,7 @@ export const apiClient = {
       window.location.href = redirectTo;
     },
     updateMe: (payload) => request('/api/auth/me', { method: 'PATCH', body: JSON.stringify(payload) }),
+    changePassword: (payload) => request('/api/auth/password/change', { method: 'POST', body: JSON.stringify(payload) }),
     getTwoFactorStatus: () => request('/api/auth/2fa/status'),
     setupTwoFactor: (payload) => request('/api/auth/2fa/setup', { method: 'POST', body: JSON.stringify(payload) }),
     enableTwoFactor: (payload) => request('/api/auth/2fa/enable', { method: 'POST', body: JSON.stringify(payload) }),

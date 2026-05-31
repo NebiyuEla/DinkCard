@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
@@ -9,6 +9,7 @@ import { invalidateOperationalData } from '@/lib/realtime';
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
+  const location = useLocation();
   const { data: user } = useCurrentUser();
   const { data: notifications } = useNotifications(user?.email);
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
@@ -36,6 +37,10 @@ export default function AppLayout() {
     }
     announceNewNotifications(notifications);
   }, [notifications, user?.email]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">

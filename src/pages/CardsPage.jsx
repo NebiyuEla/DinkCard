@@ -5,7 +5,7 @@ import { AlertTriangle, Copy, CreditCard, DollarSign, Eye, EyeOff, Play, Plus, S
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { apiClient } from '@/api/client';
-import { useCurrentUser, useCards, useKYCStatus, useWallet } from '@/hooks/useAppData';
+import { useCurrentUser, useCards, useFeeSettings, useKYCStatus, useWallet } from '@/hooks/useAppData';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
@@ -49,6 +49,7 @@ export default function CardsPage() {
   const { data: user } = useCurrentUser();
   const { data: cards } = useCards(user?.email);
   const { data: wallet } = useWallet(user?.email);
+  const { data: settings } = useFeeSettings();
   const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
   const [selectedCard, setSelectedCard] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
@@ -113,6 +114,7 @@ export default function CardsPage() {
 
   const visibleCards = useMemo(() => cards?.filter((card) => !['deleted', 'failed', 'rejected'].includes(String(card.status || '').toLowerCase())) || [], [cards]);
   const kycApproved = kyc?.status === 'approved';
+  const maxCards = Math.min(Number(settings?.max_cards_per_user || 3), 3);
   const hasUsableFunds = Number(wallet?.available_balance || 0) > 0;
   const requestCardPath = !kycApproved ? '/kyc' : hasUsableFunds ? '/cards/create' : '/add-money';
   const requestCardLabel = !kycApproved ? 'Complete KYC' : hasUsableFunds ? 'Request Card' : 'Add Funds';
@@ -144,6 +146,7 @@ export default function CardsPage() {
         <div>
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
           <p className="text-sm text-muted-foreground">Manage virtual cards for supported online payments.</p>
+          <p className="mt-1 text-xs font-semibold text-primary">Cards created: {visibleCards.length}/{maxCards}</p>
         </div>
         <Link to={requestCardPath}>
           <Button className="bg-primary text-primary-foreground">
@@ -278,7 +281,7 @@ export default function CardsPage() {
                   <p className="text-sm text-muted-foreground">No card transactions yet.</p>
                 ) : (
                   <div className="divide-y divide-border">
-                    {cardTransactionRows.slice(0, 8).map((tx, index) => (
+                    {cardTransactionRows.map((tx, index) => (
                       <div key={tx.id || tx.reference || index} className="flex items-center justify-between gap-3 py-2 text-sm">
                         <div className="min-w-0">
                           <p className="truncate font-medium capitalize">{String(tx.type || tx.description || 'Transaction').replace(/_/g, ' ')}</p>

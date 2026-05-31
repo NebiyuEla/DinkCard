@@ -165,8 +165,9 @@ export default function AdminDashboard() {
             type="button"
             onClick={() => setSoundMuted((current) => !current)}
             className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            title={soundMuted ? 'Turn admin notification sounds on' : 'Turn admin notification sounds off'}
           >
-            <BellRing className="h-4 w-4" /> {soundMuted ? 'Unmute' : 'Mute'}
+            <BellRing className="h-4 w-4" /> {soundMuted ? 'Sounds Off' : 'Sounds On'}
           </button>
           <button
             type="button"

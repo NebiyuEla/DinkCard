@@ -1722,6 +1722,37 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  app.post('/api/auth/password/change', authMiddleware(db), async (req, res) => {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    const confirmPassword = String(req.body?.confirmPassword || '');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'Current password, new password, and confirmation are required.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'New password must be at least 8 characters.' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'New password and confirmation must match.' });
+    }
+
+    const validPassword = await comparePassword(currentPassword, user.password_hash);
+    if (!validPassword) {
+      writeAudit({ actor: user.email, userId: user.email, action: 'password_change_failed', entityType: 'auth', reason: 'invalid_current_password', req });
+      return res.status(401).json({ message: 'Current password is incorrect.' });
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').run(passwordHash, nowIso(), user.id);
+    createNotification(user.email, 'Password Updated', 'Your Dink Card password was changed successfully.', 'security', '/account');
+    writeAudit({ actor: user.email, userId: user.email, action: 'password_changed', entityType: 'auth', req });
+    res.json({ ok: true });
+  });
+
   app.get('/api/auth/me', (req, res) => {
     const session = readSession(req);
 
