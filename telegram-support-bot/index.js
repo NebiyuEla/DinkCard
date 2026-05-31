@@ -884,6 +884,13 @@ async function handleCallback(callback) {
   const data = callback.data || '';
   await answerCallback(callback.id);
 
+  if (isSupportAdmin(chatId) && !data.startsWith('oc:')) {
+    const currentSession = getSession(chatId);
+    if (currentSession?.mode === 'reply') {
+      clearSession(chatId);
+    }
+  }
+
   if (data === 'faq:home') {
     clearSession(chatId);
     return editMessage(chatId, messageId, 'Choose a support category:', faqHomeKeyboard());
@@ -1031,7 +1038,7 @@ async function handleCallback(callback) {
     if (!ticket) {
       return editMessage(chatId, messageId, 'Ticket not found.');
     }
-    await assignTicket(ticket, adminId, { notifyUser: ticket.status === 'queued' || !ticket.assignedAdminId, notifySuper: false });
+    await assignTicket(ticket, adminId, { notifyUser: ticket.status === 'waiting_for_user' || !ticket.assignedAdminId, notifySuper: false });
     return editMessage(chatId, messageId, `Ticket assigned.\n\n${formatTicketCard(ticket)}`, ticketActionKeyboard(ticket, 'superadmin'));
   }
 
