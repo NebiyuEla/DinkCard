@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { ArrowDownUp, CheckCircle2, CreditCard, DollarSign, Eye, EyeOff, HeadphonesIcon, LockKeyhole, PlusCircle, QrCode, SendHorizontal, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
+import { ArrowDownUp, CheckCircle2, CreditCard, DollarSign, Eye, EyeOff, HeadphonesIcon, LockKeyhole, PlusCircle, QrCode, Settings2, ShieldCheck, TrendingUp, UserRound, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/api/client';
 import { useCards, useCurrentUser, useDeposits, useFeeSettings, useKYCStatus, useWallet, useWalletTransactions } from '@/hooks/useAppData';
@@ -16,12 +16,11 @@ import { invalidateOperationalData } from '@/lib/realtime';
 import KycRequiredNotice from '@/components/KycRequiredNotice';
 
 const QUICK_ACTION_STORAGE_KEY = 'dinkcard_quick_actions';
-const DEFAULT_QUICK_ACTION_IDS = ['add-money', 'crypto-deposit', 'request-card', 'send-money', 'kyc', 'support'];
+const DEFAULT_QUICK_ACTION_IDS = ['add-money', 'crypto-deposit', 'request-card', 'kyc', 'support', 'transactions'];
 const quickActionCatalog = [
   { id: 'add-money', label: 'Add Money', path: '/add-money', icon: PlusCircle, color: 'text-primary', requiresKyc: true },
   { id: 'crypto-deposit', label: 'Crypto Deposit', path: '/wallet?openCrypto=1', icon: QrCode, color: 'text-primary', requiresKyc: true },
   { id: 'request-card', label: 'Request Card', path: '/cards/create', icon: CreditCard, color: 'text-accent', requiresKyc: true },
-  { id: 'send-money', label: 'Send Money', path: '/wallet?openSend=1', icon: SendHorizontal, color: 'text-primary' },
   { id: 'fund-card', label: 'Fund Card', path: '/cards', icon: DollarSign, color: 'text-yellow-500' },
   { id: 'transactions', label: 'Transactions', path: '/transactions', icon: ArrowDownUp, color: 'text-muted-foreground' },
   { id: 'kyc', label: 'KYC', path: '/kyc', icon: ShieldCheck, color: 'text-primary' },

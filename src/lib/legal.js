@@ -1,6 +1,8 @@
 export const BRAND_NAME = 'Dink Card';
 export const LEGAL_BUSINESS_NAME = 'Dink Card';
-export const SUPPORT_EMAIL = 'support@dinkcard.cc';
+export const INFO_EMAIL = 'info@dinkcard.et';
+export const SUPPORT_EMAIL = 'support@dinkcard.et';
+export const SECURITY_EMAIL = 'security@dinkcard.et';
 export const SUPPORT_LINK = '/contact-support';
 export const BUSINESS_ADDRESS = 'Addis Ababa, Ethiopia';
 export const TERMS_VERSION = 'v1.2';
@@ -19,15 +21,21 @@ export const legalLinks = [
   { label: 'Complaints', path: '/complaints' }
 ];
 
-export const platformDisclaimer = `${BRAND_NAME} helps verified users access and manage virtual card-related services through approved third-party infrastructure partners. Card creation, funding, processing, settlement, limits, availability, and acceptance are subject to partner provider rules, compliance checks, merchant acceptance, technical availability, and applicable regulations.`;
+export const platformDisclaimer = `${BRAND_NAME} is a digital service platform that helps verified customers request virtual card-related services through authorized third-party providers. ${BRAND_NAME} is not a bank, card network, payment institution, payment gateway, wallet provider, money transfer service, remittance provider, crypto exchange, or direct card issuer.`;
 
-export const footerDisclaimer = `${BRAND_NAME} is operated by ${LEGAL_BUSINESS_NAME}. ${BRAND_NAME} is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants. Merchant acceptance is not guaranteed.`;
+export const serviceCreditDisclaimer = `Any balance or credit shown inside ${BRAND_NAME} is service credit only. It may only be used by the verified account owner to request ${BRAND_NAME} services. It is not a bank deposit, e-money account, stored-value wallet, payment account, withdrawable balance, or transferable financial balance.`;
+
+export const p2pRestrictionNotice = `${BRAND_NAME} does not support peer-to-peer transfers, user-to-user balance transfers, balance resale, third-party payments, cash-out, crypto trading, money exchange, or remittance activity.`;
+
+export const footerDisclaimer = `${BRAND_NAME} is operated by ${LEGAL_BUSINESS_NAME}. ${platformDisclaimer} Merchant acceptance is not guaranteed.`;
+export const contactEmailLine = `General: ${INFO_EMAIL} | Support: ${SUPPORT_EMAIL} | Security: ${SECURITY_EMAIL}`;
 
 export const appStoreDescription = `${BRAND_NAME} helps users in Ethiopia access supported virtual card-related services with clear ETB pricing, exchange-rate visibility, and simple service processing.`;
 
 export const appStoreDisclaimer = `${BRAND_NAME} is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants.`;
 
-export const checkoutAgreement = 'I understand that card approval, funding, processing, and merchant acceptance are subject to verification, provider rules, compliance checks, service availability, and applicable fees.';
+export const checkoutAgreement = 'I understand that Dink Card account credit is service credit only and can only be used for Dink Card services. It is not a bank deposit, wallet balance, money transfer balance, withdrawable balance, crypto balance, or P2P balance.';
+export const cardRequestAgreement = 'I understand that Dink Card helps me request virtual card-related services through third-party providers. Dink Card is not the direct card issuer, and approval, activation, limits, fees, supported merchants, and availability may depend on verification, provider rules, risk review, and third-party provider approval.';
 
 export const policies = {
   terms: {
@@ -42,7 +50,8 @@ export const policies = {
       ['Eligibility', `To use ${BRAND_NAME}, you must be legally allowed to use the service in your country, provide accurate personal, contact, and payment information, complete verification/KYC when requested, use the service only for lawful supported online payments, and comply with our policies and partner provider requirements. We may refuse, suspend, or terminate access if account activity, documents, or transactions create legal, fraud, compliance, financial, security, or operational risk.`],
       ['Account Registration', 'You are responsible for keeping your login details secure. You must not share your account, password, OTP, card details, verification documents, or private account access with unauthorized persons. You are responsible for activity performed through your account unless you quickly report unauthorized access and we confirm the issue.'],
       ['Verification and KYC', 'We may require identity verification, business verification, proof of address, payment proof, phone verification, email verification, or additional documents before allowing funding, card requests, card funding, refunds, or account upgrades. All documents and information submitted must be true, accurate, current, and legally yours. False, misleading, forged, edited, stolen, third-party, or unauthorized documents may result in rejection, suspension, cancellation, permanent ban, refund delay, or reporting where required.'],
-      ['Add Money and Available Service Balance', 'When you add funds, you are adding value for supported card-related service requests on the platform. Your displayed balance represents available platform/service balance for eligible services. It is not a bank deposit, savings account, foreign currency account, stored bank account, or interest-bearing account. Payments may be subject to review, confirmation, provider approval, payment gateway response, manual verification, anti-fraud checks, and compliance requirements.'],
+      ['Service Credit', `When you add service credit, you are adding value for supported Dink Card service requests on the platform. ${serviceCreditDisclaimer} Payments may be subject to review, confirmation, provider approval, payment gateway response, manual verification, anti-fraud checks, and compliance requirements.`],
+      ['No P2P, Transfer, Cash-Out, or Exchange', `${p2pRestrictionNotice} Any suspected P2P, resale, fraudulent, third-party, mismatched, or suspicious activity may result in delayed approval, account review, balance hold, service restriction, request rejection, account suspension, or escalation for further review.`],
       ['Exchange Rate and Fees', 'Before confirming a payment or card request, we show available information such as exchange rate, service fee, payment method fee, card creation fee, card funding fee, total payable amount, expected credited value, and estimated processing time. Rates and fees may change based on market conditions, provider fees, payment gateway fees, bank charges, operational cost, and risk level.'],
       ['Virtual Card Requests', 'Users may request virtual cards through the platform after meeting verification and funding requirements. We do not independently issue cards. Virtual cards are provided, processed, and controlled through third-party infrastructure partners. A request may be approved, delayed, declined, frozen, blocked, terminated, or limited based on KYC status, provider rules, card network rules, merchant restrictions, risk checks, suspicious activity, insufficient balance, technical issues, legal or compliance requirements, and service availability.'],
       ['Card Usage', 'Virtual cards are intended for supported online payments only. They may not work for every merchant, website, subscription, country, platform, or transaction type. Merchant acceptance is not guaranteed. A card may fail because of merchant restrictions, region restrictions, provider rules, 3D Secure requirements, insufficient balance, billing address mismatch, unsupported merchant category, subscription restrictions, fraud/risk checks, or network/provider downtime.'],
@@ -56,7 +65,7 @@ export const policies = {
       ['Compliance With Law', 'You agree to use the platform according to applicable laws, regulations, payment rules, provider requirements, and platform policies. Where required, we may request additional information, delay processing, reject transactions, keep records, or report suspicious activity to relevant partners or authorities.'],
       ['Payment Processing', 'Payment gateways are used only to process supported payments for the platform. Payment confirmation, account crediting, service balance updates, and order processing are subject to backend verification, transaction reference matching, gateway status, fraud review, and platform approval. A successful payment screen alone does not guarantee final approval until the platform verifies the payment.'],
       ['Changes to Terms', 'We may update these Terms from time to time. Updated Terms will be posted on the platform. Continued use of the service after updates means you accept the revised Terms.'],
-      ['Contact', `For support, questions, refunds, or complaints, contact us through Email: ${SUPPORT_EMAIL}; Support: ${SUPPORT_LINK}; Address: ${BUSINESS_ADDRESS}; Legal Operator: ${LEGAL_BUSINESS_NAME}.`]
+      ['Contact', `General questions: ${INFO_EMAIL}. Customer support, card issues, deposits, payments, KYC, login, and complaints: ${SUPPORT_EMAIL}. Fraud, suspicious activity, account safety, card misuse, and urgent risk issues: ${SECURITY_EMAIL}. Support: ${SUPPORT_LINK}; Address: ${BUSINESS_ADDRESS}; Legal Operator: ${LEGAL_BUSINESS_NAME}.`]
     ]
   },
   privacy: {
@@ -126,7 +135,9 @@ export const policies = {
     title: 'Contact & Support',
     intro: [`Need help with ${BRAND_NAME}? Use the in-app support page when signed in, or contact us using the details below.`],
     sections: [
-      ['Support Email', SUPPORT_EMAIL],
+      ['General Email', `${INFO_EMAIL} - General questions, company information, partnership inquiries, and basic customer messages.`],
+      ['Support Email', `${SUPPORT_EMAIL} - Customer help, card issues, service credit, payments, KYC problems, login problems, and complaints.`],
+      ['Security Email', `${SECURITY_EMAIL} - Fraud reports, suspicious activity, account safety, blocked accounts, card misuse, and urgent risk issues.`],
       ['Support Link', SUPPORT_LINK],
       ['Business Address', BUSINESS_ADDRESS],
       ['Legal Operator', LEGAL_BUSINESS_NAME]

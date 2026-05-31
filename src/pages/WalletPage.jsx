@@ -6,7 +6,7 @@ import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, SendHorizontal, Copy, QrCode, ReceiptText } from 'lucide-react';
+import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, Copy, QrCode, ReceiptText } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,10 +25,6 @@ export default function WalletPage() {
   const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
   const { data: settings } = useFeeSettings();
   const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [recipientInput, setRecipientInput] = useState('');
-  const [recipient, setRecipient] = useState(null);
-  const [shareAmount, setShareAmount] = useState('');
   const [cryptoOpen, setCryptoOpen] = useState(false);
   const [cryptoCurrency, setCryptoCurrency] = useState('USDC');
   const [cryptoAmount, setCryptoAmount] = useState('');
@@ -49,13 +45,13 @@ export default function WalletPage() {
     adjustment: <Clock className="w-4 h-4 text-muted-foreground" />,
     card_withdrawal: <ArrowDownUp className="w-4 h-4 text-primary" />,
     referral_reward: <DollarSign className="w-4 h-4 text-primary" />,
-    balance_share_sent: <SendHorizontal className="w-4 h-4 text-accent" />,
-    balance_share_received: <SendHorizontal className="w-4 h-4 text-primary" />
+    balance_share_sent: <ArrowDownUp className="w-4 h-4 text-accent" />,
+    balance_share_received: <ArrowDownUp className="w-4 h-4 text-primary" />
   };
 
   const typeLabels = {
-    balance_share_sent: 'Money sent',
-    balance_share_received: 'Money received'
+    balance_share_sent: 'Legacy transfer',
+    balance_share_received: 'Legacy transfer'
   };
 
   const cryptoNetworksQuery = useQuery({
@@ -78,7 +74,7 @@ export default function WalletPage() {
       setCryptoOpen(true);
       setSearchParams({}, { replace: true });
     } else if (searchParams.get('openSend') === '1') {
-      setShareOpen(true);
+      toast.info('Dink Card service credit is not transferable between users.');
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams]);
@@ -103,31 +99,6 @@ export default function WalletPage() {
     });
     return () => { ignore = true; };
   }, [currentCryptoDeposit?.payment_address]);
-
-  const lookupRecipient = useMutation({
-    mutationFn: () => apiClient.wallet.lookupShareRecipient(recipientInput),
-    onSuccess: (payload) => {
-      setRecipient(payload);
-      toast.success('Receiver found');
-    },
-    onError: (error) => {
-      setRecipient(null);
-      toast.error(error.message || 'Receiver not found');
-    }
-  });
-
-  const shareBalance = useMutation({
-    mutationFn: () => apiClient.wallet.shareBalance({ identifier: recipientInput, amount: Number(shareAmount) }),
-    onSuccess: (payload) => {
-      invalidateOperationalData(queryClient);
-      toast.success(`$${Number(payload.amount || 0).toFixed(2)} sent successfully`);
-      setShareOpen(false);
-      setRecipientInput('');
-      setRecipient(null);
-      setShareAmount('');
-    },
-    onError: (error) => toast.error(error.message || 'Could not send money')
-  });
 
   const createCryptoAddress = useMutation({
     mutationFn: () => apiClient.payments.createCryptoAddress({ amountUsd: Number(cryptoAmount), network: cryptoNetwork, currency: cryptoCurrency }),
@@ -161,10 +132,7 @@ export default function WalletPage() {
           <h1 className="text-xl font-bold sm:text-2xl">Service Balance</h1>
           <p className="text-sm text-muted-foreground">Your available platform balance and history</p>
         </div>
-        <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
-          <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => setShareOpen(true)}>
-            <SendHorizontal className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Send</span><span className="hidden sm:inline">Send Money</span>
-          </Button>
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <Button variant="outline" className="h-10 justify-center px-2 text-xs sm:px-4 sm:text-sm" onClick={() => kycApproved ? setCryptoOpen(true) : toast.info('Complete your KYC verification before making deposits.')}>
             <QrCode className="mr-1.5 h-4 w-4 sm:mr-2" /> <span className="sm:hidden">Deposit</span><span className="hidden sm:inline">Crypto Deposit</span>
           </Button>
@@ -177,6 +145,9 @@ export default function WalletPage() {
       </div>
 
       {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
+      <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-relaxed text-muted-foreground">
+        Account credit is service credit only for Dink Card services. It is not transferable, withdrawable, or usable for peer-to-peer payments.
+      </div>
 
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-4">
         <StatCard className="col-span-2 md:col-span-1" title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
@@ -224,71 +195,6 @@ export default function WalletPage() {
           </div>
         )}
       </div>
-
-      <Dialog open={shareOpen} onOpenChange={setShareOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send Money</DialogTitle>
-            <DialogDescription>Send money with no fee using the receiver&apos;s email, phone number, or username.</DialogDescription>
-          </DialogHeader>
-
-          {!recipient ? (
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Receiver</Label>
-                <Input
-                  value={recipientInput}
-                  onChange={(event) => setRecipientInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && recipientInput.trim() && !lookupRecipient.isPending) {
-                      event.preventDefault();
-                      lookupRecipient.mutate();
-                    }
-                  }}
-                  placeholder="email, phone, or username"
-                />
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShareOpen(false)}>Cancel</Button>
-                <Button onClick={() => lookupRecipient.mutate()} disabled={!recipientInput.trim() || lookupRecipient.isPending}>
-                  {lookupRecipient.isPending ? 'Checking...' : 'Next'}
-                </Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-secondary/20 p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Receiver</p>
-                <p className="mt-2 font-semibold">{recipient.full_name || recipient.email}</p>
-                <p className="text-xs text-muted-foreground">{recipient.username ? `@${recipient.username}` : recipient.email}</p>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount in USD</Label>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={shareAmount}
-                  onChange={(event) => setShareAmount(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' && Number(shareAmount) && Number(shareAmount) <= balance && !shareBalance.isPending) {
-                      event.preventDefault();
-                      shareBalance.mutate();
-                    }
-                  }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">No fee is charged for this transfer.</p>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setRecipient(null); setShareAmount(''); }}>Back</Button>
-                <Button onClick={() => shareBalance.mutate()} disabled={!Number(shareAmount) || Number(shareAmount) > balance || shareBalance.isPending}>
-                  {shareBalance.isPending ? 'Sending...' : 'Send Money'}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={cryptoOpen} onOpenChange={setCryptoOpen}>
         <DialogContent className="max-w-lg">

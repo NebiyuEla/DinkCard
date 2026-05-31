@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
 import BrandLogo from '@/components/BrandLogo';
 import ThemeToggle from '@/components/ThemeToggle';
-import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
+import { contactEmailLine, footerDisclaimer, platformDisclaimer } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 import {
   ArrowRight,
@@ -264,6 +264,7 @@ export default function Landing() {
               ))}
             </nav>
             <LegalLinks />
+            <p className="text-center text-xs text-muted-foreground">{contactEmailLine}</p>
             <p className="max-w-2xl text-center text-xs text-muted-foreground">{footerDisclaimer}</p>
           </div>
           <p className="text-xs text-muted-foreground">(c) {new Date().getFullYear()} Dink Card</p>

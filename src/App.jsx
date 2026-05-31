@@ -110,6 +110,13 @@ function PublicOnly({ children }) {
   return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
 }
 
+function HomeRoute() {
+  const { isLoadingAuth, isAuthenticated, user } = useAuth();
+  if (isLoadingAuth) return <LoadingScreen />;
+  if (isAuthenticated) return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
+  return <Landing />;
+}
+
 function RequireOwner({ children }) {
   const { isLoadingAuth, user } = useAuth();
   if (isLoadingAuth) return <LoadingScreen />;
@@ -119,7 +126,7 @@ function RequireOwner({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Landing />} />
+      <Route path="/" element={<HomeRoute />} />
       <Route path="/services" element={<MarketingPage />} />
       <Route path="/about" element={<MarketingPage />} />
       <Route path="/contact" element={<MarketingPage />} />

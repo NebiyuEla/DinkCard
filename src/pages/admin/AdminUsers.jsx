@@ -46,6 +46,13 @@ function getActionCopy(action, user) {
       variant: 'outline',
       requiresReason: true
     },
+    reset_2fa: {
+      title: 'Reset Google Authenticator',
+      description: 'This disables two-factor authentication for this account so the user can set it up again.',
+      confirm: 'Reset 2FA',
+      variant: 'outline',
+      requiresReason: true
+    },
     add_money: {
       title: 'Add money',
       description: 'This manually credits the user available service balance. Use only after internal verification.',
@@ -107,6 +114,9 @@ function UserActions({ user, onAction, onView }) {
         <DropdownMenuItem onClick={() => onAction(user, isAdmin ? 'remove_admin' : 'make_admin')}>
           {isAdmin ? <UserMinus className="h-4 w-4" /> : <UserCog className="h-4 w-4" />} {isAdmin ? 'Remove admin' : 'Make admin'}
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAction(user, 'reset_2fa')}>
+          <ShieldOff className="h-4 w-4" /> Reset 2FA
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => onAction(user, isActive ? 'suspend' : 'activate')}>
           {isActive ? <ShieldOff className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />} {isActive ? 'Suspend user' : 'Restore user'}
         </DropdownMenuItem>
@@ -134,6 +144,7 @@ function displayRole(role) {
 
 export default function AdminUsers() {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState('all');
   const { data: users } = useQuery({
     queryKey: ['admin-users'],
     queryFn: () => apiClient.entities.User.list('-created_date', 100),
@@ -162,13 +173,25 @@ export default function AdminUsers() {
   const [manualCard, setManualCard] = useState({ nickname: 'Virtual Card', balance: '', lastFour: '' });
   const [staffDialogOpen, setStaffDialogOpen] = useState(false);
   const [staffForm, setStaffForm] = useState({ fullName: '', email: '', username: '', password: '', role: 'support' });
-  const visibleUsers = (users || [])
+  const allVisibleUsers = (users || [])
     .filter((user) => user.role !== 'superadmin')
     .sort((a, b) => {
       const rank = (roleRank[a.role] ?? 0) - (roleRank[b.role] ?? 0);
       if (rank !== 0) return rank;
-      return String(a.full_name || a.email || '').localeCompare(String(b.full_name || b.email || ''));
+      return new Date(b.created_date || b.created_at || 0) - new Date(a.created_date || a.created_at || 0);
     });
+  const tabs = [
+    { id: 'all', label: 'Total', count: allVisibleUsers.length },
+    { id: 'active', label: 'Active', count: allVisibleUsers.filter((user) => (user.account_status || 'active') === 'active' && !['support', 'support_response', 'kyc_checker', 'admin'].includes(user.role)).length },
+    { id: 'suspended', label: 'Suspended', count: allVisibleUsers.filter((user) => (user.account_status || 'active') !== 'active').length },
+    { id: 'admin', label: 'Admin', count: allVisibleUsers.filter((user) => ['support', 'support_response', 'kyc_checker', 'admin'].includes(user.role)).length }
+  ];
+  const visibleUsers = allVisibleUsers.filter((user) => {
+    if (activeTab === 'active') return (user.account_status || 'active') === 'active' && !['support', 'support_response', 'kyc_checker', 'admin'].includes(user.role);
+    if (activeTab === 'suspended') return (user.account_status || 'active') !== 'active';
+    if (activeTab === 'admin') return ['support', 'support_response', 'kyc_checker', 'admin'].includes(user.role);
+    return true;
+  });
 
   const actionCopy = getActionCopy(pendingAction?.action, pendingAction?.user);
   const reasonMissing = actionCopy.requiresReason && !reason.trim();
@@ -184,6 +207,7 @@ export default function AdminUsers() {
       if (action === 'activate') return apiClient.admin.users.activate(user.id);
       if (action === 'make_admin') return apiClient.admin.users.setRole(user.id, 'admin', actionReason);
       if (action === 'remove_admin') return apiClient.admin.users.setRole(user.id, 'user', actionReason);
+      if (action === 'reset_2fa') return apiClient.admin.users.resetTwoFactor(user.id, actionReason);
       if (action === 'add_money') return apiClient.admin.users.addMoney(user.id, { amount: Number(manualAmount), reason: actionReason });
       if (action === 'set_balance') return apiClient.admin.users.setBalance(user.id, { amount: Number(manualAmount), reason: actionReason });
       if (action === 'pass_kyc') return apiClient.admin.users.passKyc(user.id, { reason: actionReason });
@@ -241,16 +265,32 @@ export default function AdminUsers() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-bold">Users ({visibleUsers.length})</h2>
+        <div>
+          <h2 className="text-lg font-bold">Users ({visibleUsers.length})</h2>
+          <p className="text-xs text-muted-foreground">Latest registrations appear first inside each role group. Staff roles stay grouped after users.</p>
+        </div>
         <Button type="button" onClick={() => setStaffDialogOpen(true)}>
           <UserCog className="mr-2 h-4 w-4" />Add admin or support
         </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all ${activeTab === tab.id ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:text-foreground'}`}
+          >
+            {tab.label} <span className="ml-1 font-mono">{tab.count}</span>
+          </button>
+        ))}
       </div>
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">User ID</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Role</th>
@@ -263,6 +303,7 @@ export default function AdminUsers() {
             <tbody className="divide-y divide-border">
               {visibleUsers.map(user => (
                 <tr key={user.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{user.id}</td>
                   <td className="px-4 py-3 font-medium">{user.full_name || '-'}</td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">{user.email}</td>
                   <td className="px-4 py-3"><StatusBadge status={displayRole(user.role)} /></td>
@@ -287,6 +328,7 @@ export default function AdminUsers() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{user.full_name || 'Unassigned name'}</p>
                   <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/80">{user.id}</p>
                 </div>
                 <StatusBadge status={user.account_status || 'active'} className="shrink-0" />
               </div>
@@ -317,6 +359,7 @@ export default function AdminUsers() {
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Account</p>
                     <p className="mt-2 font-semibold">{detailUser.full_name || '-'}</p>
                     <p className="mt-1 text-xs text-muted-foreground">{detailUser.email}</p>
+                    <p className="mt-1 font-mono text-[11px] text-muted-foreground">{detailUser.id}</p>
                   </div>
                   <div className="rounded-xl border border-border bg-secondary/30 p-4">
                     <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Role</p>
@@ -346,7 +389,6 @@ export default function AdminUsers() {
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Front ID</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.front_id_url} label="Front ID" /></div></div>
-                    {kyc?.id_type !== 'passport' && <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Back ID</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.back_id_url} label="Back ID" /></div></div>}
                     <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Selfie</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.selfie_url} label="Selfie" /></div></div>
                   </div>
                 </div>

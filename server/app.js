@@ -9,7 +9,7 @@ import multer from 'multer';
 import { config } from './config.js';
 import { db, mapRow } from './db.js';
 import { authMiddleware, clearSessionCookie, comparePassword, hashPassword, readSession, readTwoFactorChallenge, setSessionCookie, signTwoFactorChallenge } from './auth.js';
-import { sanitizeUser, parseJson, generateId, money, nowIso, normalizeEthiopianPhone, toUsername, hmacSha256Hex } from './utils.js';
+import { sanitizeUser, parseJson, generateId, money, nowIso, normalizeEthiopianPhone, toUsername, hmacSha256Hex, formatPersonName, isReasonablePersonName } from './utils.js';
 import { createEntity, queryEntities, updateEntity } from './entities.js';
 import { approveDeposit, creditWallet, debitWallet, expirePendingChapaDeposits, getFeeSettings, initializeChapaPayment, finalizeChapaDeposit, setWalletBalance, verifyChapaWebhookSignature } from './payments.js';
 import { buildTwoFactorRecoverySummary, formatSecretForDisplay, getOtpAuthUrl, getTwoFactorSetupForUser, isTwoFactorEnabled, readEncryptedTwoFactorSecret, replacementRecoveryState, verifyTotp, verifyTwoFactorCode } from './two-factor.js';
@@ -121,6 +121,19 @@ function createNotification(userId, title, message, type = 'system', link = null
 }
 
 const ADMIN_ROLES = ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'];
+
+function notifyAdmins(title, message, type = 'admin', link = '/admin') {
+  try {
+    const admins = db.prepare(`
+      SELECT email FROM users
+      WHERE role IN ('support', 'support_response', 'kyc_checker', 'admin', 'superadmin')
+        AND ifnull(account_status, 'active') = 'active'
+    `).all();
+    for (const admin of admins) {
+      createNotification(admin.email, title, message, type, link);
+    }
+  } catch {}
+}
 
 function hasAnyAdminRole(user) {
   return ADMIN_ROLES.includes(user?.role);
@@ -265,7 +278,7 @@ function buildSeoHead(pathname) {
     `<meta name="description" content="${escapeSeoHtml(page.description)}" />`,
     `<meta name="keywords" content="${escapeSeoHtml(keywords)}" />`,
     `<meta name="application-name" content="${escapeSeoHtml(SEO_BRAND_NAME)}" />`,
-    '<meta name="robots" content="index, follow" />',
+    `<meta name="robots" content="${escapeSeoHtml(page.robots || 'index, follow')}" />`,
     `<link rel="canonical" href="${escapeSeoHtml(page.url)}" />`,
     `<meta property="og:title" content="${escapeSeoHtml(page.title)}" />`,
     `<meta property="og:description" content="${escapeSeoHtml(page.description)}" />`,
@@ -1406,15 +1419,19 @@ export function createApp() {
       email,
       phone,
       password,
+      confirmPassword,
       acceptedTerms
     } = req.body;
 
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ message: 'First name, last name, email, and password are required.' });
+    if (!firstName || !lastName || !email || !phone || !password) {
+      return res.status(400).json({ message: 'First name, last name, email, phone number, and password are required.' });
     }
 
     if (String(password).length < 8) {
       return res.status(400).json({ message: 'Password must be at least 8 characters.' });
+    }
+    if (confirmPassword !== undefined && String(password) !== String(confirmPassword)) {
+      return res.status(400).json({ message: 'Password and confirm password must match.' });
     }
 
     if (!acceptedTerms) {
@@ -1424,11 +1441,14 @@ export function createApp() {
     const normalizedEmail = String(email).trim().toLowerCase();
     const normalizedUsername = normalizeUsername(username);
     const normalizedPhone = normalizeEthiopianPhone(phone);
-    const cleanFirstName = String(firstName).trim();
-    const cleanLastName = String(lastName).trim();
+    const cleanFirstName = formatPersonName(firstName);
+    const cleanLastName = formatPersonName(lastName);
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       return res.status(400).json({ message: 'Enter a valid email address.' });
+    }
+    if (!isReasonablePersonName(cleanFirstName) || !isReasonablePersonName(cleanLastName)) {
+      return res.status(400).json({ message: 'Enter a valid first and last name.' });
     }
     if (normalizedUsername && !/^[a-zA-Z0-9_]+$/.test(normalizedUsername)) {
       return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
@@ -1471,6 +1491,8 @@ export function createApp() {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
 
     setSessionCookie(res, user);
+    notifyAdmins('New User Registration', `${user.full_name || user.email} created a Dink Card account.`, 'user', '/admin/users');
+    writeAudit({ actor: user.email, userId: user.email, action: 'user_registered', entityType: 'user', entityId: user.id, newValue: sanitizeUser(user), req });
 
     res.status(201).json({ user: serializeTwoFactorUser(user) });
   });
@@ -1716,12 +1738,13 @@ export function createApp() {
     const requestedLastName = typeof req.body.last_name === 'string' ? String(req.body.last_name).trim() : null;
     if (!approvedKyc && (requestedFirstName !== null || requestedLastName !== null || typeof req.body.full_name === 'string')) {
       const current = db.prepare('SELECT first_name, last_name FROM users WHERE id = ?').get(req.user.id);
-      const firstName = requestedFirstName ?? current?.first_name ?? '';
-      const lastName = requestedLastName ?? current?.last_name ?? '';
+      const firstName = formatPersonName(requestedFirstName ?? current?.first_name ?? '');
+      const lastName = formatPersonName(requestedLastName ?? current?.last_name ?? '');
       const fullName = String(req.body.full_name || `${firstName} ${lastName}`.trim()).trim();
       if (!firstName || !lastName) return res.status(400).json({ message: 'First name and last name are required.' });
+      if (!isReasonablePersonName(firstName) || !isReasonablePersonName(lastName)) return res.status(400).json({ message: 'Enter a valid first and last name.' });
       updates.push('first_name = ?', 'last_name = ?', 'full_name = ?');
-      values.push(firstName, lastName, fullName);
+      values.push(firstName, lastName, formatPersonName(fullName));
     }
 
     if (!approvedKyc && typeof req.body.phone === 'string') {
@@ -1994,61 +2017,11 @@ export function createApp() {
   });
 
   app.post('/api/wallet/share/lookup', authMiddleware(db), (req, res) => {
-    const identifier = String(req.body?.identifier || '').trim();
-    if (!identifier) return res.status(400).json({ message: 'Enter an email, phone number, or username.' });
-    const recipient = findUserByIdentifier(identifier);
-    if (!recipient || recipient.id === req.user.id) {
-      return res.status(404).json({ message: 'Receiver not found.' });
-    }
-    res.json({
-      id: recipient.id,
-      email: recipient.email,
-      phone: recipient.phone,
-      username: recipient.username,
-      full_name: recipient.full_name || `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim()
-    });
+    res.status(410).json({ message: 'Dink Card does not support user-to-user transfers. Account credit is service credit only.' });
   });
 
   app.post('/api/wallet/share', authMiddleware(db), (req, res) => {
-    try {
-      const identifier = String(req.body?.identifier || '').trim();
-      const amount = Number(req.body?.amount || 0);
-      if (!identifier) return res.status(400).json({ message: 'Choose a receiver first.' });
-      if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ message: 'Enter a valid amount.' });
-
-      const recipient = findUserByIdentifier(identifier);
-      if (!recipient || recipient.id === req.user.id) {
-        return res.status(404).json({ message: 'Receiver not found.' });
-      }
-
-      ensureWallet(req.user.email);
-      ensureWallet(recipient.email);
-      const transferId = `SND-${Date.now()}-${generateId('bal')}`;
-      debitWallet(req.user.email, amount, 'balance_share_sent', `Sent money to ${recipient.full_name || recipient.email}`, `${transferId}-debit`);
-      creditWallet(recipient.email, amount, 'balance_share_received', `Received money from ${req.user.full_name || req.user.email}`, `${transferId}-credit`);
-      createNotification(recipient.email, 'Balance Received', `$${money(amount).toFixed(2)} was shared to you by ${req.user.full_name || req.user.email}.`, 'wallet', '/wallet');
-      createNotification(req.user.email, 'Balance Sent', `You shared $${money(amount).toFixed(2)} to ${recipient.full_name || recipient.email}.`, 'wallet', '/wallet');
-      writeAudit({
-        actor: req.user.email,
-        userId: recipient.email,
-        action: 'balance_shared',
-        entityType: 'wallet',
-        entityId: transferId,
-        newValue: { from: req.user.email, to: recipient.email, amount: money(amount) },
-        req
-      });
-      res.json({
-        ok: true,
-        reference: transferId,
-        amount: money(amount),
-        receiver: {
-          full_name: recipient.full_name || `${recipient.first_name || ''} ${recipient.last_name || ''}`.trim(),
-          email: recipient.email
-        }
-      });
-    } catch (error) {
-      res.status(400).json({ message: error.message || 'Balance share failed.' });
-    }
+    res.status(410).json({ message: 'Dink Card does not support user-to-user transfers. Account credit is service credit only.' });
   });
 
   app.post('/api/uploads', authMiddleware(db), uploadLimiter, upload.single('file'), (req, res) => {
@@ -2104,6 +2077,15 @@ export function createApp() {
   app.post('/api/entities/:entity', authMiddleware(db), (req, res) => {
     try {
       const row = createEntity(req.params.entity, req.body, req.user);
+      if (req.params.entity === 'KYCSubmission') {
+        notifyAdmins('New KYC Submission', `${req.user.full_name || req.user.email} submitted KYC for review.`, 'kyc', '/admin/kyc');
+      }
+      if (req.params.entity === 'SupportTicket') {
+        notifyAdmins('New Support Message', `${req.user.full_name || req.user.email} opened a support ticket.`, 'support', '/admin/tickets');
+      }
+      if (req.params.entity === 'SupportMessage' && req.user.role === 'user') {
+        notifyAdmins('Support Reply Received', `${req.user.full_name || req.user.email} replied to a support ticket.`, 'support', '/admin/tickets');
+      }
       res.status(201).json(row);
     } catch (error) {
       res.status(400).json({ message: error.message });
@@ -2677,11 +2659,50 @@ export function createApp() {
     res.json(sanitizeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)));
   });
 
+  app.post('/api/admin/users/:id/reset-2fa', authMiddleware(db), (req, res) => {
+    if (!requireSuperadmin(req, res)) return;
+
+    const target = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+    if (!target) return res.status(404).json({ message: 'User not found' });
+    if (target.role === 'superadmin' && target.id === req.user.id) {
+      return res.status(400).json({ message: 'Use your account security page to change your own 2FA.' });
+    }
+
+    const reason = String(req.body.reason || '').trim();
+    if (!reason) return res.status(400).json({ message: 'A reason is required to reset 2FA.' });
+
+    db.prepare(`
+      UPDATE users
+      SET two_factor_enabled = 0,
+          two_factor_secret = NULL,
+          two_factor_temp_secret = NULL,
+          two_factor_recovery_codes = NULL,
+          two_factor_enabled_at = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `).run(nowIso(), target.id);
+
+    createNotification(target.email, 'Two-Factor Reset', 'An admin reset your two-factor authentication. Please enable it again from Account & Security.', 'security', '/account');
+    writeAudit({
+      actor: req.user.email,
+      userId: target.email,
+      action: 'two_factor_reset_by_superadmin',
+      entityType: 'user',
+      entityId: target.id,
+      oldValue: { two_factor_enabled: Boolean(Number(target.two_factor_enabled || 0)) },
+      newValue: { two_factor_enabled: false },
+      reason,
+      req
+    });
+
+    res.json(sanitizeUser(db.prepare('SELECT * FROM users WHERE id = ?').get(target.id)));
+  });
+
   app.post('/api/admin/users/create-staff', authMiddleware(db), async (req, res) => {
     if (!requireSuperadmin(req, res)) return;
 
     try {
-      const fullName = String(req.body.fullName || req.body.full_name || '').trim();
+      const fullName = formatPersonName(req.body.fullName || req.body.full_name || '');
       const email = String(req.body.email || '').trim().toLowerCase();
       const username = normalizeUsername(req.body.username);
       const password = String(req.body.password || '');
@@ -2691,6 +2712,9 @@ export function createApp() {
 
       if (!fullName || !email || !username || !password) {
         return res.status(400).json({ message: 'Full name, email, username, and password are required.' });
+      }
+      if (!isReasonablePersonName(fullName)) {
+        return res.status(400).json({ message: 'Enter a valid staff name.' });
       }
       if (!allowedRoles.has(role)) {
         return res.status(400).json({ message: 'Role must be support, KYC checker, admin, or superadmin.' });
@@ -3104,6 +3128,7 @@ export function createApp() {
         amountUsd: req.body.amountUsd,
         phoneNumber: req.body.phoneNumber
       });
+      notifyAdmins('New Deposit Request', `${req.user.full_name || req.user.email} started a service credit checkout.`, 'deposit', '/admin/deposits');
 
       res.json(result);
     } catch (error) {
@@ -3219,6 +3244,7 @@ export function createApp() {
         now,
         now
       );
+      notifyAdmins('New Crypto Deposit Request', `${req.user.full_name || req.user.email} generated a ${currency} funding address.`, 'deposit', '/admin/deposits');
 
       res.status(201).json({
         id: depositId,
@@ -3346,6 +3372,7 @@ export function createApp() {
   app.post('/api/cards', authMiddleware(db), async (req, res) => {
     try {
       await createVirtualCardForUser(req.user, req.body);
+      notifyAdmins('New Card Service Request', `${req.user.full_name || req.user.email} requested a virtual card service.`, 'card', '/admin/cards');
       res.status(201).json({ ok: true });
     } catch (error) {
       res.status(400).json({ message: error.message });

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import LegalLinks from '@/components/LegalLinks';
-import { checkoutAgreement } from '@/lib/legal';
+import { cardRequestAgreement } from '@/lib/legal';
 import { invalidateOperationalData } from '@/lib/realtime';
 
 export default function FundCard() {
@@ -159,7 +159,7 @@ export default function FundCard() {
       <div className="bg-secondary/40 rounded-xl p-4 text-xs text-muted-foreground space-y-3">
         <label className="flex items-start gap-3 rounded-xl border-2 border-primary/25 bg-card p-3 text-sm text-foreground">
           <Checkbox checked={acceptedNotice} onCheckedChange={(value) => setAcceptedNotice(Boolean(value))} className="mt-0.5 h-6 w-6 border-primary bg-background" />
-          <span className="leading-5">{checkoutAgreement}</span>
+          <span className="leading-5">{cardRequestAgreement}</span>
         </label>
         <LegalLinks />
       </div>

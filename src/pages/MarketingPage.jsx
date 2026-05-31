@@ -5,7 +5,7 @@ import BrandLogo from '@/components/BrandLogo';
 import LegalLinks from '@/components/LegalLinks';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
-import { footerDisclaimer } from '@/lib/legal';
+import { contactEmailLine, footerDisclaimer, INFO_EMAIL, SECURITY_EMAIL, SUPPORT_EMAIL } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 
 const pageContent = {
@@ -36,7 +36,7 @@ const pageContent = {
     cards: [
       { icon: HeadphonesIcon, title: 'Account Support', text: 'Get help with login, password reset, profile, and account status questions.' },
       { icon: WalletCards, title: 'Payment Help', text: 'Ask about funding, receipts, pending payment status, and transaction support.' },
-      { icon: CreditCard, title: 'Card Support', text: 'Get help with card request status, funding, card details, freeze, or card usage questions.' }
+      { icon: CreditCard, title: 'Official Emails', text: `${INFO_EMAIL} for general questions, ${SUPPORT_EMAIL} for help, ${SECURITY_EMAIL} for urgent safety reports.` }
     ]
   }
 };
@@ -110,6 +110,7 @@ export default function MarketingPage() {
             ))}
           </nav>
           <LegalLinks />
+          <p className="text-xs text-muted-foreground">{contactEmailLine}</p>
           <p className="max-w-2xl text-xs text-muted-foreground">{footerDisclaimer}</p>
         </div>
       </footer>

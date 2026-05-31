@@ -22,7 +22,6 @@ const KYC_FIX_OPTIONS = [
   { value: 'id_type', label: 'ID type' },
   { value: 'id_number', label: 'ID number' },
   { value: 'front_id', label: 'Front ID upload' },
-  { value: 'back_id', label: 'Back ID upload' },
   { value: 'selfie', label: 'Selfie upload' }
 ];
 
@@ -120,6 +119,7 @@ export default function AdminKYC() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">KYC ID</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">ID Type</th>
@@ -131,6 +131,7 @@ export default function AdminKYC() {
             <tbody className="divide-y divide-border">
               {(submissions || []).map(k => (
                 <tr key={k.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{k.id}</td>
                   <td className="px-4 py-3 text-xs">{k.user_id}</td>
                   <td className="px-4 py-3">{k.legal_name}</td>
                   <td className="px-4 py-3 capitalize text-xs">{(k.id_type || '').replace(/_/g, ' ')}</td>
@@ -149,6 +150,7 @@ export default function AdminKYC() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{k.legal_name || k.user_id}</p>
                   <p className="text-xs text-muted-foreground truncate">{k.user_id}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/80">{k.id}</p>
                 </div>
                 <StatusBadge status={k.status} className="text-[10px] shrink-0" />
               </div>
@@ -168,6 +170,7 @@ export default function AdminKYC() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Name:</span> {selected.legal_name}</div>
+                <div><span className="text-muted-foreground">KYC ID:</span> <span className="font-mono">{selected.id}</span></div>
                 <div><span className="text-muted-foreground">First / Last:</span> {[selected.first_name, selected.last_name].filter(Boolean).join(' ') || '-'}</div>
                 <div><span className="text-muted-foreground">DOB:</span> {selected.date_of_birth}</div>
                 <div><span className="text-muted-foreground">Phone:</span> {selected.phone}</div>
@@ -182,7 +185,6 @@ export default function AdminKYC() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <FilePreview url={selected.front_id_url} label="Front ID" />
-                {selected.id_type !== 'passport' && <FilePreview url={selected.back_id_url} label="Back ID" />}
                 <FilePreview url={selected.selfie_url} label="Selfie" />
               </div>
               {APPROVABLE_KYC_STATUSES.has(selected.status) && (

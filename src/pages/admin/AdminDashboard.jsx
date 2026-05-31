@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
-import { useCurrentUser } from '@/hooks/useAppData';
+import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import StatCard from '@/components/ui-custom/StatCard';
 import { 
   LayoutDashboard, Users, ShieldCheck, DollarSign, CreditCard, 
@@ -15,6 +15,39 @@ import ThemeToggle from '@/components/ThemeToggle';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function hasAnyAdminRoleLocal(user) {
+  return ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'].includes(user?.role);
+}
+
+const ADMIN_SOUND_KEY = 'dinkcard_admin_sounds';
+
+function playAdminTone(type) {
+  if (typeof window === 'undefined') return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  const frequencyMap = {
+    user: 520,
+    deposit: 660,
+    card: 740,
+    kyc: 580,
+    support: 440,
+    security: 220
+  };
+  const context = new AudioContext();
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = type === 'security' ? 'sawtooth' : 'sine';
+  oscillator.frequency.value = frequencyMap[type] || 500;
+  gain.gain.setValueAtTime(0.0001, context.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.14, context.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.22);
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start();
+  oscillator.stop(context.currentTime + 0.24);
+  setTimeout(() => context.close().catch(() => {}), 350);
 }
 
 const adminNav = [
@@ -41,6 +74,9 @@ export default function AdminDashboard() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const { data: currentUser } = useCurrentUser();
+  const { data: adminNotifications } = useNotifications(currentUser?.email);
+  const [soundMuted, setSoundMuted] = useState(() => localStorage.getItem(ADMIN_SOUND_KEY) === 'muted');
+  const previousStatsRef = useRef(null);
   const access = roleNavAccess[currentUser?.role] || roleNavAccess.support;
   const visibleNav = adminNav.filter((item) => {
     if (currentUser?.role === 'superadmin') return true;
@@ -63,6 +99,29 @@ export default function AdminDashboard() {
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
   const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
   const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
+  const unreadAdminNotifications = adminNotifications?.filter((item) => !item.read)?.length || 0;
+
+  useEffect(() => {
+    localStorage.setItem(ADMIN_SOUND_KEY, soundMuted ? 'muted' : 'enabled');
+  }, [soundMuted]);
+
+  useEffect(() => {
+    const stats = {
+      users: users?.length || 0,
+      kyc: pendingKYC,
+      deposits: pendingDeposits,
+      cards: cards?.length || 0,
+      tickets: openTickets
+    };
+    const previous = previousStatsRef.current;
+    previousStatsRef.current = stats;
+    if (!previous || soundMuted || !hasAnyAdminRoleLocal(currentUser)) return;
+    if (stats.deposits > previous.deposits) playAdminTone('deposit');
+    else if (stats.kyc > previous.kyc) playAdminTone('kyc');
+    else if (stats.tickets > previous.tickets) playAdminTone('support');
+    else if (stats.cards > previous.cards) playAdminTone('card');
+    else if (stats.users > previous.users) playAdminTone('user');
+  }, [cards?.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
 
   const isOverview = location.pathname === '/admin';
   const syncProvider = useMutation({
@@ -96,6 +155,19 @@ export default function AdminDashboard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <ThemeToggle compact />
+          <Link
+            to="/notifications"
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <BellRing className="h-4 w-4" /> Alerts{unreadAdminNotifications ? ` (${unreadAdminNotifications})` : ''}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setSoundMuted((current) => !current)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+          >
+            <BellRing className="h-4 w-4" /> {soundMuted ? 'Unmute' : 'Mute'}
+          </button>
           <button
             type="button"
             onClick={refreshDashboard}

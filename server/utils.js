@@ -55,6 +55,25 @@ export function toUsername(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '');
 }
 
+export function formatPersonName(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((part) => {
+      const lower = part.toLowerCase();
+      return lower.replace(/(^|[-'.])([a-z])/g, (_, separator, char) => `${separator}${char.toUpperCase()}`);
+    })
+    .join(' ');
+}
+
+export function isReasonablePersonName(value) {
+  const clean = String(value || '').trim().replace(/\s+/g, ' ');
+  if (clean.length < 2 || clean.length > 60) return false;
+  if (!/[A-Za-z]/.test(clean)) return false;
+  return /^[A-Za-z][A-Za-z\s'.-]*$/.test(clean);
+}
+
 function getKey() {
   return crypto.createHash('sha256').update(config.encryptionKey).digest();
 }

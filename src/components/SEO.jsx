@@ -45,7 +45,7 @@ export default function SEO() {
     upsertMeta('meta[name="description"]', { name: 'description', content: page.description });
     upsertMeta('meta[name="keywords"]', { name: 'keywords', content: page.keywords.join(', ') });
     upsertMeta('meta[name="application-name"]', { name: 'application-name', content: SEO_BRAND_NAME });
-    upsertMeta('meta[name="robots"]', { name: 'robots', content: 'index, follow' });
+    upsertMeta('meta[name="robots"]', { name: 'robots', content: page.robots || 'index, follow' });
 
     upsertMeta('meta[property="og:title"]', { property: 'og:title', content: page.title });
     upsertMeta('meta[property="og:description"]', { property: 'og:description', content: page.description });

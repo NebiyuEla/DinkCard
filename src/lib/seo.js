@@ -22,10 +22,28 @@ export const PUBLIC_NAV_LINKS = [
   { label: 'Terms', path: '/terms' }
 ];
 
+export const NOINDEX_PATH_PREFIXES = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password',
+  '/dashboard',
+  '/admin',
+  '/superadmin',
+  '/account',
+  '/wallet',
+  '/cards',
+  '/transactions',
+  '/kyc',
+  '/support',
+  '/notifications',
+  '/add-money'
+];
+
 export const SEO_PAGES = {
   '/': {
-    title: 'Dink Card - Virtual Visa Card Solution in Ethiopia',
-    description: 'Dink Card helps users create and manage virtual cards for secure online payments, subscriptions, and digital services. Simple, fast, and built for Ethiopia.',
+    title: 'Dink Card - Virtual USD Card Solution in Ethiopia',
+    description: 'Dink Card helps users in Ethiopia request and manage virtual USD card services for online payments, subscriptions, and digital services with a simple and secure experience.',
     canonicalPath: '/',
     type: 'website'
   },
@@ -33,13 +51,15 @@ export const SEO_PAGES = {
     title: 'Login - Dink Card',
     description: 'Log in to your Dink Card account to manage your virtual card, balance, transactions, and digital payment services.',
     canonicalPath: '/login',
-    type: 'website'
+    type: 'website',
+    robots: 'noindex, follow'
   },
   '/register': {
     title: 'Create Account - Dink Card',
     description: 'Create a Dink Card account to start verification and access supported virtual card services for online payments in Ethiopia.',
     canonicalPath: '/register',
-    type: 'website'
+    type: 'website',
+    robots: 'noindex, follow'
   },
   '/services': {
     title: 'Services - Dink Card',
@@ -91,10 +111,12 @@ export function absoluteUrl(path = '/') {
 export function getSeoForPath(pathname = '/') {
   const normalizedPath = normalizeSeoPath(pathname);
   const page = SEO_PAGES[normalizedPath] || SEO_PAGES['/'];
+  const isNoindex = NOINDEX_PATH_PREFIXES.some((prefix) => normalizedPath === prefix || normalizedPath.startsWith(`${prefix}/`));
   return {
     keywords: SEO_KEYWORDS,
     image: SEO_OG_IMAGE_URL,
     url: absoluteUrl(page.canonicalPath || normalizedPath),
+    robots: isNoindex ? 'noindex, follow' : 'index, follow',
     ...page
   };
 }

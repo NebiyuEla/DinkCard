@@ -1,4 +1,19 @@
 User-agent: *
 Allow: /
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /superadmin
+Disallow: /account
+Disallow: /wallet
+Disallow: /cards
+Disallow: /transactions
+Disallow: /kyc
+Disallow: /support
+Disallow: /notifications
+Disallow: /add-money
 
 Sitemap: https://dinkcard.et/sitemap.xml

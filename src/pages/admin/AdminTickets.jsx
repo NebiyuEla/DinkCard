@@ -60,6 +60,7 @@ export default function AdminTickets() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ticket ID</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">User</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Subject</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Category</th>
@@ -71,6 +72,7 @@ export default function AdminTickets() {
             <tbody className="divide-y divide-border">
               {(tickets || []).map(t => (
                 <tr key={t.id} className="hover:bg-secondary/20">
+                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{t.id}</td>
                   <td className="px-4 py-3 text-xs">{t.user_id}</td>
                   <td className="px-4 py-3 font-medium">{t.subject}</td>
                   <td className="px-4 py-3 capitalize text-xs">{(t.category || '').replace(/_/g, ' ')}</td>
@@ -93,6 +95,7 @@ export default function AdminTickets() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{t.subject}</p>
                   <p className="text-xs text-muted-foreground truncate">{t.user_id}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground/80">{t.id}</p>
                 </div>
                 <StatusBadge status={t.status} className="text-[10px] shrink-0" />
               </div>
@@ -109,6 +112,7 @@ export default function AdminTickets() {
         <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>{selected?.subject}</DialogTitle>
+            {selected?.id && <p className="font-mono text-[11px] text-muted-foreground">Ticket ID: {selected.id}</p>}
           </DialogHeader>
           <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
             {/* Original message */}

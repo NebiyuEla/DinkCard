@@ -71,6 +71,8 @@ export default function Sidebar({ user, unreadCount = 0 }) {
               <Link
                 key={item.path}
                 to={item.path}
+                title={collapsed ? item.label : undefined}
+                aria-label={item.label}
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                   isActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -92,6 +94,8 @@ export default function Sidebar({ user, unreadCount = 0 }) {
               </div>
               <Link
                 to="/admin"
+                title={collapsed ? 'Admin Panel' : undefined}
+                aria-label="Admin Panel"
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
                   location.pathname.startsWith('/admin') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -111,12 +115,14 @@ export default function Sidebar({ user, unreadCount = 0 }) {
           <button
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
             onClick={() => setCollapsed(!collapsed)}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <ChevronRight className="mx-auto h-4 w-4" /> : <><ChevronLeft className="h-4 w-4" /><span>Collapse</span></>}
           </button>
           <button
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-all hover:bg-destructive/10 hover:text-destructive"
             onClick={() => apiClient.auth.logout('/')}
+            title={collapsed ? 'Sign Out' : undefined}
           >
             <LogOut className="h-4 w-4 shrink-0" />
             {!collapsed && <span>Sign Out</span>}

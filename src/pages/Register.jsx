@@ -24,6 +24,7 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [error, setError] = useState('');
@@ -33,8 +34,18 @@ export default function Register() {
     event.preventDefault();
     setLoading(true);
     setError('');
+    if (password !== confirmPassword) {
+      setError('Password and confirm password must match.');
+      setLoading(false);
+      return;
+    }
+    if (!phone.trim()) {
+      setError('Phone number is required.');
+      setLoading(false);
+      return;
+    }
     try {
-      const result = await apiClient.auth.register({ firstName, lastName, username, email, phone, password, acceptedTerms });
+      const result = await apiClient.auth.register({ firstName, lastName, username, email, phone, password, confirmPassword, acceptedTerms });
       setAuthenticatedUser(result.user);
       navigate('/dashboard', { replace: true });
     } catch (err) {
@@ -95,6 +106,10 @@ export default function Register() {
             <Label>Password</Label>
             <SecretInput value={password} onChange={(e) => setPassword(e.target.value)} className="mt-1.5" autoComplete="new-password" />
           </div>
+          <div>
+            <Label>Confirm Password</Label>
+            <SecretInput value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} className="mt-1.5" autoComplete="new-password" />
+          </div>
           <label className="flex items-start gap-3 text-sm">
             <Checkbox checked={acceptedTerms} onCheckedChange={handleTermsChange} className="mt-0.5" />
             <span>
@@ -106,7 +121,7 @@ export default function Register() {
             </span>
           </label>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading || !acceptedTerms}>
+          <Button type="submit" className="w-full bg-primary text-primary-foreground" disabled={loading || !acceptedTerms || password !== confirmPassword}>
             {loading ? 'Creating account...' : 'Create Account'}
           </Button>
         </form>

@@ -29,33 +29,33 @@ export default function AdminAuditLogs() {
       <h2 className="text-lg font-bold">Audit Logs ({logs?.length || 0})</h2>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Admin</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Entity</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">User Affected</th>
+                <th className="w-[110px] px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                <th className="w-[18%] px-4 py-3 text-left font-medium text-muted-foreground">Admin</th>
+                <th className="w-[16%] px-4 py-3 text-left font-medium text-muted-foreground">Action</th>
+                <th className="w-[14%] px-4 py-3 text-left font-medium text-muted-foreground">Entity</th>
+                <th className="w-[18%] px-4 py-3 text-left font-medium text-muted-foreground">User Affected</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
-                <th className="px-4 py-3"></th>
+                <th className="w-[52px] px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {(logs || []).map((log) => (
                 <tr key={log.id} className="hover:bg-secondary/20">
-                  <td className="whitespace-nowrap px-4 py-3 text-xs text-muted-foreground">
+                  <td className="whitespace-nowrap px-4 py-3 align-top text-xs text-muted-foreground">
                     {log.created_date ? format(new Date(log.created_date), 'MMM d, h:mm a') : '-'}
                   </td>
-                  <td className="px-4 py-3 text-xs">{log.admin_id}</td>
-                  <td className="px-4 py-3 text-xs font-mono">{(log.action || '').replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
+                  <td className="break-words px-4 py-3 align-top text-xs" title={log.admin_id}>{log.admin_id}</td>
+                  <td className="break-words px-4 py-3 align-top text-xs font-mono" title={log.action}>{(log.action || '').replace(/_/g, ' ')}</td>
+                  <td className="break-words px-4 py-3 align-top text-xs text-muted-foreground">
                     {log.entity_type && <span className="capitalize">{log.entity_type.replace(/_/g, ' ')}</span>}
                     {log.entity_id && <span className="ml-1 text-muted-foreground/50">#{log.entity_id.slice(-6)}</span>}
                   </td>
-                  <td className="px-4 py-3 text-xs">{log.user_id || '-'}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{log.reason || '-'}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="break-words px-4 py-3 align-top text-xs" title={log.user_id || ''}>{log.user_id || '-'}</td>
+                  <td className="break-words px-4 py-3 align-top text-xs leading-relaxed text-muted-foreground" title={log.reason || ''}>{log.reason || '-'}</td>
+                  <td className="px-4 py-3 text-right align-top">
                     <Button size="icon" variant="ghost" onClick={() => deleteLog.mutate(log.id)} disabled={deleteLog.isPending}>
                       <Trash2 className="h-4 w-4" />
                     </Button>

@@ -26,7 +26,6 @@ const FIX_LABELS = {
   id_type: 'ID type',
   id_number: 'ID number',
   front_id: 'Front ID upload',
-  back_id: 'Back ID upload',
   selfie: 'Selfie upload'
 };
 
@@ -180,7 +179,7 @@ export default function KYCPage() {
     }
   });
 
-  const needsBackId = form.id_type === 'national_id';
+  const needsBackId = false;
   const requiredMissing = [
     !form.first_name && 'First name',
     !form.last_name && 'Last name',
@@ -192,7 +191,6 @@ export default function KYCPage() {
     !form.id_type && 'ID type',
     !form.id_number && 'ID number',
     !frontIdUrl && 'Front of ID',
-    (needsBackId && !backIdUrl) && 'Back of ID',
     !selfieUrl && 'Selfie'
   ].filter(Boolean);
   const canSubmitKYC = requiredMissing.length === 0 && !submitKYC.isPending && !Object.values(uploading).some(Boolean);
@@ -345,10 +343,11 @@ export default function KYCPage() {
               <SelectContent>
                 <SelectItem value="national_id">National ID</SelectItem>
                 <SelectItem value="passport">Passport</SelectItem>
+                <SelectItem value="drivers_license">Driver&apos;s License</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-sm">{form.id_type === 'passport' ? 'Passport Number' : 'National ID Number'}</Label><Input value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value.trim()})} className="mt-1.5" /></div>
+          <div><Label className="text-sm">{form.id_type === 'passport' ? 'Passport Number' : form.id_type === 'drivers_license' ? 'Driver&apos;s License Number' : 'National ID Number'}</Label><Input value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value.trim()})} className="mt-1.5" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -166,6 +166,7 @@ export const apiClient = {
       suspend: (id, reason) => request(`/api/admin/users/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) }),
       activate: (id) => request(`/api/admin/users/${id}/activate`, { method: 'POST' }),
       setRole: (id, role, reason) => request(`/api/admin/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role, reason }) }),
+      resetTwoFactor: (id, reason) => request(`/api/admin/users/${id}/reset-2fa`, { method: 'POST', body: JSON.stringify({ reason }) }),
       addMoney: (id, payload) => request(`/api/admin/users/${id}/add-money`, { method: 'POST', body: JSON.stringify(payload) }),
       setBalance: (id, payload) => request(`/api/admin/users/${id}/set-balance`, { method: 'POST', body: JSON.stringify(payload) }),
       passKyc: (id, payload) => request(`/api/admin/users/${id}/pass-kyc`, { method: 'POST', body: JSON.stringify(payload) }),
