@@ -13,6 +13,7 @@ import { getSeededAvatarDataUrl } from '@/lib/avatarSeed';
 import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import SecretInput from '@/components/SecretInput';
+import ThemeToggle from '@/components/ThemeToggle';
 
 function buildProfileTheme(seed) {
   let hash = 0;
@@ -192,6 +193,7 @@ export default function AccountPage() {
             </div>
           </div>
           <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <ThemeToggle className="w-full justify-center sm:col-span-2 lg:col-span-1" />
             <Button type="button" variant="outline" onClick={() => apiClient.auth.logout('/')}>
               <LogOut className="mr-2 h-4 w-4" />Sign out
             </Button>

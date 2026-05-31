@@ -4,7 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
 import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import TermsModal from '@/components/TermsModal';
-import ThemeToggle from '@/components/ThemeToggle';
 import { announceNewNotifications, getNotificationPermission, markNotificationsAsSeen } from '@/lib/deviceNotifications';
 import { invalidateOperationalData } from '@/lib/realtime';
 
@@ -43,9 +42,6 @@ export default function AppLayout() {
       <Sidebar user={user} unreadCount={unreadCount} />
       <main className="min-h-screen transition-all duration-300 lg:ml-64">
         <div className="mx-auto w-full max-w-7xl px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 lg:px-8 lg:pb-8 lg:pt-6">
-          <div className="mb-3 flex justify-end lg:hidden">
-            <ThemeToggle compact />
-          </div>
           <Outlet />
         </div>
       </main>

@@ -54,6 +54,20 @@ function getEffectiveMinCardCreation(settings) {
   return Math.max(3, raw);
 }
 
+function countUserCreatedCards(userId, environment = config.bitnob.env) {
+  return db.prepare(`
+    SELECT COUNT(*) AS total FROM virtual_cards
+    WHERE user_id = ?
+      AND environment = ?
+      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted')
+  `).get(userId, environment)?.total || 0;
+}
+
+function getMaxCardsPerUser(settings = getFeeSettings()) {
+  const configured = Number(settings?.max_cards_per_user || 3);
+  return Math.min(Number.isFinite(configured) && configured > 0 ? configured : 3, 3);
+}
+
 function signBitnob(body = '') {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const nonce = crypto.randomBytes(16).toString('hex');
@@ -311,14 +325,10 @@ export async function createVirtualCardForUser(user, payload) {
   }
 
   const settings = getFeeSettings();
-  const activeCards = db.prepare(`
-    SELECT COUNT(*) AS total FROM virtual_cards
-    WHERE user_id = ? AND status != 'terminated'
-  `).get(user.email);
-
-  const maxCards = Math.min(Number(settings.max_cards_per_user || 3), 3);
-  if (activeCards.total >= maxCards) {
-    throw new Error(`You have reached the maximum of ${maxCards} active virtual cards.`);
+  const maxCards = getMaxCardsPerUser(settings);
+  const createdCards = countUserCreatedCards(user.email);
+  if (createdCards >= maxCards) {
+    throw new Error(`You have reached the maximum of ${maxCards} virtual cards for this account.`);
   }
 
   const fundingAmount = Number(payload.fundingAmount || 0);
@@ -369,8 +379,8 @@ export async function createVirtualCardForUser(user, payload) {
     db.prepare(`
       INSERT INTO virtual_cards (
         id, user_id, provider, bitnob_customer_id, provider_card_id, customer_reference, card_nickname, card_type, brand, currency,
-        last_four, expiry_month, expiry_year, balance, status, billing_address, masked_pan, meta, created_at, updated_at
-      ) VALUES (?, ?, 'bitnob', ?, ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        last_four, expiry_month, expiry_year, balance, status, billing_address, masked_pan, environment, meta, created_at, updated_at
+      ) VALUES (?, ?, 'bitnob', ?, ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       generateId('crd'),
       user.email,
@@ -387,6 +397,7 @@ export async function createVirtualCardForUser(user, payload) {
       card.status || 'pending',
       JSON.stringify(card.billing_address || {}),
       maskedPan,
+      config.bitnob.env,
       JSON.stringify(card),
       now,
       now

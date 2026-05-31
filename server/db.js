@@ -3,7 +3,7 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
 import { config } from './config.js';
-import { generateId, nowIso } from './utils.js';
+import { formatPersonName, generateId, nowIso } from './utils.js';
 
 fs.mkdirSync(path.dirname(config.databasePath), { recursive: true });
 fs.mkdirSync(config.uploadDir, { recursive: true });
@@ -354,9 +354,12 @@ ensureColumn('virtual_cards', 'bitnob_customer_id', 'TEXT');
 ensureColumn('virtual_cards', 'card_pin_hash', 'TEXT');
 ensureColumn('virtual_cards', 'card_pin_enabled_at', 'TEXT');
 ensureColumn('virtual_cards', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
+db.prepare("UPDATE virtual_cards SET environment = 'sandbox' WHERE environment IS NULL OR environment = ''").run();
 ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
+db.prepare("UPDATE bitnob_customers SET environment = 'sandbox' WHERE environment IS NULL OR environment = ''").run();
+db.prepare("UPDATE bitnob_customers SET provider = 'bitnob' WHERE provider IS NULL OR provider = ''").run();
 ensureColumn('fee_settings', 'gateway_fee_percentage', 'REAL NOT NULL DEFAULT 2.5');
 ensureColumn('fee_settings', 'service_margin_percentage', 'REAL NOT NULL DEFAULT 15');
 ensureColumn('fee_settings', 'minimum_service_fee_etb', 'REAL NOT NULL DEFAULT 100');
@@ -455,6 +458,52 @@ ensureColumn('users', 'password_reset_token_hash', 'TEXT');
 ensureColumn('users', 'password_reset_expires_at', 'TEXT');
 
 db.prepare("UPDATE users SET account_status = 'active' WHERE account_status IS NULL OR account_status = ''").run();
+
+function normalizeExistingPersonNames() {
+  const userRows = db.prepare('SELECT id, first_name, last_name, full_name FROM users').all();
+  const updateUser = db.prepare('UPDATE users SET first_name = ?, last_name = ?, full_name = ?, updated_at = ? WHERE id = ?');
+
+  for (const row of userRows) {
+    const firstName = formatPersonName(row.first_name);
+    const lastName = formatPersonName(row.last_name);
+    const fullName = firstName || lastName
+      ? [firstName, lastName].filter(Boolean).join(' ')
+      : formatPersonName(row.full_name);
+
+    if (firstName !== (row.first_name || '') || lastName !== (row.last_name || '') || fullName !== (row.full_name || '')) {
+      updateUser.run(firstName || null, lastName || null, fullName || null, nowIso(), row.id);
+    }
+  }
+
+  const kycRows = db.prepare('SELECT id, first_name, last_name, legal_name FROM kyc_submissions').all();
+  const updateKyc = db.prepare('UPDATE kyc_submissions SET first_name = ?, last_name = ?, legal_name = ?, updated_at = ? WHERE id = ?');
+
+  for (const row of kycRows) {
+    const firstName = formatPersonName(row.first_name);
+    const lastName = formatPersonName(row.last_name);
+    const legalName = firstName || lastName
+      ? [firstName, lastName].filter(Boolean).join(' ')
+      : formatPersonName(row.legal_name);
+
+    if (firstName !== (row.first_name || '') || lastName !== (row.last_name || '') || legalName !== (row.legal_name || '')) {
+      updateKyc.run(firstName || null, lastName || null, legalName || null, nowIso(), row.id);
+    }
+  }
+
+  const customerRows = db.prepare('SELECT id, first_name, last_name FROM bitnob_customers').all();
+  const updateCustomer = db.prepare('UPDATE bitnob_customers SET first_name = ?, last_name = ?, updated_at = ? WHERE id = ?');
+
+  for (const row of customerRows) {
+    const firstName = formatPersonName(row.first_name);
+    const lastName = formatPersonName(row.last_name);
+
+    if (firstName !== (row.first_name || '') || lastName !== (row.last_name || '')) {
+      updateCustomer.run(firstName || null, lastName || null, nowIso(), row.id);
+    }
+  }
+}
+
+normalizeExistingPersonNames();
 
 const now = nowIso();
 

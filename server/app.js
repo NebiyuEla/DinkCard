@@ -731,6 +731,21 @@ function findAssetBalance(payload, asset = 'USDC') {
   return found.length ? Math.max(...found) : 0;
 }
 
+function countCreatedCardsForUser(userId, environment = config.bitnob.env) {
+  return db.prepare(`
+    SELECT COUNT(*) AS total FROM virtual_cards
+    WHERE user_id = ?
+      AND environment = ?
+      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted')
+  `).get(userId, environment)?.total || 0;
+}
+
+function getHardCardLimit() {
+  const settings = getFeeSettings();
+  const configured = Number(settings?.max_cards_per_user || 3);
+  return Math.min(Number.isFinite(configured) && configured > 0 ? configured : 3, 3);
+}
+
 const STABLECOIN_DEPOSIT_CHAINS = [
   { chain: 'tron', label: 'TRON', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
   { chain: 'bsc', label: 'BSC', native_token: { symbol: 'BNB', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
@@ -1239,7 +1254,7 @@ function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
   const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
   const isStablecoinDeposit = ['usdc', 'crypto'].includes(String(deposit.payment_method || '').toLowerCase());
-  const receiptTitle = isStablecoinDeposit ? 'Funding Receipt' : 'Chapa Payment Receipt';
+  const receiptTitle = isStablecoinDeposit ? 'Funding Receipt' : 'Payment Receipt';
   const rows = isStablecoinDeposit
     ? [
         ['Payment reference', deposit.transaction_reference],
@@ -2396,12 +2411,20 @@ export function createApp() {
       const customer = db.prepare('SELECT * FROM bitnob_customers WHERE (id = ? OR bitnob_customer_id = ?) AND environment = ?').get(req.body.customerId, req.body.customerId, config.bitnob.env);
       if (!customer) return res.status(404).json({ message: 'Create or select a customer first.' });
       const cardOwner = customer.user_id || customer.email;
-      const existingCards = db.prepare(`
-        SELECT COUNT(*) AS total FROM virtual_cards
-        WHERE environment = ? AND user_id = ? AND status != 'terminated'
-      `).get(config.bitnob.env, cardOwner);
-      if (existingCards.total >= 3) {
-        return res.status(400).json({ message: 'This account already has the maximum of 3 active virtual cards.' });
+      if (customer.user_id) {
+        const approvedKyc = db.prepare(`
+          SELECT id FROM kyc_submissions
+          WHERE user_id = ? AND status = 'approved'
+          ORDER BY created_at DESC LIMIT 1
+        `).get(customer.user_id);
+        if (!approvedKyc) {
+          return res.status(403).json({ message: 'This user must pass KYC before card creation.' });
+        }
+      }
+      const maxCards = getHardCardLimit();
+      const createdCards = countCreatedCardsForUser(cardOwner);
+      if (createdCards >= maxCards) {
+        return res.status(400).json({ message: `This account already has the maximum of ${maxCards} virtual cards.` });
       }
       const fundingAmount = Number(req.body.amount || req.body.fundingAmount || 0);
       if (!Number.isFinite(fundingAmount) || fundingAmount <= 0) return res.status(400).json({ message: 'Enter a valid funding amount.' });

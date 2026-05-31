@@ -224,7 +224,7 @@ export default function AddMoney() {
               size="sm"
               onClick={() => window.open(apiClient.payments.invoiceUrl(latestDeposit.transaction_reference), '_blank')}
             >
-              Download Chapa receipt
+              Download receipt
             </Button>
           </div>
           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">

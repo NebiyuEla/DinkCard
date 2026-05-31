@@ -31,7 +31,7 @@ export default function CreateCard() {
 
   const balance = wallet?.available_balance || 0;
   const maxCards = Math.min(settings?.max_cards_per_user || 3, 3);
-  const activeCardCount = cards?.filter(c => c.status !== 'terminated').length || 0;
+  const createdCardCount = cards?.filter((card) => !['failed', 'rejected', 'deleted'].includes(String(card.status || '').toLowerCase())).length || 0;
   const kycApproved = kyc?.status === 'approved';
   const amount = parseFloat(fundingAmount) || 0;
   const fees = calculateCardCreationFees(amount, settings || {});
@@ -44,7 +44,7 @@ export default function CreateCard() {
     amount >= minFunding && 
     amount <= maxFunding &&
     fees.totalDeduction <= balance && 
-    activeCardCount < maxCards &&
+    createdCardCount < maxCards &&
     acceptedNotice;
 
   const createCard = useMutation({
@@ -71,10 +71,10 @@ export default function CreateCard() {
 
       {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
-      {activeCardCount >= maxCards && (
+      {createdCardCount >= maxCards && (
         <div className="bg-destructive/10 border border-destructive/20 rounded-xl p-4 flex gap-3">
           <AlertCircle className="w-5 h-5 text-destructive shrink-0" />
-          <p className="text-sm text-destructive">You've reached the maximum of {maxCards} active card requests.</p>
+          <p className="text-sm text-destructive">You've reached the maximum of {maxCards} virtual cards for this account.</p>
         </div>
       )}
 

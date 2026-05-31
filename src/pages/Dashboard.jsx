@@ -62,6 +62,7 @@ export default function Dashboard() {
   const etbEstimate = balance * (settings?.usd_to_etb_rate || 135);
   const activeCards = cards?.filter((card) => normalizeStatus(card.status) === 'active') || [];
   const frozenCards = cards?.filter((card) => normalizeStatus(card.status) === 'frozen') || [];
+  const visibleCards = (cards || []).filter((card) => !['failed', 'rejected', 'deleted'].includes(String(card.status || '').toLowerCase()));
   const pendingDeposits = deposits?.filter((deposit) => ['pending_payment', 'pending_transfer', 'awaiting_review'].includes(deposit.status)) || [];
   const totalDeposited = deposits?.filter((deposit) => deposit.status === 'approved').reduce((sum, deposit) => sum + Number(deposit.final_usd_credit || 0), 0) || 0;
   const totalCardDebits = transactions?.filter((tx) => ['card_creation', 'card_funding'].includes(tx.type) && tx.status === 'completed').reduce((sum, tx) => sum + Math.abs(Number(tx.amount || 0)), 0) || 0;
@@ -82,7 +83,7 @@ export default function Dashboard() {
     ].includes(type);
   });
   const hasFundStep = hasUsableFunds || hasFundingHistory;
-  const hasAnyCard = (cards || []).some((card) => !['terminated', 'deleted', 'closed', 'cancelled', 'canceled'].includes(String(card.status || '').toLowerCase()));
+  const hasAnyCard = visibleCards.length > 0;
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const currentStepIndex = [true, kycApproved, hasFundStep, hasAnyCard, twoFactorEnabled].filter(Boolean).length;
   const onboardingProgress = Math.round((currentStepIndex / 5) * 100);
@@ -164,7 +165,7 @@ export default function Dashboard() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{paymentBanner.message}</span>
             <Button type="button" variant="outline" size="sm" onClick={() => window.open(apiClient.payments.invoiceUrl(paymentBanner.txRef), '_blank')}>
-              Download Chapa receipt
+              Download receipt
             </Button>
           </div>
         </div>
@@ -301,7 +302,7 @@ export default function Dashboard() {
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">My Cards</h2>
             <Link to="/cards" className="text-xs text-primary hover:underline">View all</Link>
           </div>
-          {activeCards.length === 0 && frozenCards.length === 0 ? (
+          {visibleCards.length === 0 ? (
             <EmptyState
               icon={CreditCard}
               title="No cards yet"
@@ -312,7 +313,7 @@ export default function Dashboard() {
             />
           ) : (
             <div className="flex flex-col gap-4 sm:gap-5">
-              {[...activeCards, ...frozenCards].slice(0, 3).map((card) => (
+              {visibleCards.slice(0, 3).map((card) => (
                 <Link key={card.id} to={`/cards?id=${card.id}`} className="block">
                   <VirtualCardDisplay card={card} compact />
                 </Link>

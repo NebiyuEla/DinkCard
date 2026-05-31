@@ -111,7 +111,7 @@ export default function CardsPage() {
     toast.success(`${label} copied`);
   };
 
-  const activeCards = useMemo(() => cards?.filter((card) => normalizeCardStatus(card.status) !== 'terminated') || [], [cards]);
+  const visibleCards = useMemo(() => cards?.filter((card) => !['deleted', 'failed', 'rejected'].includes(String(card.status || '').toLowerCase())) || [], [cards]);
   const kycApproved = kyc?.status === 'approved';
   const hasUsableFunds = Number(wallet?.available_balance || 0) > 0;
   const requestCardPath = !kycApproved ? '/kyc' : hasUsableFunds ? '/cards/create' : '/add-money';
@@ -128,10 +128,15 @@ export default function CardsPage() {
   const cardTransactionRows = cardTransactions.data?.transactions || [];
 
   useEffect(() => {
-    if (activeCards.length > 0 && (!selectedCard || !activeCards.some((card) => card.id === selectedCard.id))) {
-      setSelectedCard(activeCards[0]);
+    const latestSelected = selectedCard ? visibleCards.find((card) => card.id === selectedCard.id) : null;
+    if (latestSelected && latestSelected !== selectedCard) {
+      setSelectedCard(latestSelected);
+      return;
     }
-  }, [activeCards, selectedCard]);
+    if (visibleCards.length > 0 && (!selectedCard || !latestSelected)) {
+      setSelectedCard(visibleCards[0]);
+    }
+  }, [visibleCards, selectedCard]);
 
   return (
     <div className="space-y-4 pb-4 lg:pb-0">
@@ -149,7 +154,7 @@ export default function CardsPage() {
 
       {!kycLoading && !kycApproved && <KycRequiredNotice status={kyc?.status} />}
 
-      {activeCards.length === 0 ? (
+      {visibleCards.length === 0 ? (
         <EmptyState
           icon={CreditCard}
           title="No virtual cards"
@@ -160,7 +165,7 @@ export default function CardsPage() {
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)] lg:gap-6">
           <div className="space-y-3">
-            {activeCards.map((card) => (
+            {visibleCards.map((card) => (
               <div
                 key={card.id}
                 className="cursor-pointer"
@@ -239,11 +244,13 @@ export default function CardsPage() {
                   </>
                 )}
 
-                <Link to={`/cards/fund?cardId=${selectedCard.id}`} className="col-span-2">
-                  <Button className="w-full bg-primary text-primary-foreground">
-                    <DollarSign className="w-4 h-4 mr-2" /> Fund Card
-                  </Button>
-                </Link>
+                {selectedStatus !== 'terminated' && (
+                  <Link to={`/cards/fund?cardId=${selectedCard.id}`} className="col-span-2">
+                    <Button className="w-full bg-primary text-primary-foreground">
+                      <DollarSign className="w-4 h-4 mr-2" /> Fund Card
+                    </Button>
+                  </Link>
+                )}
 
                 {selectedStatus === 'active' ? (
                   <Button variant="outline" className="col-span-2 mx-auto w-full max-w-xs" onClick={() => setConfirmDialog(selectedCard.card_pin_enabled_at ? 'freeze' : 'set-pin')}>
@@ -284,13 +291,15 @@ export default function CardsPage() {
                 )}
               </div>
 
-              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 sm:p-4">
-                <p className="text-sm font-semibold text-destructive">Danger Zone</p>
-                <p className="mt-1 text-xs text-muted-foreground">Terminate only when you are done with this card. If you set a PIN, you will need it here too.</p>
-                <Button variant="outline" className="mt-3 text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Terminate Card
-                </Button>
-              </div>
+              {selectedStatus !== 'terminated' && (
+                <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 sm:p-4">
+                  <p className="text-sm font-semibold text-destructive">Danger Zone</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Terminate only when you are done with this card. If you set a PIN, you will need it here too.</p>
+                  <Button variant="outline" className="mt-3 text-destructive hover:text-destructive" onClick={() => setConfirmDialog('terminate')}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Terminate Card
+                  </Button>
+                </div>
+              )}
             </motion.div>
           )}
         </div>
