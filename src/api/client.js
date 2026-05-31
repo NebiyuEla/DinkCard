@@ -59,6 +59,9 @@ function entityApi(entity) {
 }
 
 export const apiClient = {
+  public: {
+    contact: (payload) => request('/api/public/contact', { method: 'POST', body: JSON.stringify(payload) })
+  },
   auth: {
     me: () => request('/api/auth/me'),
     login: (payload) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) }),

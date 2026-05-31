@@ -88,13 +88,13 @@ export default function Landing() {
         >
           <div className="mx-auto max-w-3xl">
             <motion.div variants={fadeUp} className="mb-5 inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
-              Simple online payment access
+              Clear card access
             </motion.div>
             <motion.h1 variants={fadeUp} className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Virtual card solution for secure online payments in Ethiopia
             </motion.h1>
             <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-              Create and manage supported virtual cards for online payments, subscriptions, and digital services through a clear verified flow.
+              Create and manage supported virtual cards for online payments, subscriptions, and digital services with straightforward verification and funding.
             </motion.p>
             <motion.div variants={fadeUp} className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link to="/register">
@@ -143,7 +143,7 @@ export default function Landing() {
         <div className="mx-auto max-w-6xl">
           <motion.div className="mb-8 text-center" initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}>
             <h2 className="text-3xl font-bold tracking-tight">How It Works</h2>
-            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Start with verification, fund in ETB, and request your card through a simple guided flow.</p>
+            <p className="mx-auto mt-3 max-w-2xl text-muted-foreground">Start with verification, fund in ETB, and request your card step by step.</p>
           </motion.div>
           <motion.div
             className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"

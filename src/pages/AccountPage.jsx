@@ -333,7 +333,6 @@ export default function AccountPage() {
               <Button type="button" variant="outline" size="sm" onClick={() => { setPasswordDialogOpen(true); setPasswordError(''); }}>
                 Change password
               </Button>
-              <Link to="/forgot-password" className="ml-3 text-sm text-primary hover:underline">Request password reset</Link>
             </div>
           </div>
         </div>

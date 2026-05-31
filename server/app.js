@@ -196,6 +196,12 @@ const uploadLimiter = rateLimit({
   message: { message: 'Too many upload attempts. Please wait a few minutes and try again.' }
 });
 
+const publicContactLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 12,
+  message: { message: 'Too many contact requests. Please wait a few minutes and try again.' }
+});
+
 function readUploadSignature(file) {
   if (!file?.path) return { valid: false };
   const header = fs.readFileSync(file.path).subarray(0, 4096);
@@ -2093,6 +2099,68 @@ export function createApp() {
         type: req.file.mimetype
       }
     });
+  });
+
+  app.post('/api/public/contact', publicContactLimiter, (req, res) => {
+    try {
+      const name = String(req.body?.name || '').trim();
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      const phone = String(req.body?.phone || '').trim();
+      const subject = String(req.body?.subject || '').trim();
+      const message = String(req.body?.message || '').trim();
+      const targetEmail = String(req.body?.targetEmail || '').trim().toLowerCase();
+
+      const allowedTargets = new Set([
+        'support@dinkcard.et',
+        'info@dinkcard.et',
+        'security@dinkcard.et'
+      ]);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (!name || !email || !subject || !message || !targetEmail) {
+        return res.status(400).json({ message: 'Name, email, subject, message, and destination email are required.' });
+      }
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Enter a valid email address.' });
+      }
+      if (!allowedTargets.has(targetEmail)) {
+        return res.status(400).json({ message: 'Choose a valid contact email.' });
+      }
+
+      const now = nowIso();
+      const ticketId = generateId('sup');
+      const ticketMessage = [
+        `Contact request for ${targetEmail}`,
+        `Sender: ${name} <${email}>`,
+        phone ? `Phone: ${phone}` : null,
+        '',
+        message
+      ].filter(Boolean).join('\n');
+
+      db.prepare(`
+        INSERT INTO support_tickets (
+          id, user_id, category, subject, message, screenshot_url, related_transaction_id, related_card_id,
+          status, priority, created_at, updated_at
+        )
+        VALUES (?, ?, 'contact_request', ?, ?, null, null, null, 'open', 'medium', ?, ?)
+      `).run(ticketId, email, subject, ticketMessage, now, now);
+
+      notifyAdmins('New Contact Request', `${name} sent a contact request to ${targetEmail}.`, 'support', '/admin/tickets');
+      writeAudit({
+        actor: email,
+        userId: email,
+        action: 'public_contact_created',
+        entityType: 'support_tickets',
+        entityId: ticketId,
+        newValue: { name, email, phone, subject, targetEmail },
+        providerStatus: 'created',
+        req
+      });
+
+      res.status(201).json({ ok: true, ticketId, message: 'Your message was sent successfully.' });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not send your message.' });
+    }
   });
 
   app.get('/api/entities/:entity', authMiddleware(db), async (req, res) => {

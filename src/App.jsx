@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AppLayout from '@/components/layout/AppLayout';
 import PageNotFound from './lib/PageNotFound';
 import SEO from './components/SEO';
+import CookieConsentBanner from './components/CookieConsentBanner';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -197,6 +198,7 @@ export default function App() {
             <Router>
               <SEO />
               <AppRoutes />
+              <CookieConsentBanner />
             </Router>
             <Toaster />
           </QueryClientProvider>
