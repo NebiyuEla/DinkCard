@@ -161,11 +161,10 @@ const FAQ_CATEGORIES = [
 ];
 
 const STATUS_LABELS = {
-  queued: 'Queued',
+  waiting_for_user: 'Waiting',
   open: 'Open',
-  hold: 'On Hold',
+  under_review: 'Under Review',
   solved: 'Solved',
-  cancelled: 'Cancelled',
   closed: 'Closed'
 };
 
@@ -217,7 +216,15 @@ function saveState() {
 }
 
 function normalizeTicket(ticket) {
-  const normalizedStatus = ticket.status === 'active' ? 'open' : ticket.status;
+  const normalizedStatus = ticket.status === 'active'
+    ? 'open'
+    : ticket.status === 'queued'
+      ? 'waiting_for_user'
+      : ticket.status === 'hold'
+        ? 'under_review'
+        : ticket.status === 'cancelled'
+          ? 'closed'
+          : ticket.status;
   const service = ticket.service || ticket.path?.split(' -> ')[0] || 'Dink Card';
   const issue = ticket.issue || ticket.path?.split(' -> ')[1] || 'General issue';
   return {
@@ -230,7 +237,7 @@ function normalizeTicket(ticket) {
     service,
     issue,
     path: `${service} -> ${issue}`,
-    status: normalizedStatus || 'queued',
+    status: normalizedStatus || 'waiting_for_user',
     assignedAdminId: ticket.assignedAdminId ? String(ticket.assignedAdminId) : '',
     createdAt: ticket.createdAt || new Date().toISOString(),
     updatedAt: ticket.updatedAt || ticket.createdAt || new Date().toISOString(),
@@ -309,7 +316,7 @@ function getUserOpenTicket(userId) {
   return state.tickets.find(
     (ticket) =>
       ticket.userId === String(userId) &&
-      ['queued', 'open', 'hold'].includes(ticket.status)
+      ['waiting_for_user', 'open', 'under_review'].includes(ticket.status)
   ) || null;
 }
 
@@ -317,7 +324,7 @@ function getAdminLoad(adminId) {
   return state.tickets.filter(
     (ticket) =>
       ticket.assignedAdminId === String(adminId) &&
-      ['open', 'hold'].includes(ticket.status)
+      ['open', 'under_review'].includes(ticket.status)
   ).length;
 }
 
@@ -383,9 +390,9 @@ function adminDashboardKeyboard(chatId) {
   if (isSuperAdmin(chatId)) {
     return {
       inline_keyboard: [
-        [{ text: '📬 Open tickets', callback_data: 'saview:open' }, { text: '🕓 Queued', callback_data: 'saview:queued' }],
-        [{ text: '✅ Solved', callback_data: 'saview:solved' }, { text: '🚫 Cancelled', callback_data: 'saview:cancelled' }],
-        [{ text: '📦 Closed', callback_data: 'saview:closed' }, { text: '🗂️ All tickets', callback_data: 'saview:all' }],
+        [{ text: '📬 Open', callback_data: 'saview:open' }, { text: '🧾 Under Review', callback_data: 'saview:under_review' }],
+        [{ text: '🕓 Waiting', callback_data: 'saview:waiting_for_user' }, { text: '✅ Solved', callback_data: 'saview:solved' }],
+        [{ text: '📦 Closed', callback_data: 'saview:closed' }, { text: '🗂️ All', callback_data: 'saview:all' }],
         [{ text: '👥 View admins', callback_data: 'sa:admins' }, { text: '➕ Add admin', callback_data: 'sa:add' }]
       ]
     };
@@ -393,14 +400,15 @@ function adminDashboardKeyboard(chatId) {
 
   return {
     inline_keyboard: [
-      [{ text: '📬 My open cases', callback_data: 'adview:open' }, { text: '⏸️ On hold', callback_data: 'adview:hold' }],
-      [{ text: '✅ Solved', callback_data: 'adview:solved' }, { text: '🗂️ All my cases', callback_data: 'adview:all' }]
+      [{ text: '📬 Open', callback_data: 'adview:open' }, { text: '🧾 Under Review', callback_data: 'adview:under_review' }],
+      [{ text: '🕓 Waiting', callback_data: 'adview:waiting_for_user' }, { text: '✅ Solved', callback_data: 'adview:solved' }],
+      [{ text: '🗂️ All my cases', callback_data: 'adview:all' }]
     ]
   };
 }
 
 function ticketActionKeyboard(ticket, viewerRole) {
-  const closed = ['solved', 'cancelled', 'closed'].includes(ticket.status);
+  const closed = ['solved', 'closed'].includes(ticket.status);
   const keyboard = [];
 
   if (viewerRole === 'superadmin') {
@@ -408,25 +416,25 @@ function ticketActionKeyboard(ticket, viewerRole) {
 
     if (!closed) {
       keyboard.push(...pairRows(state.admins, (admin) => ({ text: `👤 ${admin.label}`, callback_data: `ta:${ticket.id}:${admin.id}` })));
-      if (ticket.status === 'hold') {
+      keyboard.push([{ text: '💬 Open chat', callback_data: `oc:${ticket.id}` }]);
+      if (ticket.status === 'under_review') {
         keyboard.push([{ text: '▶️ Resume', callback_data: `ts:${ticket.id}:open` }]);
       } else {
-        keyboard.push([{ text: '⏸️ Hold', callback_data: `ts:${ticket.id}:hold` }]);
+        keyboard.push([{ text: '🧾 Under Review', callback_data: `ts:${ticket.id}:under_review` }]);
       }
-      keyboard.push([{ text: '✅ Solved', callback_data: `ts:${ticket.id}:solved` }, { text: '🚫 Cancel', callback_data: `ts:${ticket.id}:cancelled` }]);
-      keyboard.push([{ text: '📦 Close', callback_data: `ts:${ticket.id}:closed` }]);
+      keyboard.push([{ text: '✅ Solved', callback_data: `ts:${ticket.id}:solved` }, { text: '📦 Close', callback_data: `ts:${ticket.id}:closed` }]);
     }
     return { inline_keyboard: keyboard };
   }
 
-  keyboard.push([{ text: '💬 Reply', callback_data: `tr:${ticket.id}` }, { text: '📄 Case details', callback_data: `td:${ticket.id}` }]);
+  keyboard.push([{ text: '💬 Open chat', callback_data: `oc:${ticket.id}` }, { text: '📄 Case details', callback_data: `td:${ticket.id}` }]);
   if (!closed) {
-    if (ticket.status === 'hold') {
+    if (ticket.status === 'under_review') {
       keyboard.push([{ text: '▶️ Resume', callback_data: `ts:${ticket.id}:open` }]);
     } else {
-      keyboard.push([{ text: '⏸️ Hold', callback_data: `ts:${ticket.id}:hold` }]);
+      keyboard.push([{ text: '🧾 Under Review', callback_data: `ts:${ticket.id}:under_review` }]);
     }
-    keyboard.push([{ text: '✅ Solved', callback_data: `ts:${ticket.id}:solved` }, { text: '🚫 Cancel', callback_data: `ts:${ticket.id}:cancelled` }]);
+    keyboard.push([{ text: '✅ Solved', callback_data: `ts:${ticket.id}:solved` }, { text: '📦 Close', callback_data: `ts:${ticket.id}:closed` }]);
   }
   return { inline_keyboard: keyboard };
 }
@@ -620,7 +628,7 @@ async function assignTicket(ticket, adminId, { notifyUser = true, notifySuper = 
 
 async function assignQueuedTickets() {
   const queued = state.tickets
-    .filter((ticket) => ticket.status === 'queued')
+    .filter((ticket) => ticket.status === 'waiting_for_user')
     .sort((left, right) => new Date(left.createdAt) - new Date(right.createdAt));
 
   for (const ticket of queued) {
@@ -722,7 +730,7 @@ async function createTicket(message, session) {
     service: service?.title || 'Dink Card',
     issue: issue?.title || 'General issue',
     path: `${service?.title || 'Dink Card'} -> ${issue?.title || 'General issue'}`,
-    status: 'queued',
+    status: 'waiting_for_user',
     assignedAdminId: '',
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -983,9 +991,9 @@ async function handleCallback(callback) {
     const adminId = data.slice('sax:'.length);
     state.admins = state.admins.filter((admin) => admin.id !== adminId);
     for (const ticket of state.tickets) {
-      if (ticket.assignedAdminId === adminId && ['open', 'hold'].includes(ticket.status)) {
+      if (ticket.assignedAdminId === adminId && ['open', 'under_review'].includes(ticket.status)) {
         ticket.assignedAdminId = '';
-        ticket.status = 'queued';
+        ticket.status = 'waiting_for_user';
         ticket.updatedAt = nowIso();
       }
     }
@@ -1027,21 +1035,21 @@ async function handleCallback(callback) {
     return editMessage(chatId, messageId, `Ticket assigned.\n\n${formatTicketCard(ticket)}`, ticketActionKeyboard(ticket, 'superadmin'));
   }
 
-  if (data.startsWith('tr:') && isSupportAdmin(chatId)) {
-    const ticketId = data.slice('tr:'.length);
+  if (data.startsWith('oc:') && (isSuperAdmin(chatId) || isSupportAdmin(chatId))) {
+    const ticketId = data.slice('oc:'.length);
     const ticket = getTicket(ticketId);
     if (!ticket) {
       return editMessage(chatId, messageId, 'Ticket not found.');
     }
-    if (ticket.assignedAdminId !== chatId) {
+    if (isSupportAdmin(chatId) && ticket.assignedAdminId !== chatId) {
       return editMessage(chatId, messageId, 'This case is not assigned to you.');
     }
     setSession(chatId, { mode: 'reply', ticketId });
     return editMessage(
       chatId,
       messageId,
-      `Reply mode is active for ${ticket.id}.\n\nSend your next text, photo, document, video, voice note, audio, or sticker here.`,
-      ticketActionKeyboard(ticket, 'admin')
+      `Chat is now open for ${ticket.id}.\n\nKeep sending your next text, photo, document, video, voice note, audio, or sticker here until the case is solved or closed.`,
+      ticketActionKeyboard(ticket, isSuperAdmin(chatId) ? 'superadmin' : 'admin')
     );
   }
 
@@ -1060,7 +1068,7 @@ async function handleCallback(callback) {
     ticket.updatedAt = nowIso();
     saveState();
 
-    if (['solved', 'cancelled', 'closed'].includes(nextStatus)) {
+    if (['solved', 'closed'].includes(nextStatus)) {
       const assignedSession = getSession(ticket.assignedAdminId || '');
       if (assignedSession?.mode === 'reply' && assignedSession.ticketId === ticket.id) {
         clearSession(ticket.assignedAdminId);
@@ -1068,9 +1076,9 @@ async function handleCallback(callback) {
       await sendMessage(ticket.userChatId, `Your support case ${ticket.id} is now ${statusLabel(nextStatus).toLowerCase()}.`);
       await notifySuperadmin(`${ticket.id} moved to ${statusLabel(nextStatus)}.\n\n${formatTicketCard(ticket)}`);
       await assignQueuedTickets();
-    } else if (nextStatus === 'hold') {
-      await sendMessage(ticket.userChatId, `Your support case ${ticket.id} is on hold. You can still send more details here.`);
-      await notifySuperadmin(`${ticket.id} is now on hold.\n\n${formatTicketCard(ticket)}`);
+    } else if (nextStatus === 'under_review') {
+      await sendMessage(ticket.userChatId, `Your support case ${ticket.id} is now under review. You can still send more details here.`);
+      await notifySuperadmin(`${ticket.id} is now under review.\n\n${formatTicketCard(ticket)}`);
     } else if (nextStatus === 'open') {
       await sendMessage(ticket.userChatId, `Your support case ${ticket.id} is active again.`);
       await notifySuperadmin(`${ticket.id} is active again.\n\n${formatTicketCard(ticket)}`);
@@ -1108,6 +1116,17 @@ async function handleMessage(message) {
   if (isSuperAdmin(chatId) && await handleSuperadminText(message)) return;
   if (isSupportAdmin(chatId) && await handleAdminReplyMessage(message)) return;
   if (!isSuperAdmin(chatId) && !isSupportAdmin(chatId) && await handleUserSessionMessage(message)) return;
+
+  if (isSupportAdmin(chatId) && !isSuperAdmin(chatId)) {
+    const activeAssignedTickets = state.tickets.filter(
+      (ticket) => ticket.assignedAdminId === chatId && ['open', 'under_review'].includes(ticket.status)
+    );
+    if (activeAssignedTickets.length === 1) {
+      setSession(chatId, { mode: 'reply', ticketId: activeAssignedTickets[0].id });
+      await forwardAdminMessage(activeAssignedTickets[0], message, getSupportAdmin(chatId));
+      return;
+    }
+  }
 
   if (!isSuperAdmin(chatId) && !isSupportAdmin(chatId)) {
     const openTicket = getUserOpenTicket(chatId);

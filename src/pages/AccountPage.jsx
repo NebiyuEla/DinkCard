@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getSeededAvatarDataUrl } from '@/lib/avatarSeed';
-import { ArrowLeft, KeyRound, LogOut, ShieldCheck, Trash2, UserRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, LogOut, MessageCircleMore, ShieldCheck, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'sonner';
 import SecretInput from '@/components/SecretInput';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -333,6 +333,25 @@ export default function AccountPage() {
               <Button type="button" variant="outline" size="sm" onClick={() => { setPasswordDialogOpen(true); setPasswordError(''); }}>
                 Change password
               </Button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border bg-card p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <MessageCircleMore className="h-4 w-4 text-primary" />
+                  <h2 className="font-semibold">Support Bot</h2>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Open live help faster on Telegram with @DinkSupportBot.
+                </p>
+              </div>
+              <a href="https://t.me/DinkSupportBot" target="_blank" rel="noreferrer">
+                <Button type="button" className="bg-primary text-primary-foreground">
+                  Open @DinkSupportBot
+                </Button>
+              </a>
             </div>
           </div>
         </div>
