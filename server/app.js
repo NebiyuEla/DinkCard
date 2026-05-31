@@ -167,7 +167,7 @@ async function sendContactReplyEmail({ ticket, replyMessage, adminUser }) {
   await getEmailTransporter().sendMail({
     from: `"${adminName}" <${fromEmail}>`,
     to: recipient,
-    bcc: targetEmail,
+    cc: targetEmail,
     replyTo: targetEmail,
     subject: `Re: ${subject}`,
     text: [
@@ -2324,6 +2324,9 @@ export function createApp() {
             return res.status(400).json({ message: error.message || 'Could not send the email reply.' });
           }
         }
+        if (ticket?.user_id) {
+          createNotification(ticket.user_id, 'Support replied', `A new reply was added to your support ticket: ${ticket.subject || 'Support Ticket'}.`, 'support', '/support');
+        }
       }
       if (req.params.entity === 'KYCSubmission') {
         notifyAdmins('New KYC Submission', `${req.user.full_name || req.user.email} submitted KYC for review.`, 'kyc', '/admin/kyc');
@@ -2342,7 +2345,19 @@ export function createApp() {
 
   app.patch('/api/entities/:entity/:id', authMiddleware(db), (req, res) => {
     try {
+      const previousTicket = req.params.entity === 'SupportTicket'
+        ? db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(req.params.id)
+        : null;
       const row = updateEntity(req.params.entity, req.params.id, req.body, req.user);
+      if (req.params.entity === 'SupportTicket' && previousTicket && previousTicket.status !== row.status && row.user_id) {
+        createNotification(
+          row.user_id,
+          'Support ticket updated',
+          `Your support ticket "${row.subject || 'Support Ticket'}" is now ${String(row.status || 'updated').replace(/_/g, ' ')}.`,
+          'support',
+          '/support'
+        );
+      }
       res.json(row);
     } catch (error) {
       res.status(400).json({ message: error.message });

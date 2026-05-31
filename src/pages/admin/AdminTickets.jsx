@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import { Eye, Send } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -24,7 +25,9 @@ export default function AdminTickets() {
   const [selected, setSelected] = useState(null);
   const [reply, setReply] = useState('');
   const [newStatus, setNewStatus] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const isContactRequest = selected?.category === 'contact_request';
+  const filteredTickets = (tickets || []).filter((ticket) => activeTab === 'all' ? true : ticket.status === activeTab);
 
   const { data: messages } = useQuery({
     queryKey: ['ticketMessages', selected?.id],
@@ -56,6 +59,22 @@ export default function AdminTickets() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold">Support Tickets</h2>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="flex w-full flex-wrap justify-start gap-2 rounded-2xl bg-transparent p-0">
+          {[
+            ['all', 'All'],
+            ['open', 'Open'],
+            ['under_review', 'Under Review'],
+            ['waiting_for_user', 'Waiting'],
+            ['solved', 'Solved'],
+            ['closed', 'Closed']
+          ].map(([value, label]) => (
+            <TabsTrigger key={value} value={value} className="rounded-xl border border-border bg-card px-3 py-2 data-[state=active]:border-primary/30 data-[state=active]:bg-primary/10">
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={activeTab} className="m-0">
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
@@ -71,7 +90,7 @@ export default function AdminTickets() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {(tickets || []).map(t => (
+              {filteredTickets.map(t => (
                 <tr key={t.id} className="hover:bg-secondary/20">
                   <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{t.id}</td>
                   <td className="px-4 py-3 text-xs">{t.user_id}</td>
@@ -90,7 +109,7 @@ export default function AdminTickets() {
           </table>
         </div>
         <div className="md:hidden divide-y divide-border">
-          {(tickets || []).map(t => (
+          {filteredTickets.map(t => (
             <button key={t.id} type="button" onClick={() => { setSelected(t); setNewStatus(t.status); }} className="w-full p-4 text-left space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -108,6 +127,8 @@ export default function AdminTickets() {
           ))}
         </div>
       </div>
+        </TabsContent>
+      </Tabs>
 
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
           <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">

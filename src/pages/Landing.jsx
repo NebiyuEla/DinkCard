@@ -87,9 +87,6 @@ export default function Landing() {
           variants={stagger}
         >
           <div className="mx-auto max-w-3xl">
-            <motion.div variants={fadeUp} className="mb-5 inline-flex items-center rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-sm font-medium text-primary">
-              Clear card access
-            </motion.div>
             <motion.h1 variants={fadeUp} className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Virtual card solution for secure online payments in Ethiopia
             </motion.h1>
@@ -260,9 +257,10 @@ export default function Landing() {
               Need help with an account, payment, verification, or card request? Use the contact page or email support directly.
             </p>
           </div>
-          <div className="flex flex-col gap-2 text-sm sm:flex-row">
+          <div className="flex flex-col gap-2 text-sm sm:flex-row sm:flex-wrap sm:justify-center">
             <Link to="/contact" className="font-semibold text-primary hover:underline">Open contact page</Link>
             <a href="mailto:support@dinkcard.et" className="font-semibold text-primary hover:underline">support@dinkcard.et</a>
+            <a href="https://t.me/DinkSupportBot" target="_blank" rel="noreferrer" className="font-semibold text-primary hover:underline">@DinkSupportBot</a>
           </div>
         </div>
       </section>

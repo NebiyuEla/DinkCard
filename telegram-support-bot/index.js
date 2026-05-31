@@ -330,10 +330,18 @@ function pickAvailableAdmin() {
   return sorted.find((admin) => getAdminLoad(admin.id) === 0) || null;
 }
 
+function pairRows(items, mapItem) {
+  const rows = [];
+  for (let index = 0; index < items.length; index += 2) {
+    rows.push(items.slice(index, index + 2).map(mapItem));
+  }
+  return rows;
+}
+
 function faqHomeKeyboard() {
   return {
     inline_keyboard: [
-      ...FAQ_CATEGORIES.map((category) => [{ text: `${category.icon} ${category.title}`, callback_data: `faqcat:${category.id}` }]),
+      ...pairRows(FAQ_CATEGORIES, (category) => ({ text: `${category.icon} ${category.title}`, callback_data: `faqcat:${category.id}` })),
       [{ text: '💬 Contact live support', callback_data: 'support:start' }]
     ]
   };
@@ -344,7 +352,7 @@ function faqCategoryKeyboard(categoryId) {
   if (!category) return faqHomeKeyboard();
   return {
     inline_keyboard: [
-      ...category.questions.map(([id, question]) => [{ text: question, callback_data: `faqq:${id}` }]),
+      ...pairRows(category.questions, ([id, question]) => ({ text: question, callback_data: `faqq:${id}` })),
       [{ text: '⬅️ Back to categories', callback_data: 'faq:home' }],
       [{ text: '💬 Contact live support', callback_data: 'support:start' }]
     ]
@@ -354,7 +362,7 @@ function faqCategoryKeyboard(categoryId) {
 function supportServiceKeyboard() {
   return {
     inline_keyboard: [
-      ...SERVICE_CATALOG.map((service) => [{ text: service.title, callback_data: `svc:${service.id}` }]),
+      ...pairRows(SERVICE_CATALOG, (service) => ({ text: service.title, callback_data: `svc:${service.id}` })),
       [{ text: '⬅️ Back to FAQ', callback_data: 'faq:home' }]
     ]
   };
@@ -365,7 +373,7 @@ function supportIssueKeyboard(serviceId) {
   if (!service) return supportServiceKeyboard();
   return {
     inline_keyboard: [
-      ...service.issues.map((issue) => [{ text: issue.title, callback_data: `iss:${service.id}:${issue.id}` }]),
+      ...pairRows(service.issues, (issue) => ({ text: issue.title, callback_data: `iss:${service.id}:${issue.id}` })),
       [{ text: '⬅️ Back', callback_data: 'support:start' }]
     ]
   };
@@ -399,11 +407,7 @@ function ticketActionKeyboard(ticket, viewerRole) {
     keyboard.push([{ text: '📄 Case details', callback_data: `td:${ticket.id}` }]);
 
     if (!closed) {
-      const assignRows = [];
-      for (const admin of state.admins) {
-        assignRows.push([{ text: `👤 Assign ${admin.label}`, callback_data: `ta:${ticket.id}:${admin.id}` }]);
-      }
-      keyboard.push(...assignRows);
+      keyboard.push(...pairRows(state.admins, (admin) => ({ text: `👤 ${admin.label}`, callback_data: `ta:${ticket.id}:${admin.id}` })));
       if (ticket.status === 'hold') {
         keyboard.push([{ text: '▶️ Resume', callback_data: `ts:${ticket.id}:open` }]);
       } else {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
-import { ArrowRight, CreditCard, HeadphonesIcon, LockKeyhole, MapPin, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
+import { ArrowRight, CreditCard, HeadphonesIcon, LockKeyhole, MapPin, MessageCircleMore, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import LegalLinks from '@/components/LegalLinks';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -51,6 +51,7 @@ const pageContent = {
 export default function MarketingPage() {
   const location = useLocation();
   const content = pageContent[location.pathname] || pageContent['/services'];
+  const [contactSuccess, setContactSuccess] = useState(null);
   const [contactForm, setContactForm] = useState({
     name: '',
     email: '',
@@ -63,8 +64,13 @@ export default function MarketingPage() {
 
   const submitContact = useMutation({
     mutationFn: () => apiClient.public.contact(contactForm),
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success('Your message was sent.');
+      setContactSuccess({
+        ticketId: result.ticketId,
+        targetEmail: contactForm.targetEmail,
+        email: contactForm.email
+      });
       setContactForm({
         name: '',
         email: '',
@@ -126,6 +132,14 @@ export default function MarketingPage() {
                     Choose the email path you want, add your details, and send one clear message so the support team can respond faster.
                   </p>
                 </div>
+                {contactSuccess && (
+                  <div className="mb-5 rounded-2xl border border-primary/20 bg-primary/10 p-4 text-sm">
+                    <p className="font-semibold text-primary">Message sent successfully</p>
+                    <p className="mt-1 text-muted-foreground">
+                      Ticket {contactSuccess.ticketId} was sent to {contactSuccess.targetEmail}. Replies will go to {contactSuccess.email}.
+                    </p>
+                  </div>
+                )}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Your name</Label>
@@ -164,11 +178,16 @@ export default function MarketingPage() {
                   </div>
                 </div>
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs text-muted-foreground">
-                    Direct email also works:
-                    {' '}
-                    <a href={`mailto:${contactForm.targetEmail}`} className="font-medium text-primary hover:underline">{contactForm.targetEmail}</a>
-                  </p>
+                  <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                    <p>
+                      Direct email also works:
+                      {' '}
+                      <a href={`mailto:${contactForm.targetEmail}`} className="font-medium text-primary hover:underline">{contactForm.targetEmail}</a>
+                    </p>
+                    <a href="https://t.me/DinkSupportBot" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+                      <MessageCircleMore className="h-3.5 w-3.5" /> Chat on @DinkSupportBot
+                    </a>
+                  </div>
                   <Button
                     type="button"
                     className="bg-primary text-primary-foreground"

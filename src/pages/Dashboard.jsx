@@ -138,6 +138,7 @@ export default function Dashboard() {
   const finishInstallStep = () => {
     localStorage.setItem(INSTALL_STEP_DONE_KEY, '1');
     setInstallDone(true);
+    setInstallPrompt(null);
   };
 
   const promptInstall = async () => {

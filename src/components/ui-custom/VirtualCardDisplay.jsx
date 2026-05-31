@@ -59,7 +59,9 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       <div className={cn(
         'group relative overflow-hidden border rounded-2xl p-4 cursor-pointer hover:border-primary/30 transition-all',
         'min-h-[92px]',
-        isFrozen ? 'bg-gradient-to-br from-cyan-950/40 via-card to-slate-950' : 'bg-gradient-to-br from-secondary to-card',
+        isFrozen
+          ? 'bg-gradient-to-br from-cyan-50 via-card to-slate-100 dark:from-cyan-950/40 dark:via-card dark:to-slate-950'
+          : 'bg-gradient-to-br from-white via-secondary/60 to-slate-100 dark:from-secondary dark:to-card',
         statusStyles[card.status]
       )}>
         {isFrozen && (
@@ -108,14 +110,14 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
       className={cn(
         'relative w-full max-w-[340px] aspect-[1.586/1] rounded-2xl p-5 sm:p-6 flex flex-col justify-between overflow-hidden shadow-2xl shadow-primary/5',
         isFrozen
-          ? 'bg-gradient-to-br from-cyan-950 via-slate-950 to-cyan-900/70 border backdrop-blur-xl'
-          : 'bg-gradient-to-br from-[hsl(222,44%,13%)] via-[hsl(222,38%,9%)] to-[hsl(222,44%,5%)] border backdrop-blur-xl',
+          ? 'bg-gradient-to-br from-cyan-100 via-white to-cyan-50 border backdrop-blur-xl dark:from-cyan-950 dark:via-slate-950 dark:to-cyan-900/70'
+          : 'bg-gradient-to-br from-white via-slate-50 to-emerald-50 border backdrop-blur-xl dark:from-[hsl(222,44%,13%)] dark:via-[hsl(222,38%,9%)] dark:to-[hsl(222,44%,5%)]',
         statusStyles[card.status]
       )}
     >
       <div className="card-shimmer absolute inset-0 rounded-2xl" />
-      <div className="pointer-events-none absolute -left-10 -top-16 h-36 w-36 rounded-full bg-primary/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-20 right-4 h-40 w-40 rounded-full bg-accent/10 blur-3xl" />
+      <div className="pointer-events-none absolute -left-10 -top-16 h-36 w-36 rounded-full bg-primary/10 blur-3xl dark:bg-primary/10" />
+      <div className="pointer-events-none absolute -bottom-20 right-4 h-40 w-40 rounded-full bg-accent/10 blur-3xl dark:bg-accent/10" />
       {isFrozen && (
         <>
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_22%,rgba(186,230,253,0.22),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.14)_0_1px,transparent_1px_12px)]" />
@@ -128,8 +130,8 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
 
       <div className="relative flex items-start justify-between">
         <div>
-          <p className="max-w-[180px] truncate text-sm font-semibold text-foreground/90">{cardholderName}</p>
-          <p className="max-w-[180px] truncate text-[11px] text-muted-foreground">{card.card_nickname || 'Virtual Card'}</p>
+          <p className="max-w-[180px] truncate text-sm font-semibold text-slate-900 dark:text-foreground/90">{cardholderName}</p>
+          <p className="max-w-[180px] truncate text-[11px] text-slate-600 dark:text-muted-foreground">{card.card_nickname || 'Virtual Card'}</p>
           <div className="mt-2">
             <span className={cn(
               'rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase',
@@ -142,13 +144,13 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
             </span>
           </div>
         </div>
-        <span className="whitespace-nowrap text-base font-bold tracking-tight text-foreground/80 sm:text-lg">Dink Card</span>
+        <span className="whitespace-nowrap text-base font-bold tracking-tight text-slate-800 dark:text-foreground/80 sm:text-lg">Dink Card</span>
       </div>
 
       <div className="relative">
         <button
           type="button"
-          className={cn('max-w-full font-mono text-lg tracking-[0.2em] text-foreground/90', showDetails && 'cursor-copy rounded-md text-left transition-colors hover:text-primary')}
+          className={cn('max-w-full font-mono text-lg tracking-[0.2em] text-slate-900 dark:text-foreground/90', showDetails && 'cursor-copy rounded-md text-left transition-colors hover:text-primary')}
           onClick={() => copyField(card.card_number_encrypted, 'Card number')}
           title={showDetails ? 'Click to copy card number' : undefined}
         >
@@ -161,7 +163,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
           <p className="text-[10px] text-muted-foreground uppercase">Expiry</p>
           <button
             type="button"
-            className={cn('font-mono text-sm text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
+            className={cn('font-mono text-sm text-slate-800 dark:text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
             onClick={() => copyField(expiry, 'Expiry')}
             title={showDetails ? 'Click to copy expiry' : undefined}
           >
@@ -172,7 +174,7 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
           <p className="text-[10px] text-muted-foreground uppercase">CVV</p>
           <button
             type="button"
-            className={cn('font-mono text-sm text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
+            className={cn('font-mono text-sm text-slate-800 dark:text-foreground/80', showDetails && 'cursor-copy rounded-md transition-colors hover:text-primary')}
             onClick={() => copyField(card.cvv_encrypted, 'CVV')}
             title={showDetails ? 'Click to copy CVV' : undefined}
           >

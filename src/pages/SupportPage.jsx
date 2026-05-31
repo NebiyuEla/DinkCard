@@ -13,6 +13,7 @@ import EmptyState from '@/components/ui-custom/EmptyState';
 import FilePreview from '@/components/FilePreview';
 import FileUploadControl from '@/components/FileUploadControl';
 import { HeadphonesIcon, Paperclip, Plus, Send } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -38,8 +39,11 @@ export default function SupportPage() {
   const [replyAttachment, setReplyAttachment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [reply, setReply] = useState('');
+  const [activeTab, setActiveTab] = useState('all');
   const messagesListRef = useRef(null);
   const messagesEndRef = useRef(null);
+
+  const filteredTickets = (tickets || []).filter((ticket) => activeTab === 'all' ? true : ticket.status === activeTab);
 
   const { data: messages } = useQuery({
     queryKey: ['ticketMessages', selectedTicket?.id],
@@ -132,21 +136,38 @@ export default function SupportPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Support</h1>
-          <p className="text-sm text-muted-foreground">Get help with your account</p>
+          <p className="text-sm text-muted-foreground">Get help with your account or use <a href="https://t.me/DinkSupportBot" target="_blank" rel="noreferrer" className="font-medium text-primary hover:underline">@DinkSupportBot</a>.</p>
         </div>
         <Button onClick={() => setShowCreate(true)} className="bg-primary text-primary-foreground">
           <Plus className="w-4 h-4 mr-2" /> New Ticket
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="flex w-full flex-wrap justify-start gap-2 rounded-2xl bg-transparent p-0">
+          {[
+            ['all', 'All'],
+            ['open', 'Open'],
+            ['under_review', 'Under Review'],
+            ['waiting_for_user', 'Waiting'],
+            ['solved', 'Solved'],
+            ['closed', 'Closed']
+          ].map(([value, label]) => (
+            <TabsTrigger key={value} value={value} className="rounded-xl border border-border bg-card px-3 py-2 data-[state=active]:border-primary/30 data-[state=active]:bg-primary/10">
+              {label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value={activeTab} className="m-0">
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Ticket list */}
         <div>
-          {!tickets?.length ? (
+          {!filteredTickets.length ? (
             <EmptyState icon={HeadphonesIcon} title="No tickets" description="Create a support ticket if you need help." className="bg-card border border-border rounded-xl" />
           ) : (
             <div className="bg-card border border-border rounded-xl divide-y divide-border">
-              {tickets.map(ticket => (
+              {filteredTickets.map(ticket => (
                 <div 
                   key={ticket.id} 
                   onClick={() => setSelectedTicket(ticket)} 
@@ -226,6 +247,8 @@ export default function SupportPage() {
           </div>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Create ticket dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
