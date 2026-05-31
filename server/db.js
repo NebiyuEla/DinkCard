@@ -203,6 +203,10 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   category TEXT NOT NULL,
   subject TEXT NOT NULL,
   message TEXT NOT NULL,
+  contact_name TEXT,
+  contact_email TEXT,
+  contact_phone TEXT,
+  contact_target_email TEXT,
   screenshot_url TEXT,
   related_transaction_id TEXT,
   related_card_id TEXT,
@@ -456,6 +460,10 @@ ensureColumn('users', 'two_factor_recovery_codes', 'TEXT');
 ensureColumn('users', 'two_factor_enabled_at', 'TEXT');
 ensureColumn('users', 'password_reset_token_hash', 'TEXT');
 ensureColumn('users', 'password_reset_expires_at', 'TEXT');
+ensureColumn('support_tickets', 'contact_name', 'TEXT');
+ensureColumn('support_tickets', 'contact_email', 'TEXT');
+ensureColumn('support_tickets', 'contact_phone', 'TEXT');
+ensureColumn('support_tickets', 'contact_target_email', 'TEXT');
 
 db.prepare("UPDATE users SET account_status = 'active' WHERE account_status IS NULL OR account_status = ''").run();
 

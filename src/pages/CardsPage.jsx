@@ -142,14 +142,14 @@ export default function CardsPage() {
 
   return (
     <div className="space-y-4 pb-4 lg:pb-0">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Virtual Cards</h1>
           <p className="text-sm text-muted-foreground">Manage virtual cards for supported online payments.</p>
           <p className="mt-1 text-xs font-semibold text-primary">Cards created: {visibleCards.length}/{maxCards}</p>
         </div>
-        <Link to={requestCardPath}>
-          <Button className="bg-primary text-primary-foreground">
+        <Link to={requestCardPath} className="w-full sm:w-auto">
+          <Button className="w-full bg-primary text-primary-foreground sm:w-auto">
             <Plus className="w-4 h-4 mr-2" /> {requestCardLabel}
           </Button>
         </Link>

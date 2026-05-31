@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
+import nodemailer from 'nodemailer';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -60,6 +61,125 @@ const allowedUploadTypes = new Set([
 
 const allowedUploadExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.heic', '.heif', '.pdf', '.txt', '.csv', '.mp3', '.wav', '.ogg', '.webm', '.m4a', '.mp4', '.doc', '.docx', '.xls', '.xlsx']);
 const blockedUploadExtensions = new Set(['.exe', '.bat', '.cmd', '.com', '.scr', '.ps1', '.vbs', '.js', '.mjs', '.html', '.htm', '.svg']);
+let emailTransporter = null;
+
+function hasMailConfig() {
+  return Boolean(config.mail.host && config.mail.port && config.mail.user && config.mail.pass);
+}
+
+function getEmailTransporter() {
+  if (!hasMailConfig()) {
+    throw new Error('SMTP is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS.');
+  }
+  if (!emailTransporter) {
+    emailTransporter = nodemailer.createTransport({
+      host: config.mail.host,
+      port: config.mail.port,
+      secure: config.mail.secure,
+      auth: {
+        user: config.mail.user,
+        pass: config.mail.pass
+      }
+    });
+  }
+  return emailTransporter;
+}
+
+function mailboxForTargetEmail(targetEmail) {
+  const target = String(targetEmail || '').trim().toLowerCase();
+  if (target === 'info@dinkcard.et') return config.mail.fromInfo;
+  if (target === 'security@dinkcard.et') return config.mail.fromSecurity;
+  return config.mail.fromSupport;
+}
+
+function formatContactTicketMessage({ targetEmail, name, email, phone, subject, message }) {
+  return [
+    'Contact request',
+    '',
+    `Inbox: ${targetEmail}`,
+    `Sender: ${name}`,
+    `Email: ${email}`,
+    `Phone: ${phone || 'Not provided'}`,
+    `Subject: ${subject}`,
+    '',
+    'Message',
+    message
+  ].join('\n');
+}
+
+async function sendContactInboxEmail({ targetEmail, name, email, phone, subject, message }) {
+  const inbox = String(targetEmail || '').trim().toLowerCase();
+  if (!inbox) {
+    throw new Error('Destination inbox is missing.');
+  }
+
+  const fromEmail = mailboxForTargetEmail(inbox);
+  const cleanSubject = String(subject || 'New contact request').trim();
+  const cleanName = String(name || 'Website Visitor').trim();
+  const cleanMessage = String(message || '').trim();
+
+  await getEmailTransporter().sendMail({
+    from: `"Dink Card Website" <${fromEmail}>`,
+    to: inbox,
+    replyTo: email,
+    subject: `[Contact] ${cleanSubject}`,
+    text: [
+      'New contact request',
+      '',
+      `Inbox: ${inbox}`,
+      `Name: ${cleanName}`,
+      `Email: ${email}`,
+      `Phone: ${phone || 'Not provided'}`,
+      `Subject: ${cleanSubject}`,
+      '',
+      'Message',
+      cleanMessage
+    ].join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.6">
+        <h2 style="margin:0 0 12px">New contact request</h2>
+        <table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-bottom:16px">
+          <tr><td style="padding:4px 12px 4px 0;font-weight:700">Inbox</td><td style="padding:4px 0">${inbox}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:700">Name</td><td style="padding:4px 0">${cleanName}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:700">Email</td><td style="padding:4px 0"><a href="mailto:${email}">${email}</a></td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:700">Phone</td><td style="padding:4px 0">${phone || 'Not provided'}</td></tr>
+          <tr><td style="padding:4px 12px 4px 0;font-weight:700">Subject</td><td style="padding:4px 0">${cleanSubject}</td></tr>
+        </table>
+        <div style="font-weight:700;margin-bottom:6px">Message</div>
+        <div style="padding:14px 16px;border:1px solid #dbe3ee;border-radius:12px;background:#f8fafc;white-space:pre-wrap">${cleanMessage}</div>
+      </div>
+    `
+  });
+}
+
+async function sendContactReplyEmail({ ticket, replyMessage, adminUser }) {
+  const recipient = String(ticket.contact_email || ticket.user_id || '').trim().toLowerCase();
+  const targetEmail = String(ticket.contact_target_email || '').trim().toLowerCase();
+  if (!recipient || !targetEmail) {
+    throw new Error('This contact request is missing the sender email or destination inbox.');
+  }
+
+  const fromEmail = mailboxForTargetEmail(targetEmail);
+  const adminName = formatPersonName(adminUser?.full_name || [adminUser?.first_name, adminUser?.last_name].filter(Boolean).join(' ')) || 'Dink Support';
+  const subject = String(ticket.subject || 'Dink Support Reply').trim();
+  const body = String(replyMessage?.message || '').trim();
+
+  await getEmailTransporter().sendMail({
+    from: `"${adminName}" <${fromEmail}>`,
+    to: recipient,
+    bcc: targetEmail,
+    replyTo: targetEmail,
+    subject: `Re: ${subject}`,
+    text: [
+      `Hello ${ticket.contact_name || 'there'},`,
+      '',
+      body,
+      '',
+      'This reply was sent from Dink Support.',
+      `For follow-up, reply to ${targetEmail}.`
+    ].join('\n')
+  });
+}
 
 function getClientIp(req) {
   const forwarded = req?.headers?.['x-forwarded-for'];
@@ -2101,7 +2221,7 @@ export function createApp() {
     });
   });
 
-  app.post('/api/public/contact', publicContactLimiter, (req, res) => {
+  app.post('/api/public/contact', publicContactLimiter, async (req, res) => {
     try {
       const name = String(req.body?.name || '').trim();
       const email = String(req.body?.email || '').trim().toLowerCase();
@@ -2129,21 +2249,24 @@ export function createApp() {
 
       const now = nowIso();
       const ticketId = generateId('sup');
-      const ticketMessage = [
-        `Contact request for ${targetEmail}`,
-        `Sender: ${name} <${email}>`,
-        phone ? `Phone: ${phone}` : null,
-        '',
-        message
-      ].filter(Boolean).join('\n');
+      const ticketMessage = formatContactTicketMessage({ targetEmail, name, email, phone, subject, message });
 
       db.prepare(`
         INSERT INTO support_tickets (
-          id, user_id, category, subject, message, screenshot_url, related_transaction_id, related_card_id,
+          id, user_id, category, subject, message, contact_name, contact_email, contact_phone, contact_target_email, screenshot_url, related_transaction_id, related_card_id,
           status, priority, created_at, updated_at
         )
-        VALUES (?, ?, 'contact_request', ?, ?, null, null, null, 'open', 'medium', ?, ?)
-      `).run(ticketId, email, subject, ticketMessage, now, now);
+        VALUES (?, ?, 'contact_request', ?, ?, ?, ?, ?, ?, null, null, null, 'open', 'medium', ?, ?)
+      `).run(ticketId, email, subject, ticketMessage, name, email, phone || null, targetEmail, now, now);
+
+      if (hasMailConfig()) {
+        try {
+          await sendContactInboxEmail({ targetEmail, name, email, phone, subject, message });
+        } catch (error) {
+          db.prepare('DELETE FROM support_tickets WHERE id = ?').run(ticketId);
+          return res.status(400).json({ message: error.message || 'Could not deliver the contact email.' });
+        }
+      }
 
       notifyAdmins('New Contact Request', `${name} sent a contact request to ${targetEmail}.`, 'support', '/admin/tickets');
       writeAudit({
@@ -2188,9 +2311,20 @@ export function createApp() {
     }
   });
 
-  app.post('/api/entities/:entity', authMiddleware(db), (req, res) => {
+  app.post('/api/entities/:entity', authMiddleware(db), async (req, res) => {
     try {
       const row = createEntity(req.params.entity, req.body, req.user);
+      if (req.params.entity === 'SupportMessage' && req.user.role !== 'user') {
+        const ticket = db.prepare('SELECT * FROM support_tickets WHERE id = ?').get(row.ticket_id);
+        if (ticket?.category === 'contact_request') {
+          try {
+            await sendContactReplyEmail({ ticket, replyMessage: row, adminUser: req.user });
+          } catch (error) {
+            db.prepare('DELETE FROM support_messages WHERE id = ?').run(row.id);
+            return res.status(400).json({ message: error.message || 'Could not send the email reply.' });
+          }
+        }
+      }
       if (req.params.entity === 'KYCSubmission') {
         notifyAdmins('New KYC Submission', `${req.user.full_name || req.user.email} submitted KYC for review.`, 'kyc', '/admin/kyc');
       }

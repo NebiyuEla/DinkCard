@@ -60,6 +60,16 @@ export const config = {
     baseUrl: must('BITNOB_BASE_URL', 'https://api.bitnob.com'),
     webhookSecret: must('BITNOB_WEBHOOK_SECRET'),
     webhookUrl: must('BITNOB_WEBHOOK_URL', 'http://localhost:3001/api/webhooks/bitnob')
+  },
+  mail: {
+    host: must('SMTP_HOST'),
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
+    user: must('SMTP_USER'),
+    pass: must('SMTP_PASS'),
+    fromSupport: must('SMTP_FROM_SUPPORT', 'support@dinkcard.et'),
+    fromInfo: must('SMTP_FROM_INFO', 'info@dinkcard.et'),
+    fromSecurity: must('SMTP_FROM_SECURITY', 'security@dinkcard.et')
   }
 };
 

@@ -24,6 +24,7 @@ export default function AdminTickets() {
   const [selected, setSelected] = useState(null);
   const [reply, setReply] = useState('');
   const [newStatus, setNewStatus] = useState('');
+  const isContactRequest = selected?.category === 'contact_request';
 
   const { data: messages } = useQuery({
     queryKey: ['ticketMessages', selected?.id],
@@ -109,11 +110,39 @@ export default function AdminTickets() {
       </div>
 
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">
+          <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">
           <DialogHeader>
             <DialogTitle>{selected?.subject}</DialogTitle>
             {selected?.id && <p className="font-mono text-[11px] text-muted-foreground">Ticket ID: {selected.id}</p>}
           </DialogHeader>
+          {selected && (
+            <div className="grid gap-2 rounded-xl border border-border bg-secondary/20 p-3 text-xs sm:grid-cols-2">
+              <div>
+                <p className="text-muted-foreground">User</p>
+                <p className="font-medium">{selected.contact_name || selected.user_id}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Category</p>
+                <p className="font-medium capitalize">{String(selected.category || '').replace(/_/g, ' ')}</p>
+              </div>
+              {isContactRequest && (
+                <>
+                  <div>
+                    <p className="text-muted-foreground">Sender email</p>
+                    <p className="font-medium break-all">{selected.contact_email || selected.user_id}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Inbox</p>
+                    <p className="font-medium break-all">{selected.contact_target_email || 'support@dinkcard.et'}</p>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <p className="text-muted-foreground">Phone</p>
+                    <p className="font-medium">{selected.contact_phone || 'Not provided'}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
             {/* Original message */}
             {selected && (
