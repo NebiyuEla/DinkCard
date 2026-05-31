@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const CONSENT_KEY = 'dinkcard_cookie_consent';
+const CONSENT_MAX_AGE = 60 * 60 * 24 * 180;
 const defaultConsent = {
   essential: true,
   preferences: true,
@@ -10,26 +11,65 @@ const defaultConsent = {
   marketing: false
 };
 
+function readConsentCookie() {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie
+    .split('; ')
+    .find((item) => item.startsWith(`${CONSENT_KEY}=`));
+  if (!match) return null;
+  const raw = match.slice(CONSENT_KEY.length + 1);
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return null;
+  }
+}
+
+function persistConsent(value) {
+  const payload = { ...defaultConsent, ...value, essential: true };
+  const encoded = encodeURIComponent(JSON.stringify(payload));
+  if (typeof document !== 'undefined') {
+    document.cookie = `${CONSENT_KEY}=${encoded}; path=/; max-age=${CONSENT_MAX_AGE}; SameSite=Lax`;
+  }
+  localStorage.setItem(CONSENT_KEY, JSON.stringify(payload));
+  return payload;
+}
+
 export default function CookieConsentBanner() {
-  const [saved, setSaved] = useState(() => localStorage.getItem(CONSENT_KEY));
+  const [saved, setSaved] = useState(() => {
+    const cookieConsent = readConsentCookie();
+    if (cookieConsent) return JSON.stringify(cookieConsent);
+    return localStorage.getItem(CONSENT_KEY);
+  });
   const [consent, setConsent] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null') || defaultConsent;
+      return readConsentCookie() || JSON.parse(localStorage.getItem(CONSENT_KEY) || 'null') || defaultConsent;
     } catch {
       return defaultConsent;
     }
   });
 
   useEffect(() => {
+    const cookieConsent = readConsentCookie();
+    if (cookieConsent) {
+      const serialized = JSON.stringify(cookieConsent);
+      if (serialized !== saved) setSaved(serialized);
+      localStorage.setItem(CONSENT_KEY, serialized);
+      return;
+    }
     const stored = localStorage.getItem(CONSENT_KEY);
-    if (stored && stored !== saved) setSaved(stored);
+    if (stored) {
+      try {
+        const restored = persistConsent(JSON.parse(stored));
+        setSaved(JSON.stringify(restored));
+      } catch {}
+    }
   }, [saved]);
 
   if (saved) return null;
 
   const saveConsent = (value) => {
-    const payload = { ...defaultConsent, ...value, essential: true };
-    localStorage.setItem(CONSENT_KEY, JSON.stringify(payload));
+    const payload = persistConsent(value);
     setSaved(JSON.stringify(payload));
   };
 
