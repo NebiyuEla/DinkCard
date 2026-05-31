@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { ArrowRight, CreditCard, HeadphonesIcon, LockKeyhole, MapPin, ShieldCheck, Smartphone, WalletCards } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
 import LegalLinks from '@/components/LegalLinks';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { footerDisclaimer } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
@@ -57,6 +58,7 @@ export default function MarketingPage() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle compact />
             <Link to="/login"><Button variant="ghost" size="sm">Sign In</Button></Link>
             <Link to="/register"><Button size="sm">Get Started</Button></Link>
           </div>

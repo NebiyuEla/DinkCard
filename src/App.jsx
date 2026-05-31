@@ -184,7 +184,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AppErrorBoundary>
-      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} storageKey="dinkcard-theme" disableTransitionOnChange>
         <AuthProvider>
           <QueryClientProvider client={queryClientInstance}>
             <Router>

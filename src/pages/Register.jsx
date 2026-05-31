@@ -13,6 +13,7 @@ import LegalLinks from '@/components/LegalLinks';
 import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 import BrandLogo from '@/components/BrandLogo';
 import SecretInput from '@/components/SecretInput';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
@@ -58,6 +59,9 @@ export default function Register() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
+      <div className="fixed right-4 top-4 z-20">
+        <ThemeToggle compact />
+      </div>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <BrandLogo to="/" className="justify-center mb-4" imageClassName="h-14 w-14 rounded-2xl" showLabel={false} />

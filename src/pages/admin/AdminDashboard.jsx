@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import ThemeToggle from '@/components/ThemeToggle';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -94,6 +95,7 @@ export default function AdminDashboard() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <ThemeToggle compact />
           <button
             type="button"
             onClick={refreshDashboard}

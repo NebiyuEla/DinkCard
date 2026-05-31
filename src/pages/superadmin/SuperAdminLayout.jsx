@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import TermsModal from '@/components/TermsModal';
 import BrandLogo from '@/components/BrandLogo';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const nav = [
   { label: 'Overview', path: '/superadmin/dashboard', icon: LayoutDashboard },
@@ -54,7 +55,10 @@ export default function SuperAdminLayout() {
           <div className="flex items-center gap-2">
             <BrandLogo to="/superadmin/dashboard" imageClassName="h-7 w-7 rounded-lg" labelClassName="font-bold text-sm" />
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout}>Sign Out</Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle compact />
+            <Button variant="ghost" size="sm" onClick={handleLogout}>Sign Out</Button>
+          </div>
         </div>
         <nav className="grid grid-cols-3 gap-2 px-3 pb-3">
           {nav.map(item => {
@@ -109,6 +113,7 @@ export default function SuperAdminLayout() {
         </nav>
 
         <div className="p-3 border-t border-border">
+          <ThemeToggle className="mb-2 w-full justify-start" />
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out

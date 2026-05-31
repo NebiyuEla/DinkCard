@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import LegalLinks from '@/components/LegalLinks';
 import BrandLogo from '@/components/BrandLogo';
+import ThemeToggle from '@/components/ThemeToggle';
 import { footerDisclaimer, platformDisclaimer } from '@/lib/legal';
 import { PUBLIC_NAV_LINKS } from '@/lib/seo';
 import {
@@ -67,6 +68,7 @@ export default function Landing() {
             ))}
           </nav>
           <div className="flex items-center gap-3">
+            <ThemeToggle compact />
             <Link to="/login">
               <Button variant="ghost" size="sm">Sign In</Button>
             </Link>

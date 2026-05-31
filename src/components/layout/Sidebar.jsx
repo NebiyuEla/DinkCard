@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/api/client';
 import BrandLogo from '@/components/BrandLogo';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const navItems = [
   { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -104,6 +105,9 @@ export default function Sidebar({ user, unreadCount = 0 }) {
         </nav>
 
         <div className="space-y-2 border-t border-border p-3">
+          <div className={cn('flex', collapsed ? 'justify-center' : 'justify-start')}>
+            <ThemeToggle compact={collapsed} className={collapsed ? '' : 'w-full justify-start'} />
+          </div>
           <button
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-all hover:bg-secondary hover:text-foreground"
             onClick={() => setCollapsed(!collapsed)}
