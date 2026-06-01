@@ -11,20 +11,47 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { toast } from 'sonner';
 import QRCode from 'qrcode';
 import KycRequiredNotice from '@/components/KycRequiredNotice';
 
+function WalletSkeleton() {
+  return (
+    <div className="space-y-4 pb-4 lg:pb-0">
+      <div className="space-y-3 sm:flex sm:items-center sm:justify-between sm:gap-3 sm:space-y-0">
+        <div>
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="mt-2 h-4 w-64" />
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Skeleton className="h-10 w-full sm:w-32" />
+          <Skeleton className="h-10 w-full sm:w-28" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-4">
+        <Skeleton className="col-span-2 h-24 rounded-xl md:col-span-1" />
+        <Skeleton className="h-24 rounded-xl" />
+        <Skeleton className="h-24 rounded-xl" />
+      </div>
+      <Skeleton className="h-64 rounded-xl" />
+    </div>
+  );
+}
+
 export default function WalletPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: user } = useCurrentUser();
-  const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
-  const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
+  const walletQuery = useWallet(user?.email);
+  const transactionsQuery = useWalletTransactions(user?.email);
   const { data: settings } = useFeeSettings();
-  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
+  const kycQuery = useKYCStatus(user?.email);
+  const { data: wallet, isLoading: walletLoading } = walletQuery;
+  const { data: transactions, isLoading: transactionsLoading } = transactionsQuery;
+  const { data: kyc, isLoading: kycLoading } = kycQuery;
   const [cryptoOpen, setCryptoOpen] = useState(false);
   const [cryptoCurrency, setCryptoCurrency] = useState('USDC');
   const [cryptoAmount, setCryptoAmount] = useState('');
@@ -135,6 +162,20 @@ export default function WalletPage() {
       toast.error(`Could not copy ${label.toLowerCase()}`);
     }
   };
+
+  const walletInitialLoading = walletLoading || transactionsLoading || kycLoading;
+  const walletLoadError = [walletQuery, transactionsQuery, kycQuery].some((query) => query.isError && !query.data);
+
+  if (walletInitialLoading) return <WalletSkeleton />;
+  if (walletLoadError) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 text-sm">
+        <p className="font-semibold">Could not load balance data.</p>
+        <p className="mt-1 text-muted-foreground">Your previous data was not changed. Retry when the connection is stable.</p>
+        <Button type="button" className="mt-4 bg-primary text-primary-foreground" onClick={() => invalidateOperationalData(queryClient)}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-4 lg:pb-0">

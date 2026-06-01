@@ -92,11 +92,32 @@ function LoadingScreen() {
   );
 }
 
+function AuthProblemScreen({ message, onRetry }) {
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5 text-center shadow-sm">
+        <h1 className="text-lg font-semibold">Could not verify your session</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{message || 'Check your connection and try again.'}</p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground"
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function RequireAuth({ roles }) {
-  const { isLoadingAuth, isAuthenticated, user } = useAuth();
+  const { isLoadingAuth, isAuthenticated, user, authError, checkUserAuth } = useAuth();
   const location = useLocation();
 
   if (isLoadingAuth) return <LoadingScreen />;
+  if (authError && authError.type !== 'auth_required' && !isAuthenticated) {
+    return <AuthProblemScreen message={authError.message} onRetry={checkUserAuth} />;
+  }
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />;
   if (roles && !roles.includes(user?.role)) {
     return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
@@ -105,15 +126,21 @@ function RequireAuth({ roles }) {
 }
 
 function PublicOnly({ children }) {
-  const { isLoadingAuth, isAuthenticated, user } = useAuth();
+  const { isLoadingAuth, isAuthenticated, user, authError, checkUserAuth } = useAuth();
   if (isLoadingAuth) return <LoadingScreen />;
+  if (authError && authError.type !== 'auth_required') {
+    return <AuthProblemScreen message={authError.message} onRetry={checkUserAuth} />;
+  }
   if (!isAuthenticated) return children;
   return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
 }
 
 function HomeRoute() {
-  const { isLoadingAuth, isAuthenticated, user } = useAuth();
+  const { isLoadingAuth, isAuthenticated, user, authError, checkUserAuth } = useAuth();
   if (isLoadingAuth) return <LoadingScreen />;
+  if (authError && authError.type !== 'auth_required') {
+    return <AuthProblemScreen message={authError.message} onRetry={checkUserAuth} />;
+  }
   if (isAuthenticated) return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
   return <Landing />;
 }

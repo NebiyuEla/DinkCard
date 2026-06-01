@@ -12,6 +12,7 @@ import StatusBadge from '@/components/ui-custom/StatusBadge';
 import VirtualCardDisplay from '@/components/ui-custom/VirtualCardDisplay';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import { invalidateOperationalData } from '@/lib/realtime';
 import KycRequiredNotice from '@/components/KycRequiredNotice';
 
@@ -38,6 +39,41 @@ function normalizeStatus(status) {
   return value;
 }
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4 pb-4 sm:space-y-6 lg:pb-0">
+      <div>
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="mt-2 h-4 w-44" />
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton key={index} className="h-24 rounded-xl sm:h-28" />
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-20 rounded-2xl" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Skeleton className="h-56 rounded-xl" />
+        <Skeleton className="h-56 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+function DashboardError({ onRetry }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 text-sm">
+      <p className="font-semibold">Could not load dashboard data.</p>
+      <p className="mt-1 text-muted-foreground">Your account data was not changed. Retry when the connection is stable.</p>
+      <Button type="button" className="mt-4 bg-primary text-primary-foreground" onClick={onRetry}>Retry</Button>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -54,12 +90,19 @@ export default function Dashboard() {
     return DEFAULT_QUICK_ACTION_IDS;
   });
   const { data: user } = useCurrentUser();
-  const { data: wallet, isLoading: walletLoading } = useWallet(user?.email);
-  const { data: cards, isLoading: cardsLoading } = useCards(user?.email);
-  const { data: deposits } = useDeposits(user?.email);
-  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
+  const walletQuery = useWallet(user?.email);
+  const cardsQuery = useCards(user?.email);
+  const depositsQuery = useDeposits(user?.email);
+  const kycQuery = useKYCStatus(user?.email);
   const { data: settings } = useFeeSettings();
-  const { data: transactions, isLoading: transactionsLoading } = useWalletTransactions(user?.email);
+  const transactionsQuery = useWalletTransactions(user?.email);
+  const { data: wallet, isLoading: walletLoading } = walletQuery;
+  const { data: cards, isLoading: cardsLoading } = cardsQuery;
+  const { data: deposits, isLoading: depositsLoading } = depositsQuery;
+  const { data: kyc, isLoading: kycLoading } = kycQuery;
+  const { data: transactions, isLoading: transactionsLoading } = transactionsQuery;
+  const dashboardLoading = walletLoading || cardsLoading || depositsLoading || kycLoading || transactionsLoading;
+  const dashboardError = [walletQuery, cardsQuery, depositsQuery, kycQuery, transactionsQuery].some((query) => query.isError && !query.data);
 
   const balance = Number(wallet?.available_balance || 0);
   const etbEstimate = balance * (settings?.usd_to_etb_rate || 135);
@@ -177,6 +220,9 @@ export default function Dashboard() {
         window.history.replaceState({}, '', '/dashboard');
       });
   }, [queryClient]);
+
+  if (dashboardLoading) return <DashboardSkeleton />;
+  if (dashboardError) return <DashboardError onRetry={() => invalidateOperationalData(queryClient)} />;
 
   return (
     <div className="space-y-4 pb-4 sm:space-y-6 lg:pb-0">

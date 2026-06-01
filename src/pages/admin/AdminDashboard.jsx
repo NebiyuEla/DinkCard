@@ -12,6 +12,7 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -70,6 +71,19 @@ const roleNavAccess = {
   superadmin: null
 };
 
+function AdminOverviewSkeleton() {
+  return (
+    <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
+      <Skeleton className="h-20 rounded-xl" />
+      <div className="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        {Array.from({ length: 7 }).map((_, index) => (
+          <Skeleton key={index} className="h-28 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -84,12 +98,18 @@ export default function AdminDashboard() {
     return access?.has(item.path);
   });
 
-  const { data: users } = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const { data: kycSubs } = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const { data: deposits } = useQuery({ queryKey: ['admin-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const { data: cards } = useQuery({ queryKey: ['admin-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const { data: tickets } = useQuery({ queryKey: ['admin-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const { data: walletSummary } = useQuery({ queryKey: ['admin-wallet-summary'], queryFn: apiClient.admin.walletSummary, refetchInterval: REFRESH.admin });
+  const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const kycQuery = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const depositsQuery = useQuery({ queryKey: ['admin-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const cardsQuery = useQuery({ queryKey: ['admin-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const ticketsQuery = useQuery({ queryKey: ['admin-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const walletSummaryQuery = useQuery({ queryKey: ['admin-wallet-summary'], queryFn: apiClient.admin.walletSummary, refetchInterval: REFRESH.admin });
+  const { data: users } = usersQuery;
+  const { data: kycSubs } = kycQuery;
+  const { data: deposits } = depositsQuery;
+  const { data: cards } = cardsQuery;
+  const { data: tickets } = ticketsQuery;
+  const { data: walletSummary } = walletSummaryQuery;
   const { data: companyBalances } = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
@@ -124,6 +144,9 @@ export default function AdminDashboard() {
   }, [cards?.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
 
   const isOverview = location.pathname === '/admin';
+  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, walletSummaryQuery];
+  const overviewLoading = isOverview && overviewQueries.some((query) => query.isLoading);
+  const overviewError = isOverview && overviewQueries.some((query) => query.isError && !query.data);
   const syncProvider = useMutation({
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: async (result) => {
@@ -209,6 +232,15 @@ export default function AdminDashboard() {
       </div>
 
       {isOverview ? (
+        overviewLoading ? (
+          <AdminOverviewSkeleton />
+        ) : overviewError ? (
+          <div className="rounded-[28px] border border-border bg-card p-5 text-sm">
+            <p className="font-semibold">Could not load admin overview.</p>
+            <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
+            <button type="button" onClick={refreshDashboard} className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Retry</button>
+          </div>
+        ) : (
         <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
           <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-500">
             All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
@@ -246,6 +278,7 @@ export default function AdminDashboard() {
             </div>
           )}
         </div>
+        )
       ) : (
         <div className="rounded-[28px] border border-border bg-card p-4 md:p-6">
           <Outlet />

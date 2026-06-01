@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import LegalLinks from '@/components/LegalLinks';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,13 +18,33 @@ import KycRequiredNotice from '@/components/KycRequiredNotice';
 
 const DEFAULT_CARD_NICKNAME = 'Virtual Card';
 
+function CreateCardSkeleton() {
+  return (
+    <div className="mx-auto w-full max-w-2xl space-y-4 pb-4 sm:space-y-6 lg:pb-0">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-10 w-10 rounded-lg" />
+        <div className="flex-1">
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="mt-2 h-4 w-72" />
+        </div>
+      </div>
+      <Skeleton className="h-72 rounded-2xl" />
+      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-12 rounded-xl" />
+    </div>
+  );
+}
+
 export default function CreateCard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
-  const { data: wallet } = useWallet(user?.email);
-  const { data: cards } = useCards(user?.email);
-  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
+  const walletQuery = useWallet(user?.email);
+  const cardsQuery = useCards(user?.email);
+  const kycQuery = useKYCStatus(user?.email);
+  const { data: wallet, isLoading: walletLoading } = walletQuery;
+  const { data: cards, isLoading: cardsLoading } = cardsQuery;
+  const { data: kyc, isLoading: kycLoading } = kycQuery;
   const { data: settings } = useFeeSettings();
 
   const [fundingAmount, setFundingAmount] = useState('3');
@@ -58,6 +79,20 @@ export default function CreateCard() {
       toast.error(error.message || 'Failed to create card');
     }
   });
+
+  const initialLoading = walletLoading || cardsLoading || kycLoading;
+  const loadError = [walletQuery, cardsQuery, kycQuery].some((query) => query.isError && !query.data);
+
+  if (initialLoading) return <CreateCardSkeleton />;
+  if (loadError) {
+    return (
+      <div className="mx-auto w-full max-w-2xl rounded-2xl border border-border bg-card p-5 text-sm">
+        <p className="font-semibold">Could not load card request data.</p>
+        <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
+        <Button type="button" className="mt-4 bg-primary text-primary-foreground" onClick={() => invalidateOperationalData(queryClient)}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 pb-4 sm:space-y-6 lg:pb-0">

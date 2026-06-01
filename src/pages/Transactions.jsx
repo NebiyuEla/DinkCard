@@ -3,6 +3,7 @@ import { useCurrentUser, useWalletTransactions } from '@/hooks/useAppData';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiClient } from '@/api/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowDownUp, PlusCircle, DollarSign, ArrowUpRight, Lock, Clock, CreditCard, Gift, ReceiptText } from 'lucide-react';
@@ -33,7 +34,8 @@ const typeIcons = {
 
 export default function Transactions() {
   const { data: user } = useCurrentUser();
-  const { data: transactions } = useWalletTransactions(user?.email);
+  const transactionsQuery = useWalletTransactions(user?.email);
+  const { data: transactions, isLoading, isError } = transactionsQuery;
   const [filter, setFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
@@ -78,7 +80,19 @@ export default function Transactions() {
         </Select>
       </div>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <Skeleton key={index} className="h-16 rounded-xl" />
+          ))}
+        </div>
+      ) : isError && !transactions ? (
+        <div className="rounded-xl border border-border bg-card p-5 text-sm">
+          <p className="font-semibold">Could not load transactions.</p>
+          <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
+          <Button type="button" className="mt-4 bg-primary text-primary-foreground" onClick={() => transactionsQuery.refetch()}>Retry</Button>
+        </div>
+      ) : filtered.length === 0 ? (
         <EmptyState icon={ArrowDownUp} title="No transactions found" description="Transactions matching your filters will appear here." />
       ) : (
         <div className="bg-card border border-border rounded-xl divide-y divide-border">

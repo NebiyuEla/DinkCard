@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '';
 const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 
 async function request(path, options = {}) {
@@ -6,7 +6,9 @@ async function request(path, options = {}) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       credentials: 'include',
+      cache: 'no-store',
       headers: {
+        'Accept': 'application/json',
         'Content-Type': 'application/json',
         ...(options.headers || {})
       },
@@ -20,12 +22,14 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let message = 'Request failed';
+    let payload = null;
     try {
-      const payload = await response.json();
+      payload = await response.json();
       message = payload.message || message;
     } catch {}
     const error = new Error(message);
     error.status = response.status;
+    error.payload = payload;
     throw error;
   }
 
@@ -59,6 +63,9 @@ function entityApi(entity) {
 }
 
 export const apiClient = {
+  dashboard: {
+    get: () => request('/api/dashboard')
+  },
   public: {
     contact: (payload) => request('/api/public/contact', { method: 'POST', body: JSON.stringify(payload) })
   },

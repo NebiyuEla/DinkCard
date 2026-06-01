@@ -8,6 +8,7 @@ export const REFRESH = {
 export async function invalidateOperationalData(queryClient) {
   const keys = [
     'currentUser',
+    'dashboard',
     'feeSettings',
     'wallet',
     'walletTransactions',

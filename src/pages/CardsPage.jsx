@@ -11,6 +11,7 @@ import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 import { invalidateOperationalData } from '@/lib/realtime';
 import SecretInput from '@/components/SecretInput';
 import KycRequiredNotice from '@/components/KycRequiredNotice';
@@ -43,14 +44,38 @@ function formatCardTxAmount(tx) {
   return Number.isFinite(normalized) ? normalized : 0;
 }
 
+function CardsSkeleton() {
+  return (
+    <div className="space-y-4 pb-4 lg:pb-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Skeleton className="h-8 w-44" />
+          <Skeleton className="mt-2 h-4 w-72" />
+        </div>
+        <Skeleton className="h-10 w-full sm:w-36" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <Skeleton className="h-28 rounded-2xl" />
+          <Skeleton className="h-28 rounded-2xl" />
+        </div>
+        <Skeleton className="h-96 rounded-2xl" />
+      </div>
+    </div>
+  );
+}
+
 export default function CardsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data: user } = useCurrentUser();
-  const { data: cards } = useCards(user?.email);
-  const { data: wallet } = useWallet(user?.email);
+  const cardsQuery = useCards(user?.email);
+  const walletQuery = useWallet(user?.email);
   const { data: settings } = useFeeSettings();
-  const { data: kyc, isLoading: kycLoading } = useKYCStatus(user?.email);
+  const kycQuery = useKYCStatus(user?.email);
+  const { data: cards, isLoading: cardsLoading } = cardsQuery;
+  const { data: wallet, isLoading: walletLoading } = walletQuery;
+  const { data: kyc, isLoading: kycLoading } = kycQuery;
   const [selectedCard, setSelectedCard] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [pin, setPin] = useState('');
@@ -139,6 +164,20 @@ export default function CardsPage() {
       setSelectedCard(visibleCards[0]);
     }
   }, [visibleCards, selectedCard]);
+
+  const cardsInitialLoading = cardsLoading || walletLoading || kycLoading;
+  const cardsLoadError = [cardsQuery, walletQuery, kycQuery].some((query) => query.isError && !query.data);
+
+  if (cardsInitialLoading) return <CardsSkeleton />;
+  if (cardsLoadError) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 text-sm">
+        <p className="font-semibold">Could not load card data.</p>
+        <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
+        <Button type="button" className="mt-4 bg-primary text-primary-foreground" onClick={() => invalidateOperationalData(queryClient)}>Retry</Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-4 lg:pb-0">

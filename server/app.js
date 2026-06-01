@@ -709,6 +709,72 @@ function ensureWallet(userEmail) {
   return db.prepare('SELECT * FROM wallets WHERE id = ?').get(walletId);
 }
 
+function mapRows(rows = []) {
+  return rows.map((row) => mapRow(row));
+}
+
+function buildUserDashboard(user) {
+  const wallet = ensureWallet(user.email);
+  const kyc = db.prepare(`
+    SELECT * FROM kyc_submissions
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 1
+  `).get(user.email);
+  const cards = db.prepare(`
+    SELECT * FROM virtual_cards
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all(user.email);
+  const deposits = db.prepare(`
+    SELECT * FROM deposits
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all(user.email);
+  const transactions = db.prepare(`
+    SELECT * FROM wallet_transactions
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 50
+  `).all(user.email);
+  const notifications = db.prepare(`
+    SELECT * FROM notifications
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all(user.email);
+
+  const visibleCards = cards.filter((card) => !['failed', 'rejected', 'deleted'].includes(String(card.status || '').toLowerCase()));
+  const hasApprovedKyc = kyc?.status === 'approved';
+  const hasFundStep = Number(wallet.available_balance || 0) > 0
+    || deposits.some((deposit) => deposit.status === 'approved')
+    || transactions.some((tx) => Number(tx.amount || 0) > 0);
+  const twoFactorEnabled = isTwoFactorEnabled(user);
+  const completedSteps = [true, hasApprovedKyc, hasFundStep, visibleCards.length > 0, twoFactorEnabled].filter(Boolean).length;
+
+  return {
+    user: serializeTwoFactorUser(user),
+    wallet: mapRow(wallet),
+    kyc: kyc ? mapRow(kyc) : { user_id: user.email, status: 'not_started', level: 0 },
+    cards: mapRows(cards),
+    deposits: mapRows(deposits),
+    transactions: mapRows(transactions),
+    notifications: mapRows(notifications),
+    progress: {
+      completed_steps: completedSteps,
+      total_steps: 5,
+      percent: Math.round((completedSteps / 5) * 100),
+      kyc_approved: hasApprovedKyc,
+      has_funds: hasFundStep,
+      has_card: visibleCards.length > 0,
+      two_factor_enabled: twoFactorEnabled
+    },
+    loaded_at: nowIso()
+  };
+}
+
 function extractProviderData(payload) {
   return payload?.data?.card || payload?.data?.customer || payload?.data || payload?.card || payload?.customer || payload || {};
 }
@@ -1354,7 +1420,9 @@ function addOrigin(allowedOrigins, origin) {
 function buildAllowedOrigins() {
   const allowedOrigins = new Set([
     'http://localhost:5173',
-    'http://127.0.0.1:5173'
+    'http://127.0.0.1:5173',
+    'https://dinkcard.et',
+    'https://www.dinkcard.et'
   ]);
 
   [
@@ -1506,9 +1574,10 @@ export function createApp() {
 
   app.use((req, res, next) => {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-    if (req.path.startsWith('/api/auth')) {
-      res.setHeader('Cache-Control', 'no-store');
+    if (req.path.startsWith('/api')) {
+      res.setHeader('Cache-Control', 'no-store, private');
       res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
     }
     next();
   });
@@ -1547,7 +1616,11 @@ export function createApp() {
   });
 
   app.get('/api/health', (req, res) => {
-    res.json({ ok: true });
+    res.json({
+      status: 'ok',
+      environment: process.env.NODE_ENV || 'development',
+      time: nowIso()
+    });
   });
 
   app.get('/', (req, res) => {
@@ -1897,6 +1970,17 @@ export function createApp() {
 
     ensureWallet(user.email);
     return res.json(serializeTwoFactorUser(user));
+  });
+
+  app.get('/api/dashboard', authMiddleware(db), (req, res) => {
+    try {
+      const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+      if (!user) return res.status(401).json({ message: 'Authentication required' });
+      return res.json(buildUserDashboard(user));
+    } catch (error) {
+      console.error('Dashboard load failed:', error.message);
+      return res.status(500).json({ message: 'Could not load dashboard data. Please retry.' });
+    }
   });
 
   app.patch('/api/auth/me', authMiddleware(db), (req, res) => {

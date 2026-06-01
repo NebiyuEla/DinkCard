@@ -7,18 +7,47 @@ import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Users, ShieldCheck, DollarSign, CreditCard, HeadphonesIcon, WalletCards, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
 }
 
+function SuperOverviewSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="mt-2 h-4 w-52" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-24" />
+          <Skeleton className="h-9 w-32" />
+        </div>
+      </div>
+      <Skeleton className="h-20 rounded-xl" />
+      <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <Skeleton key={index} className="h-28 rounded-xl" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function SAOverview() {
   const queryClient = useQueryClient();
-  const { data: users } = useQuery({ queryKey: ['sa-users'], queryFn: () => apiClient.entities.User.list('-created_date', 200), refetchInterval: REFRESH.admin });
-  const { data: kycSubs } = useQuery({ queryKey: ['sa-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 200), refetchInterval: REFRESH.admin });
-  const { data: deposits } = useQuery({ queryKey: ['sa-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 200), refetchInterval: REFRESH.admin });
-  const { data: cards } = useQuery({ queryKey: ['sa-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 200), refetchInterval: REFRESH.admin });
-  const { data: tickets } = useQuery({ queryKey: ['sa-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const usersQuery = useQuery({ queryKey: ['sa-users'], queryFn: () => apiClient.entities.User.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const kycQuery = useQuery({ queryKey: ['sa-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const depositsQuery = useQuery({ queryKey: ['sa-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const cardsQuery = useQuery({ queryKey: ['sa-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const ticketsQuery = useQuery({ queryKey: ['sa-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const { data: users } = usersQuery;
+  const { data: kycSubs } = kycQuery;
+  const { data: deposits } = depositsQuery;
+  const { data: cards } = cardsQuery;
+  const { data: tickets } = ticketsQuery;
   const { data: companyBalances } = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
@@ -46,6 +75,21 @@ export default function SAOverview() {
     await invalidateOperationalData(queryClient);
     toast.success('Dashboard refreshed');
   };
+
+  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery];
+  const overviewLoading = overviewQueries.some((query) => query.isLoading);
+  const overviewError = overviewQueries.some((query) => query.isError && !query.data);
+
+  if (overviewLoading) return <SuperOverviewSkeleton />;
+  if (overviewError) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 text-sm">
+        <p className="font-semibold">Could not load superadmin overview.</p>
+        <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
+        <button type="button" onClick={refreshDashboard} className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Retry</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

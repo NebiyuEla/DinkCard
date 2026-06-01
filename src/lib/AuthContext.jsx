@@ -18,10 +18,19 @@ export function AuthProvider({ children }) {
       setUser(currentUser);
       setIsAuthenticated(true);
       setAuthError(null);
+      queryClientInstance.setQueryData(['currentUser'], currentUser);
     } catch (error) {
-      setUser(null);
-      setIsAuthenticated(false);
-      setAuthError(error.status === 401 ? { type: 'auth_required', message: 'Authentication required' } : null);
+      if (error.status === 401) {
+        setUser(null);
+        setIsAuthenticated(false);
+        setAuthError({ type: 'auth_required', message: 'Authentication required' });
+        queryClientInstance.removeQueries({ queryKey: ['currentUser'] });
+      } else {
+        setAuthError({
+          type: 'network',
+          message: error.message || 'Could not verify your session. Check your connection and try again.'
+        });
+      }
     } finally {
       setIsLoadingAuth(false);
       setAuthChecked(true);
@@ -38,6 +47,7 @@ export function AuthProvider({ children }) {
     setAuthError(null);
     setIsLoadingAuth(false);
     setAuthChecked(true);
+    queryClientInstance.setQueryData(['currentUser'], currentUser);
   };
 
   const logout = async () => {
