@@ -873,7 +873,7 @@ function getHardCardLimit() {
 }
 
 const STABLECOIN_DEPOSIT_CHAINS = [
-  { chain: 'tron', label: 'TRON', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
+  { chain: 'tron', label: 'TRON', native_token: { symbol: 'TRX', decimals: 6 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }] },
   { chain: 'bsc', label: 'BSC', native_token: { symbol: 'BNB', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
   { chain: 'polygon', label: 'Polygon', native_token: { symbol: 'POL', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] },
   { chain: 'ethereum', label: 'Ethereum', native_token: { symbol: 'ETH', decimals: 18 }, stablecoins: [{ symbol: 'USDT', decimals: 6 }, { symbol: 'USDC', decimals: 6 }] }
@@ -932,16 +932,18 @@ function mergeCryptoNetworks(...groups) {
 }
 
 async function getCryptoNetworksForCurrency(currency) {
-  if (!['USDC', 'USDT'].includes(String(currency || '').toUpperCase())) return [];
+  const targetCurrency = String(currency || '').toUpperCase();
+  if (!['USDC', 'USDT'].includes(targetCurrency)) return [];
   let providerNetworks = [];
   try {
-    providerNetworks = normalizeStablecoinChains(await bitnobService.getSupportedChains(), currency);
+    providerNetworks = normalizeStablecoinChains(await bitnobService.getSupportedChains(), targetCurrency);
   } catch {
     providerNetworks = [];
   }
-  const fallbackNetworks = normalizeStablecoinChains({ data: { chains: STABLECOIN_DEPOSIT_CHAINS } }, currency);
+  const fallbackNetworks = normalizeStablecoinChains({ data: { chains: STABLECOIN_DEPOSIT_CHAINS } }, targetCurrency);
   return mergeCryptoNetworks(fallbackNetworks, providerNetworks)
-    .filter((network) => STABLECOIN_DEPOSIT_CHAIN_VALUES.has(String(network.value || '').toUpperCase()));
+    .filter((network) => STABLECOIN_DEPOSIT_CHAIN_VALUES.has(String(network.value || '').toUpperCase()))
+    .filter((network) => !(targetCurrency === 'USDC' && String(network.value || '').trim().toLowerCase() === 'tron'));
 }
 
 function extractGeneratedAddress(payload) {
@@ -3562,6 +3564,48 @@ export function createApp() {
       res.json(mapRow(db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id)));
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to submit this USDC transfer right now.' });
+    }
+  });
+
+  app.post('/api/payments/crypto/:depositId/cancel', authMiddleware(db), (req, res) => {
+    try {
+      const deposit = db.prepare(`
+        SELECT * FROM deposits
+        WHERE id = ? AND user_id = ?
+      `).get(req.params.depositId, req.user.email);
+      if (!deposit) return res.status(404).json({ message: 'Funding request not found.' });
+      if (!['usdc', 'crypto'].includes(String(deposit.payment_method || '').toLowerCase())) {
+        return res.status(400).json({ message: 'This funding request is not a crypto transfer.' });
+      }
+      if (!['pending_transfer', 'awaiting_review'].includes(String(deposit.status || '').toLowerCase())) {
+        return res.status(400).json({ message: 'This funding request can no longer be cancelled.' });
+      }
+
+      const now = nowIso();
+      db.prepare(`
+        UPDATE deposits
+        SET status = 'cancelled',
+            provider_status = 'cancelled_by_user',
+            rejection_reason = 'Cancelled by user before confirmation.',
+            updated_at = ?
+        WHERE id = ?
+      `).run(now, deposit.id);
+
+      createNotification(req.user.email, 'Deposit Cancelled', 'Your crypto funding request was cancelled.', 'deposit', '/wallet');
+      writeAudit({
+        actor: req.user.email,
+        userId: req.user.email,
+        action: 'crypto_funding_cancelled',
+        entityType: 'deposit',
+        entityId: deposit.id,
+        oldValue: deposit,
+        newValue: { status: 'cancelled', provider_status: 'cancelled_by_user' },
+        req
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to cancel this funding request right now.' });
     }
   });
 

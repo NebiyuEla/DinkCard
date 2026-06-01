@@ -132,6 +132,7 @@ export const apiClient = {
     getUsdcNetworks: () => request('/api/payments/crypto/networks?currency=USDC'),
     createUsdcAddress: (payload) => request('/api/payments/crypto/address', { method: 'POST', body: JSON.stringify({ ...payload, currency: 'USDC' }) }),
     submitUsdcTransfer: (depositId, payload = {}) => request(`/api/payments/usdc/${encodeURIComponent(depositId)}/submit`, { method: 'POST', body: JSON.stringify(payload) }),
+    cancelCryptoDeposit: (depositId) => request(`/api/payments/crypto/${encodeURIComponent(depositId)}/cancel`, { method: 'POST' }),
     getChapaStatus: (txRef) => request(`/api/payments/chapa/status/${encodeURIComponent(txRef)}`),
     invoiceUrl: (txRef) => `${API_BASE_URL}/api/payments/invoice/${encodeURIComponent(txRef)}/download`
   },

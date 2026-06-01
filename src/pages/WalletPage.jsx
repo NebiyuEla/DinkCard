@@ -6,7 +6,7 @@ import StatCard from '@/components/ui-custom/StatCard';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import EmptyState from '@/components/ui-custom/EmptyState';
 import { Button } from '@/components/ui/button';
-import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, Copy, QrCode, ReceiptText } from 'lucide-react';
+import { Wallet, PlusCircle, ArrowDownUp, DollarSign, Lock, Clock, Copy, QrCode, ReceiptText, XCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,7 +56,8 @@ export default function WalletPage() {
 
   const cryptoNetworksQuery = useQuery({
     queryKey: ['crypto-networks', cryptoCurrency],
-    queryFn: () => apiClient.payments.getCryptoNetworks(cryptoCurrency)
+    queryFn: () => apiClient.payments.getCryptoNetworks(cryptoCurrency),
+    enabled: cryptoOpen && kycApproved
   });
 
   const { data: deposits } = useQuery({
@@ -107,6 +108,16 @@ export default function WalletPage() {
       toast.success(`${cryptoCurrency} address ready`);
     },
     onError: (error) => toast.error(error.message || 'Could not generate address')
+  });
+
+  const cancelCryptoDeposit = useMutation({
+    mutationFn: (depositId) => apiClient.payments.cancelCryptoDeposit(depositId),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      setCryptoQr('');
+      toast.success('Crypto deposit cancelled');
+    },
+    onError: (error) => toast.error(error.message || 'Could not cancel this deposit')
   });
 
   const depositReceiptUrl = (tx) => {
@@ -244,7 +255,7 @@ export default function WalletPage() {
                     </Select>
                   </div>
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2 sm:justify-end">
                   <Button variant="outline" onClick={() => setCryptoOpen(false)}>Close</Button>
                   <Button onClick={() => createCryptoAddress.mutate()} disabled={!cryptoAmount || !cryptoNetwork || createCryptoAddress.isPending}>
                     {createCryptoAddress.isPending ? 'Generating...' : 'Generate Address'}
@@ -253,19 +264,25 @@ export default function WalletPage() {
               </>
             ) : (
               <div className="space-y-3 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold">{currentCryptoDeposit.payment_currency || 'Crypto'} deposit</p>
-                    <p className="text-xs text-muted-foreground"><StatusBadge status={currentCryptoDeposit.provider_status || currentCryptoDeposit.status} className="text-[10px]" /></p>
+                    <div className="mt-1">
+                      <StatusBadge status={currentCryptoDeposit.provider_status || currentCryptoDeposit.status} className="text-[10px]" />
+                    </div>
                   </div>
                   <span className="rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                     {currentCryptoDeposit.payment_network}
                   </span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-1">
+                <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl bg-card p-3">
                     <p className="text-xs text-muted-foreground">Amount</p>
                     <p className="font-mono font-semibold">{Number(currentCryptoDeposit.payment_amount || 0).toFixed(2)} {currentCryptoDeposit.payment_currency || 'USDC'}</p>
+                  </div>
+                  <div className="rounded-xl bg-card p-3">
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className="text-sm font-semibold capitalize">{String(currentCryptoDeposit.status || '').replace(/_/g, ' ')}</p>
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
@@ -282,7 +299,18 @@ export default function WalletPage() {
                     {cryptoQr ? <img src={cryptoQr} alt="Deposit QR code" className="h-[150px] w-[150px] rounded-lg border border-border bg-white p-2" /> : <div className="text-xs text-muted-foreground">QR loading...</div>}
                   </div>
                 </div>
-                <DialogFooter>
+                <div className="rounded-xl bg-card/70 p-3 text-xs text-muted-foreground">
+                  If you have not sent the transfer yet, cancel this request first and then generate a new address.
+                </div>
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <Button
+                    variant="destructive"
+                    onClick={() => cancelCryptoDeposit.mutate(currentCryptoDeposit.id)}
+                    disabled={cancelCryptoDeposit.isPending}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    {cancelCryptoDeposit.isPending ? 'Cancelling...' : 'Cancel Deposit'}
+                  </Button>
                   <Button variant="outline" onClick={() => setCryptoOpen(false)}>Close</Button>
                 </DialogFooter>
               </div>

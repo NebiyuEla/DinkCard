@@ -882,7 +882,7 @@ function cryptoAmountCoversDeposit(deposit, data = {}, payload = {}) {
 }
 
 function applyCryptoDepositPayload(deposit, payload = {}, { complete = false, pending = false, source = 'bitnob' } = {}) {
-  if (!deposit || deposit.status === 'approved') return false;
+  if (!deposit || ['approved', 'cancelled', 'canceled', 'rejected', 'failed', 'refunded'].includes(String(deposit.status || '').toLowerCase())) return false;
   const data = payload.data || payload.transaction || payload;
   const txHash = extractStablecoinTxHash(data, payload);
   const now = nowIso();
