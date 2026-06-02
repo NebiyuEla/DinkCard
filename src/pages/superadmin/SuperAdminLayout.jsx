@@ -62,6 +62,7 @@ export default function SuperAdminLayout() {
   const [permission, setPermission] = useState(() => getNotificationPermission());
   const [soundMuted, setSoundMuted] = useState(() => localStorage.getItem(SUPER_ADMIN_SOUND_KEY) === 'muted');
   const previousNotificationIdsRef = useRef(null);
+  const seededNotificationsRef = useRef(false);
 
   const { data: kycSubs } = useQuery({ queryKey: ['sa-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const { data: deposits } = useQuery({ queryKey: ['sa-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
@@ -113,8 +114,14 @@ export default function SuperAdminLayout() {
     const previousIds = previousNotificationIdsRef.current;
     previousNotificationIdsRef.current = unreadIds;
 
+    if (!seededNotificationsRef.current) {
+      seededNotificationsRef.current = true;
+      markNotificationsAsSeen(notifications);
+      return;
+    }
+
     if (permission === 'granted') announceNewNotifications(notifications);
-    else markNotificationsAsSeen(notifications.filter((item) => item.read));
+    else markNotificationsAsSeen(notifications);
 
     if (!previousIds || soundMuted) return;
     if ([...unreadIds].some((id) => !previousIds.has(id))) playSuperAdminTone();
@@ -173,7 +180,7 @@ export default function SuperAdminLayout() {
         </nav>
       </header>
       {/* Sidebar */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-border bg-card flex-col">
+      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
         <div className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
           <BrandLogo to="/superadmin/dashboard" imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
           <div>
@@ -182,7 +189,7 @@ export default function SuperAdminLayout() {
           </div>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1">
+        <nav className="flex-1 space-y-1 overflow-hidden px-3 py-4">
           {nav.map(item => {
             const badge = badges[item.path] || 0;
             const active = location.pathname === item.path;

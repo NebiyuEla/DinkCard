@@ -10,11 +10,30 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 function must(name, fallback = '') {
   const value = process.env[name];
-  if (typeof value === 'string' && value.trim() !== '') {
-    return value;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed !== '' && !['undefined', 'null'].includes(trimmed.toLowerCase())) return value;
   }
   return fallback;
 }
+
+function requestedBitnobEnvironment() {
+  const rawValue = process.env.BITNOB_ENV;
+  const raw = typeof rawValue === 'string' ? rawValue.trim().toLowerCase() : '';
+  if (!raw || ['undefined', 'null'].includes(raw)) return null;
+  if (['live', 'prod', 'production'].includes(raw)) return 'live';
+  if (['sandbox', 'test', 'testing'].includes(raw)) return 'sandbox';
+  return null;
+}
+
+function bitnobCredentialEnvironment(clientSecret) {
+  return String(clientSecret || '').trim().toLowerCase().startsWith('sandbox_') ? 'sandbox' : '';
+}
+
+const bitnobClientSecret = must('BITNOB_CLIENT_SECRET');
+const bitnobRequestedEnv = requestedBitnobEnvironment();
+const bitnobCredentialEnv = bitnobCredentialEnvironment(bitnobClientSecret);
+const bitnobResolvedEnv = bitnobCredentialEnv || bitnobRequestedEnv || 'sandbox';
 
 function requireProductionSecret(name, value, { minLength = 32 } = {}) {
   if (!isProduction) return;
@@ -54,9 +73,12 @@ export const config = {
     returnUrl: must('CHAPA_RETURN_URL', 'http://localhost:5173/add-money')
   },
   bitnob: {
-    env: must('BITNOB_ENV', 'sandbox'),
+    env: bitnobResolvedEnv,
+    requestedEnv: bitnobRequestedEnv || bitnobResolvedEnv,
+    requestedEnvExplicit: Boolean(bitnobRequestedEnv),
+    credentialEnv: bitnobCredentialEnv,
     clientId: must('BITNOB_CLIENT_ID'),
-    clientSecret: must('BITNOB_CLIENT_SECRET'),
+    clientSecret: bitnobClientSecret,
     baseUrl: must('BITNOB_BASE_URL', 'https://api.bitnob.com'),
     webhookSecret: must('BITNOB_WEBHOOK_SECRET'),
     webhookUrl: must('BITNOB_WEBHOOK_URL', 'http://localhost:3001/api/webhooks/bitnob')

@@ -2587,7 +2587,7 @@ export function createApp() {
         environment: config.bitnob.env,
         requestedEnvironment: config.bitnob.requestedEnv,
         credentialEnvironment: config.bitnob.credentialEnv || 'live',
-        warning: config.bitnob.requestedEnv !== config.bitnob.env
+        warning: config.bitnob.requestedEnvExplicit && config.bitnob.requestedEnv !== config.bitnob.env
           ? `BITNOB_ENV is ${config.bitnob.requestedEnv}, but the configured Bitnob credentials resolve to ${config.bitnob.env}.`
           : '',
         baseUrl: config.bitnob.baseUrl,

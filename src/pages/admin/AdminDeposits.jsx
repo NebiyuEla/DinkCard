@@ -35,6 +35,7 @@ export default function AdminDeposits() {
     return Boolean(deposit && MANUAL_APPROVAL_STATUSES.has(deposit.status));
   };
   const providerTransactions = providerTxData?.transactions || [];
+  const latestCryptoDepositTransactions = providerTransactions.filter(isCryptoDepositProviderTx).slice(0, 8);
   const selectedProviderMatches = selected ? providerTransactions.filter((tx) => cryptoDepositLooksMatched(selected, tx)) : [];
 
   const approveDeposit = useMutation({
@@ -60,8 +61,6 @@ export default function AdminDeposits() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold">Deposit Management</h2>
-
-      <ProviderTransactionsPanel rows={providerTransactions} />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden divide-y divide-border md:block">
@@ -120,6 +119,8 @@ export default function AdminDeposits() {
           ))}
         </div>
       </div>
+
+      <ProviderTransactionsPanel rows={latestCryptoDepositTransactions} />
 
       {/* Detail dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
@@ -237,12 +238,22 @@ function cryptoDepositLooksMatched(deposit, tx) {
   return false;
 }
 
+function isCryptoDepositProviderTx(tx) {
+  return ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx?.status))
+    && normalizeText(tx?.type).includes('deposit')
+    && ['USDC', 'USDT', 'BTC'].includes(String(tx?.currency || '').toUpperCase())
+    && Number(tx?.amount || 0) > 0;
+}
+
 function ProviderTransactionsPanel({ rows }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold">Provider Deposit Transactions</h3>
-        <p className="text-xs text-muted-foreground">Use these provider records to verify crypto deposits before approval.</p>
+    <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
+      <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">Latest crypto deposit transactions</h3>
+          <p className="text-xs text-muted-foreground">Use these recent provider deposits to verify crypto funding.</p>
+        </div>
+        <span className="text-[11px] text-muted-foreground">Showing latest {Math.min(rows?.length || 0, 8)}</span>
       </div>
       <ProviderMiniRows rows={rows} />
     </div>
