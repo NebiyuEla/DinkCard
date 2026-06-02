@@ -280,12 +280,14 @@ export default function AdminCards() {
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers or cards..." className="pl-9 h-9" />
       </div>
 
-      <Tabs value={activeTab} onValueChange={changeTab} className="space-y-3">
-        <TabsList className="flex h-auto max-w-full justify-start overflow-x-auto">
-          {CARD_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="shrink-0 text-xs">{tab.label}</TabsTrigger>
-          ))}
-        </TabsList>
+      <Tabs value={activeTab} onValueChange={changeTab} className="min-w-0 space-y-3 overflow-hidden">
+        <div className="-mx-1 overflow-x-auto overscroll-x-contain px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <TabsList className="flex h-10 w-max min-w-full justify-start gap-1 rounded-xl p-1">
+            {CARD_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value} className="h-8 shrink-0 text-xs">{tab.label}</TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <TabsContent value="customers">
           <div className="overflow-hidden rounded-lg border border-border bg-card">

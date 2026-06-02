@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import Sidebar from './Sidebar';
@@ -6,6 +6,9 @@ import { useCurrentUser, useNotifications } from '@/hooks/useAppData';
 import TermsModal from '@/components/TermsModal';
 import { announceNewNotifications, getNotificationPermission, markNotificationsAsSeen } from '@/lib/deviceNotifications';
 import { invalidateOperationalData } from '@/lib/realtime';
+import { cn } from '@/lib/utils';
+
+const SIDEBAR_COLLAPSED_KEY = 'dinkcard_sidebar_collapsed';
 
 export default function AppLayout() {
   const queryClient = useQueryClient();
@@ -13,6 +16,11 @@ export default function AppLayout() {
   const { data: user } = useCurrentUser();
   const { data: notifications } = useNotifications(user?.email);
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
+  const seededNotificationsRef = useRef(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  });
 
   useEffect(() => {
     if (!user?.email || !window.EventSource) return undefined;
@@ -31,8 +39,13 @@ export default function AppLayout() {
 
   useEffect(() => {
     if (!user?.email || !notifications?.length) return;
+    if (!seededNotificationsRef.current) {
+      seededNotificationsRef.current = true;
+      markNotificationsAsSeen(notifications);
+      return;
+    }
     if (getNotificationPermission() !== 'granted') {
-      markNotificationsAsSeen(notifications.filter((item) => item.read));
+      markNotificationsAsSeen(notifications);
       return;
     }
     announceNewNotifications(notifications);
@@ -44,8 +57,8 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar user={user} unreadCount={unreadCount} />
-      <main className="min-h-screen transition-all duration-300 lg:ml-64">
+      <Sidebar user={user} unreadCount={unreadCount} onCollapsedChange={setSidebarCollapsed} />
+      <main className={cn('min-h-screen transition-[margin] duration-300', sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64')}>
         <div className="mx-auto w-full max-w-7xl px-4 pb-[calc(6.75rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] sm:px-5 lg:px-8 lg:pb-8 lg:pt-6">
           <Outlet />
         </div>

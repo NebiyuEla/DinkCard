@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   ArrowDownUp,
@@ -41,14 +41,26 @@ const mobileNavItems = [
   { label: 'Account', path: '/account', icon: UserRound }
 ];
 
+const SIDEBAR_COLLAPSED_KEY = 'dinkcard_sidebar_collapsed';
+
 function isPathActive(pathname, itemPath) {
   return pathname === itemPath || (itemPath !== '/dashboard' && pathname.startsWith(itemPath));
 }
 
-export default function Sidebar({ user, unreadCount = 0 }) {
+export default function Sidebar({ user, unreadCount = 0, onCollapsedChange }) {
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  });
   const isAdmin = ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'].includes(user?.role);
+
+  useEffect(() => {
+    onCollapsedChange?.(collapsed);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+    }
+  }, [collapsed, onCollapsedChange]);
 
   return (
     <>

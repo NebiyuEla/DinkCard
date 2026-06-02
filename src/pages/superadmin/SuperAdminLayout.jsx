@@ -71,7 +71,6 @@ export default function SuperAdminLayout() {
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
-  const unreadCount = notifications?.filter((item) => !item.read)?.length || 0;
   const alertsLabel = getAlertsButtonLabel(permission);
 
   const badges = {
@@ -233,7 +232,6 @@ export default function SuperAdminLayout() {
           >
             {soundMuted ? <VolumeX className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}
             {soundMuted ? 'Sounds Off' : 'Sounds On'}
-            {unreadCount > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">{unreadCount}</span>}
           </Button>
           <Button variant="ghost" size="sm" className="h-8 w-full justify-start text-xs text-muted-foreground hover:text-destructive" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
