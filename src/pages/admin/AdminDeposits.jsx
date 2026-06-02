@@ -10,6 +10,7 @@ import FilePreview from '@/components/FilePreview';
 import { Check, X, Eye, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 const MANUAL_APPROVAL_STATUSES = new Set(['awaiting_review', 'pending_transfer', 'pending_payment', 'processing']);
 const CONFIRMED_CRYPTO_STATUSES = new Set(['deposit_success', 'confirmed', 'completed', 'success']);
@@ -124,29 +125,29 @@ export default function AdminDeposits() {
 
       {/* Detail dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100vw-1rem)] max-w-2xl overflow-y-auto overflow-x-hidden p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Deposit Details</DialogTitle>
           </DialogHeader>
           {selected && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-muted-foreground">User:</span> <span className="font-medium">{selected.user_id}</span></div>
-                <div><span className="text-muted-foreground">Method:</span> <span className="capitalize">{selected.payment_method}</span></div>
-                <div><span className="text-muted-foreground">Source:</span> <span>{selected.source === 'dinkcard' || !selected.source ? 'Dink Card' : selected.source}</span></div>
-                <div><span className="text-muted-foreground">Provider Status:</span> <span>{selected.provider_status || 'not verified'}</span></div>
-                <div><span className="text-muted-foreground">USD Amount:</span> <span className="font-mono">${selected.requested_usd_amount?.toFixed(2)}</span></div>
-                <div><span className="text-muted-foreground">ETB Payable:</span> <span className="font-mono">{selected.total_payable_etb?.toLocaleString()}</span></div>
-                <div><span className="text-muted-foreground">Rate:</span> <span className="font-mono">{selected.exchange_rate}</span></div>
-                <div><span className="text-muted-foreground">USD Credit:</span> <span className="font-mono text-primary">${selected.final_usd_credit?.toFixed(2)}</span></div>
-                <div><span className="text-muted-foreground">Sender:</span> <span>{selected.sender_name}</span></div>
-                <div><span className="text-muted-foreground">Phone:</span> <span>{selected.sender_phone}</span></div>
-                {selected.payment_currency && <div><span className="text-muted-foreground">Currency:</span> <span>{selected.payment_currency}</span></div>}
-                {selected.payment_network && <div><span className="text-muted-foreground">Network:</span> <span>{selected.payment_network}</span></div>}
-                {selected.payment_amount && <div><span className="text-muted-foreground">Payment Amount:</span> <span className="font-mono">{Number(selected.payment_amount).toFixed(2)} {selected.payment_currency || ''}</span></div>}
-                {selected.tx_hash && <div><span className="text-muted-foreground">Tx Hash:</span> <span className="font-mono break-all">{selected.tx_hash}</span></div>}
-                <div className="col-span-2"><span className="text-muted-foreground">Reference:</span> <span className="font-mono">{selected.transaction_reference}</span></div>
-                {selected.payment_address && <div className="col-span-2"><span className="text-muted-foreground">Deposit Address:</span> <span className="font-mono break-all">{selected.payment_address}</span></div>}
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                <DetailItem label="User" value={selected.user_id} />
+                <DetailItem label="Method" value={selected.payment_method} />
+                <DetailItem label="Source" value={selected.source === 'dinkcard' || !selected.source ? 'Dink Card' : selected.source} />
+                <DetailItem label="Provider Status" value={selected.provider_status || 'not verified'} />
+                <DetailItem label="USD Amount" value={`$${Number(selected.requested_usd_amount || 0).toFixed(2)}`} mono />
+                <DetailItem label="ETB Payable" value={Number(selected.total_payable_etb || 0).toLocaleString()} mono />
+                <DetailItem label="Rate" value={selected.exchange_rate || '-'} mono />
+                <DetailItem label="USD Credit" value={`$${Number(selected.final_usd_credit || 0).toFixed(2)}`} mono highlight />
+                <DetailItem label="Sender" value={selected.sender_name || '-'} />
+                <DetailItem label="Phone" value={selected.sender_phone || '-'} mono />
+                {selected.payment_currency && <DetailItem label="Currency" value={selected.payment_currency} />}
+                {selected.payment_network && <DetailItem label="Network" value={selected.payment_network} />}
+                {selected.payment_amount && <DetailItem label="Payment Amount" value={`${Number(selected.payment_amount).toFixed(2)} ${selected.payment_currency || ''}`} mono />}
+                {selected.tx_hash && <DetailItem label="Tx Hash" value={selected.tx_hash} mono wide />}
+                <DetailItem label="Reference" value={selected.transaction_reference} mono wide />
+                {selected.payment_address && <DetailItem label="Deposit Address" value={selected.payment_address} mono wide />}
               </div>
 
               <Button
@@ -175,7 +176,7 @@ export default function AdminDeposits() {
               {String(selected.payment_method || '').toLowerCase() === 'crypto' && (
                 <div className="rounded-xl border border-border bg-secondary/20 p-3">
                   <p className="mb-2 text-sm font-semibold">Possible provider matches</p>
-                  <ProviderMiniRows rows={selectedProviderMatches} />
+                  <ProviderMiniRows rows={selectedProviderMatches} compact />
                 </div>
               )}
 
@@ -216,6 +217,17 @@ export default function AdminDeposits() {
 
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function DetailItem({ label, value, mono = false, wide = false, highlight = false }) {
+  return (
+    <div className={cn('min-w-0 rounded-lg border border-border/70 bg-secondary/20 p-2.5', wide && 'sm:col-span-2')}>
+      <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 min-w-0 break-words text-sm font-semibold text-foreground', mono && 'break-all font-mono text-xs', highlight && 'text-primary')}>
+        {value || '-'}
+      </p>
+    </div>
+  );
 }
 
 function cryptoDepositLooksMatched(deposit, tx) {
@@ -260,8 +272,39 @@ function ProviderTransactionsPanel({ rows }) {
   );
 }
 
-function ProviderMiniRows({ rows }) {
+function ProviderMiniRows({ rows, compact = false }) {
   if (!rows?.length) return <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">No provider transactions loaded.</div>;
+  if (compact) {
+    return (
+      <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+        {rows.slice(0, 8).map((tx, index) => (
+          <div key={tx.reference || tx.txHash || index} className="rounded-lg border border-border/70 bg-card/60 p-3 text-xs">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-muted-foreground">{formatTxDate(tx.date)} - {String(tx.type || '-').replace(/_/g, ' ')}</p>
+                <p className="mt-1 break-all font-mono text-[11px] text-foreground">{tx.reference || tx.txHash || '-'}</p>
+              </div>
+              <StatusBadge status={tx.status || 'unknown'} className="shrink-0 text-[10px]" />
+            </div>
+            <div className="mt-2 grid grid-cols-3 gap-2">
+              <div>
+                <p className="text-muted-foreground">Amount</p>
+                <p className="font-mono font-semibold">${Number(tx.amount || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Fee</p>
+                <p className="font-mono">${Number(tx.fee || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Currency</p>
+                <p className="font-semibold">{tx.currency || '-'}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[720px] text-xs">
