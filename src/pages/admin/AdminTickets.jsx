@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { useCurrentUser } from '@/hooks/useAppData';
@@ -26,6 +26,7 @@ export default function AdminTickets() {
   const [reply, setReply] = useState('');
   const [newStatus, setNewStatus] = useState('');
   const [activeTab, setActiveTab] = useState('all');
+  const messagesEndRef = useRef(null);
   const isContactRequest = selected?.category === 'contact_request';
   const filteredTickets = (tickets || []).filter((ticket) => activeTab === 'all' ? true : ticket.status === activeTab);
 
@@ -56,11 +57,19 @@ export default function AdminTickets() {
     }
   });
 
+  useEffect(() => {
+    if (!selected) return;
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ block: 'end' });
+    });
+  }, [selected, messages?.length]);
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold">Support Tickets</h2>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="flex w-full flex-wrap justify-start gap-2 rounded-2xl bg-transparent p-0">
+        <div className="-mx-1 overflow-x-auto px-1 pb-1">
+        <TabsList className="flex h-auto w-max min-w-full justify-start gap-2 rounded-2xl bg-transparent p-0">
           {[
             ['all', 'All'],
             ['open', 'Open'],
@@ -69,11 +78,12 @@ export default function AdminTickets() {
             ['solved', 'Solved'],
             ['closed', 'Closed']
           ].map(([value, label]) => (
-            <TabsTrigger key={value} value={value} className="rounded-xl border border-border bg-card px-3 py-2 data-[state=active]:border-primary/30 data-[state=active]:bg-primary/10">
+            <TabsTrigger key={value} value={value} className="shrink-0 rounded-xl border border-border bg-card px-3 py-2 text-xs data-[state=active]:border-primary/30 data-[state=active]:bg-primary/10 sm:text-sm">
               {label}
             </TabsTrigger>
           ))}
         </TabsList>
+        </div>
         <TabsContent value={activeTab} className="m-0">
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden md:block overflow-x-auto">
@@ -131,9 +141,9 @@ export default function AdminTickets() {
       </Tabs>
 
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
-          <DialogContent className="max-w-lg flex flex-col max-h-[80vh]">
+          <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-4 sm:max-h-[82vh] sm:p-6">
           <DialogHeader>
-            <DialogTitle>{selected?.subject}</DialogTitle>
+            <DialogTitle className="break-words pr-6 text-base sm:text-lg">{selected?.subject}</DialogTitle>
             {selected?.id && <p className="font-mono text-[11px] text-muted-foreground">Ticket ID: {selected.id}</p>}
           </DialogHeader>
           {selected && (
@@ -164,24 +174,25 @@ export default function AdminTickets() {
               )}
             </div>
           )}
-          <div className="flex-1 overflow-y-auto space-y-3 py-2 min-h-0">
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain py-2 pr-1">
             {/* Original message */}
             {selected && (
               <div className="flex justify-start">
-                <div className="max-w-[80%] rounded-xl px-4 py-2.5 bg-secondary">
+                <div className="max-w-[88%] rounded-xl bg-secondary px-3 py-2.5 sm:max-w-[80%] sm:px-4">
                   <p className="text-xs font-medium text-muted-foreground mb-1">User (original)</p>
-                  <p className="text-sm">{selected.message}</p>
+                  <p className="break-words text-sm">{selected.message}</p>
                 </div>
               </div>
             )}
             {messages?.map(msg => (
               <div key={msg.id} className={`flex ${msg.sender_type === 'user' ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[80%] rounded-xl px-4 py-2.5 ${msg.sender_type === 'user' ? 'bg-secondary' : 'bg-primary/10'}`}>
+                <div className={`max-w-[88%] rounded-xl px-3 py-2.5 sm:max-w-[80%] sm:px-4 ${msg.sender_type === 'user' ? 'bg-secondary' : 'bg-primary/10'}`}>
                   <p className="text-xs font-medium text-muted-foreground capitalize mb-1">{msg.sender_type}</p>
-                  <p className="text-sm">{msg.message}</p>
+                  <p className="break-words text-sm">{msg.message}</p>
                 </div>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
           <div className="space-y-2 pt-2 border-t border-border">
             <Select value={newStatus} onValueChange={setNewStatus}>
@@ -196,7 +207,7 @@ export default function AdminTickets() {
                 <SelectItem value="closed">Closed</SelectItem>
               </SelectContent>
             </Select>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Input
                 value={reply}
                 onChange={e => setReply(e.target.value)}
@@ -207,7 +218,7 @@ export default function AdminTickets() {
               <Button
                 onClick={() => sendReply.mutate()}
                 disabled={!reply.trim() || sendReply.isPending}
-                className="bg-primary text-primary-foreground"
+                className="shrink-0 bg-primary text-primary-foreground"
               >
                 <Send className="w-4 h-4" />
               </Button>

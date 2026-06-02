@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
+import { matchesProviderEnvironment, normalizeProviderEnvironment } from '@/lib/providerEnvironment';
 
 const EMPTY_CUSTOMER = {
   customer_type: 'individual',
@@ -43,6 +44,18 @@ function money(value) {
 
 function getName(customer) {
   return [customer?.first_name, customer?.last_name].filter(Boolean).join(' ') || customer?.email || 'Customer';
+}
+
+function normalizeCardStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
+  if (['frozen', 'suspended', 'paused'].includes(value)) return 'frozen';
+  if (['terminated', 'deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(value)) return value;
+  return value || 'pending';
+}
+
+function isCountableCard(card) {
+  return !['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(normalizeCardStatus(card?.status));
 }
 
 function normalizeEtPhone(value) {
@@ -80,16 +93,21 @@ export default function AdminCards() {
   const [secureDetails, setSecureDetails] = useState(null);
   const [activeTab, setActiveTab] = useState('cards');
 
-  const customersQuery = useQuery({ queryKey: ['bitnob-customers'], queryFn: apiClient.admin.customers.list, refetchInterval: REFRESH.admin });
-  const cardsQuery = useQuery({ queryKey: ['admin-cards'], queryFn: apiClient.admin.cards.list, refetchInterval: REFRESH.admin });
-  const balancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
-  const providerStatusQuery = useQuery({ queryKey: ['provider-status'], queryFn: apiClient.admin.providerStatus, refetchInterval: REFRESH.fees, retry: false });
-  const txQuery = useQuery({ queryKey: ['bitnob-transactions'], queryFn: apiClient.admin.cards.allTransactions, refetchInterval: REFRESH.admin, retry: false });
+  const providerStatusQuery = useQuery({ queryKey: ['provider-status'], queryFn: apiClient.admin.providerStatus, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const balancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const activeEnvironment = normalizeProviderEnvironment(providerStatusQuery.data?.environment || balancesQuery.data?.environment);
+  const environmentKey = activeEnvironment || 'current';
+  const providerReady = Boolean(activeEnvironment) || providerStatusQuery.isError;
+  const customersQuery = useQuery({ queryKey: ['bitnob-customers', environmentKey], queryFn: apiClient.admin.customers.list, enabled: providerReady, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
+  const cardsQuery = useQuery({ queryKey: ['admin-cards', environmentKey], queryFn: apiClient.admin.cards.list, enabled: providerReady, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
+  const txQuery = useQuery({ queryKey: ['bitnob-transactions', environmentKey], queryFn: apiClient.admin.cards.allTransactions, enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const providerDepositTxQuery = useQuery({ queryKey: ['bitnob-deposit-transactions', environmentKey], queryFn: () => apiClient.admin.bitnob.transactions('credit'), enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
   const auditQuery = useQuery({ queryKey: ['audit-logs'], queryFn: apiClient.admin.auditLogs, refetchInterval: REFRESH.admin });
 
-  const customers = customersQuery.data || [];
-  const cards = cardsQuery.data || [];
+  const customers = (customersQuery.data || []).filter((customer) => matchesProviderEnvironment(customer, activeEnvironment));
+  const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const transactions = txQuery.data?.transactions || [];
+  const providerDepositTransactions = providerDepositTxQuery.data?.transactions || [];
   const auditLogs = auditQuery.data || [];
 
   const filteredCustomers = customers.filter((customer) => {
@@ -103,10 +121,11 @@ export default function AdminCards() {
   });
 
   const stats = useMemo(() => {
-    const active = cards.filter((card) => card.status === 'active').length;
-    const frozen = cards.filter((card) => card.status === 'frozen').length;
-    const totalBalance = cards.reduce((sum, card) => sum + Number(card.balance || 0), 0);
-    return { active, frozen, totalBalance };
+    const countableCards = cards.filter(isCountableCard);
+    const active = countableCards.filter((card) => normalizeCardStatus(card.status) === 'active').length;
+    const frozen = countableCards.filter((card) => normalizeCardStatus(card.status) === 'frozen').length;
+    const totalBalance = countableCards.reduce((sum, card) => sum + Number(card.balance || 0), 0);
+    return { total: countableCards.length, active, frozen, totalBalance };
   }, [cards]);
 
   const createCustomer = useMutation({
@@ -201,7 +220,7 @@ export default function AdminCards() {
 
   const companyStableBalance = Number(balancesQuery.data?.totalUsd || balancesQuery.data?.stableUsd || 0);
   const lowBalance = companyStableBalance < 7;
-  const environment = providerStatusQuery.data?.environment || balancesQuery.data?.environment || 'sandbox';
+  const environment = activeEnvironment || 'sandbox';
   const changeTab = (value) => {
     setActiveTab(value);
     requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -217,25 +236,26 @@ export default function AdminCards() {
           </div>
           <p className="text-xs text-muted-foreground">Customers, cards, funding, transactions, and admin activity.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={() => balancesQuery.refetch()}>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => balancesQuery.refetch()}>
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
-          <Button size="sm" variant="outline" onClick={() => syncCustomers.mutate()} disabled={syncCustomers.isPending}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => syncCustomers.mutate()} disabled={syncCustomers.isPending}>
             <RefreshCw className="h-3.5 w-3.5" /> {syncCustomers.isPending ? 'Syncing...' : 'Sync Provider'}
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setShowCustomer(true)}>
+          <Button size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setShowCustomer(true)}>
             <Plus className="h-3.5 w-3.5" /> Create Customer
           </Button>
-          <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setShowCreateCard(true)}>
+          <Button size="sm" className="w-full bg-primary text-primary-foreground sm:w-auto" onClick={() => setShowCreateCard(true)}>
             <CreditCard className="h-3.5 w-3.5" /> Create Card
           </Button>
         </div>
       </div>
 
-      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-2 lg:grid-cols-6">
+      <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Stat label="Company Wallet" value={money(companyStableBalance)} icon={WalletCards} tone={lowBalance ? 'text-red-500' : 'text-primary'} />
         <Stat label="Customers" value={customers.length} icon={BadgeCheck} />
+        <Stat label="Total Cards" value={stats.total} icon={CreditCard} />
         <Stat label="Active Cards" value={stats.active} icon={CreditCard} />
         <Stat label="Frozen" value={stats.frozen} icon={PauseCircle} tone="text-yellow-500" />
         <Stat label="Card Balance" value={money(stats.totalBalance)} icon={WalletCards} />
@@ -244,7 +264,13 @@ export default function AdminCards() {
 
       {lowBalance && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-700">
-          Insufficient company wallet balance may block card creation. Sandbox balance may not be preloaded; fund the sandbox wallet before testing card creation.
+          Insufficient company wallet balance may block card creation. {environment === 'sandbox' ? 'Sandbox balance may not be preloaded; fund the sandbox wallet before testing card creation.' : 'Fund the live company wallet before creating or funding live cards.'}
+        </div>
+      )}
+
+      {providerStatusQuery.data?.warning && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-500">
+          {providerStatusQuery.data.warning}
         </div>
       )}
 
@@ -254,15 +280,57 @@ export default function AdminCards() {
       </div>
 
       <Tabs value={activeTab} onValueChange={changeTab} className="space-y-3">
-        <TabsList className="h-auto flex-wrap justify-start">
+        <TabsList className="flex h-auto max-w-full justify-start overflow-x-auto">
           {CARD_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="text-xs">{tab.label}</TabsTrigger>
+            <TabsTrigger key={tab.value} value={tab.value} className="shrink-0 text-xs">{tab.label}</TabsTrigger>
           ))}
         </TabsList>
 
         <TabsContent value="customers">
           <div className="overflow-hidden rounded-lg border border-border bg-card">
-            <table className="w-full text-xs">
+            <div className="md:hidden divide-y divide-border">
+              {filteredCustomers.map((customer) => (
+                <div key={customer.id} className="space-y-3 p-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-semibold">{getName(customer)}</p>
+                      <p className="break-all text-xs text-muted-foreground">{customer.email}</p>
+                      <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground">{customer.bitnob_customer_id}</p>
+                    </div>
+                    <StatusBadge status={customer.status || 'active'} className="shrink-0 text-[10px]" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="rounded-lg bg-secondary/30 p-2">
+                      <p className="text-[10px] uppercase text-muted-foreground">Country</p>
+                      <p>{customer.country || '-'}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/30 p-2">
+                      <p className="text-[10px] uppercase text-muted-foreground">Phone</p>
+                      <p>{customer.phone_number || customer.phone || '-'}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/30 p-2">
+                      <p className="text-[10px] uppercase text-muted-foreground">Environment</p>
+                      <p className="uppercase">{customer.environment || environment}</p>
+                    </div>
+                    <div className="rounded-lg bg-secondary/30 p-2">
+                      <p className="text-[10px] uppercase text-muted-foreground">City</p>
+                      <p>{customer.city || '-'}</p>
+                    </div>
+                    <div className="col-span-2 rounded-lg bg-secondary/30 p-2">
+                      <p className="text-[10px] uppercase text-muted-foreground">Created</p>
+                      <p>{customer.created_at || customer.created_date ? format(new Date(customer.created_at || customer.created_date), 'MMM d, yyyy') : '-'}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setCardForm((current) => ({ ...current, customerId: customer.id, name: getName(customer) })); setShowCreateCard(true); }}>Create Card</Button>
+                    <Button size="sm" variant="destructive" onClick={() => { setDeleteCustomer(customer); setDeleteReason(''); }}>Delete</Button>
+                  </div>
+                </div>
+              ))}
+              {!filteredCustomers.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No customers yet. Create one or sync from Bitnob.</div>}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[920px] text-xs">
               <thead className="bg-secondary/40 text-muted-foreground">
                 <tr><th className="px-3 py-2 text-left">Name</th><th className="px-3 py-2 text-left">Email</th><th className="px-3 py-2 text-left">Country</th><th className="px-3 py-2 text-left">Customer ID</th><th className="px-3 py-2 text-left">Env</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Actions</th></tr>
               </thead>
@@ -286,6 +354,7 @@ export default function AdminCards() {
                 {!filteredCustomers.length && <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">No customers yet. Create one or sync from Bitnob.</td></tr>}
               </tbody>
             </table>
+            </div>
           </div>
         </TabsContent>
 
@@ -304,6 +373,10 @@ export default function AdminCards() {
         </TabsContent>
 
         <TabsContent value="activity" className="grid gap-3 lg:grid-cols-2">
+          <div className="lg:col-span-2">
+            <p className="mb-2 text-sm font-semibold">Provider deposit transactions</p>
+            <ProviderTransactionsTable rows={providerDepositTransactions} empty="No provider deposit transactions returned yet." />
+          </div>
           <div>
             <p className="mb-2 text-sm font-semibold">Card transactions</p>
             <SimpleRows rows={transactions} empty="No card transactions returned yet." />
@@ -325,6 +398,8 @@ export default function AdminCards() {
             </div>
             <div className="mt-4 grid gap-2 text-xs sm:grid-cols-2">
               <InfoRow label="Environment" value={providerStatusQuery.data?.environment || environment} />
+              <InfoRow label="Requested Env" value={providerStatusQuery.data?.requestedEnvironment || environment} />
+              <InfoRow label="Credential Env" value={providerStatusQuery.data?.credentialEnvironment || environment} />
               <InfoRow label="Base URL" value={providerStatusQuery.data?.baseUrl || 'Not loaded'} />
               <InfoRow label="Client ID" value={providerStatusQuery.data?.clientId || 'Hidden'} />
               <InfoRow label="Webhook URL" value={providerStatusQuery.data?.webhookUrl || 'Not configured'} />
@@ -435,7 +510,45 @@ export default function AdminCards() {
 
 function CompactCards({ cards, onAction }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      <div className="divide-y divide-border md:hidden">
+        {cards.map((card) => (
+          <div key={card.id} className="space-y-3 p-3.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="break-words text-sm font-semibold">{card.first_name ? `${card.first_name} ${card.last_name || ''}` : card.user_id}</p>
+                <p className="font-mono text-xs text-muted-foreground">{card.masked_pan || `**** ${card.last_four || '----'}`}</p>
+                <p className="mt-1 break-all text-[10px] text-muted-foreground">{card.customer_email || card.bitnob_customer_id || card.provider_card_id}</p>
+              </div>
+              <StatusBadge status={card.status} className="shrink-0 text-[10px]" />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+              <div className="rounded-lg bg-secondary/30 p-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Balance</p>
+                <p className="font-mono font-semibold">{money(card.balance)}</p>
+              </div>
+              <div className="rounded-lg bg-secondary/30 p-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Env</p>
+                <p className="uppercase">{card.environment || 'sandbox'}</p>
+              </div>
+              <div className="rounded-lg bg-secondary/30 p-2">
+                <p className="text-[10px] uppercase text-muted-foreground">Brand</p>
+                <p className="capitalize">{card.brand || 'visa'}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button size="sm" variant="outline" onClick={() => onAction(card, 'fund')}>Fund</Button>
+              <Button size="sm" variant="outline" onClick={() => onAction(card, card.status === 'frozen' ? 'unfreeze' : 'freeze')}>{card.status === 'frozen' ? 'Unfreeze' : 'Freeze'}</Button>
+              <Button size="sm" variant="outline" onClick={() => onAction(card, 'secure')}>Secure Details</Button>
+              {card.status !== 'terminated' && (
+                <Button size="sm" variant="destructive" onClick={() => onAction(card, 'terminate')}>Terminate</Button>
+              )}
+            </div>
+          </div>
+        ))}
+        {!cards.length && <div className="px-3 py-8 text-center text-sm text-muted-foreground">No cards yet.</div>}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
       <table className="w-full min-w-[760px] text-xs">
         <thead className="bg-secondary/40 text-muted-foreground">
           <tr><th className="px-3 py-2 text-left">Holder</th><th className="px-3 py-2 text-left">Card</th><th className="px-3 py-2 text-left">Env</th><th className="px-3 py-2 text-left">Status</th><th className="px-3 py-2 text-right">Balance</th><th className="px-3 py-2 text-right">Actions</th></tr>
@@ -465,6 +578,7 @@ function CompactCards({ cards, onAction }) {
           {!cards.length && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No cards yet.</td></tr>}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -495,6 +609,81 @@ function SimpleRows({ rows, empty }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function formatProviderDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : format(date, 'MMM d, HH:mm');
+}
+
+function ProviderTransactionsTable({ rows, empty }) {
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      {!rows.length ? (
+        <div className="p-8 text-center text-sm text-muted-foreground">{empty}</div>
+      ) : (
+        <>
+          <div className="divide-y divide-border md:hidden">
+            {rows.slice(0, 100).map((row, index) => (
+              <div key={row.reference || row.txHash || index} className="space-y-2 p-3 text-xs">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold capitalize">{String(row.type || 'transaction').replace(/_/g, ' ')}</p>
+                    <p className="break-all font-mono text-[11px] text-muted-foreground">{row.reference || row.txHash || '-'}</p>
+                  </div>
+                  <StatusBadge status={row.status || 'unknown'} className="shrink-0 text-[10px]" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <InfoPill label="Date" value={formatProviderDate(row.date)} />
+                  <InfoPill label="Currency" value={row.currency || '-'} />
+                  <InfoPill label="Amount" value={money(row.amount)} />
+                  <InfoPill label="Fee" value={money(row.fee)} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[820px] text-xs">
+              <thead className="bg-secondary/40 text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2 text-left">Date</th>
+                  <th className="px-3 py-2 text-left">Reference</th>
+                  <th className="px-3 py-2 text-left">Type</th>
+                  <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-right">Fee</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Currency</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.slice(0, 100).map((row, index) => (
+                  <tr key={row.reference || row.txHash || index}>
+                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatProviderDate(row.date)}</td>
+                    <td className="max-w-[260px] break-all px-3 py-2 font-mono">{row.reference || row.txHash || '-'}</td>
+                    <td className="px-3 py-2 capitalize">{String(row.type || 'transaction').replace(/_/g, ' ')}</td>
+                    <td className="px-3 py-2 text-right font-mono">{money(row.amount)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{money(row.fee)}</td>
+                    <td className="px-3 py-2"><StatusBadge status={row.status || 'unknown'} className="text-[10px]" /></td>
+                    <td className="px-3 py-2 font-semibold">{row.currency || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function InfoPill({ label, value }) {
+  return (
+    <div className="rounded-lg bg-secondary/30 p-2">
+      <p className="text-[10px] uppercase text-muted-foreground">{label}</p>
+      <p className="break-words font-mono">{value}</p>
     </div>
   );
 }

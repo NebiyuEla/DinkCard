@@ -79,11 +79,23 @@ const roleNavAccess = {
   superadmin: null
 };
 
+function normalizeCardStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
+  if (['frozen', 'suspended', 'paused'].includes(value)) return 'frozen';
+  if (['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(value)) return value;
+  return value || 'pending';
+}
+
+function isCountableCard(card) {
+  return !['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(normalizeCardStatus(card?.status));
+}
+
 function AdminOverviewSkeleton() {
   return (
     <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
       <Skeleton className="h-20 rounded-xl" />
-      <div className="grid auto-rows-fr grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
         {Array.from({ length: 7 }).map((_, index) => (
           <Skeleton key={index} className="h-28 rounded-xl" />
         ))}
@@ -101,6 +113,7 @@ export default function AdminDashboard() {
   const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const previousStatsRef = useRef(null);
   const previousNotificationIdsRef = useRef(null);
+  const seededNotificationsRef = useRef(false);
   const access = roleNavAccess[currentUser?.role] || roleNavAccess.support;
   const visibleNav = adminNav.filter((item) => {
     if (currentUser?.role === 'superadmin') return true;
@@ -129,8 +142,9 @@ export default function AdminDashboard() {
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const totalUsableBalance = Number(walletSummary?.totalUsableBalance || 0);
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
-  const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
-  const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
+  const countableCards = cards.filter(isCountableCard);
+  const activeCards = countableCards.filter((card) => normalizeCardStatus(card.status) === 'active').length;
+  const frozenCards = countableCards.filter((card) => normalizeCardStatus(card.status) === 'frozen').length;
   const unreadAdminNotifications = adminNotifications?.filter((item) => !item.read)?.length || 0;
   const alertsLabel = getAlertsButtonLabel(notificationPermission);
 
@@ -143,7 +157,7 @@ export default function AdminDashboard() {
       users: users?.length || 0,
       kyc: pendingKYC,
       deposits: pendingDeposits,
-      cards: cards?.length || 0,
+      cards: countableCards.length,
       tickets: openTickets
     };
     const previous = previousStatsRef.current;
@@ -154,7 +168,7 @@ export default function AdminDashboard() {
     else if (stats.tickets > previous.tickets) playAdminTone('support');
     else if (stats.cards > previous.cards) playAdminTone('card');
     else if (stats.users > previous.users) playAdminTone('user');
-  }, [cards?.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
+  }, [countableCards.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
 
   const isOverview = location.pathname === '/admin';
   const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, walletSummaryQuery, companyBalancesQuery];
@@ -208,10 +222,16 @@ export default function AdminDashboard() {
     const previousIds = previousNotificationIdsRef.current;
     previousNotificationIdsRef.current = unreadIds;
 
+    if (!seededNotificationsRef.current) {
+      seededNotificationsRef.current = true;
+      markNotificationsAsSeen(adminNotifications);
+      return;
+    }
+
     if (notificationPermission === 'granted') {
       announceNewNotifications(adminNotifications);
     } else {
-      markNotificationsAsSeen(adminNotifications.filter((item) => item.read));
+      markNotificationsAsSeen(adminNotifications);
     }
 
     if (!previousIds || soundMuted || !hasAnyAdminRoleLocal(currentUser)) return;
@@ -327,16 +347,16 @@ export default function AdminDashboard() {
           </div>
         ) : (
         <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
-          <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-500">
+          <div className="hidden rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-500 sm:block">
             All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
           </div>
-          <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-4">
             <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
             <StatCard title="Platform Balance" value={`$${totalUsableBalance.toFixed(2)}`} icon={Activity} />
-            <StatCard title="Total Cards" value={cards?.length || 0} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
+            <StatCard title="Total Cards" value={countableCards.length} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
             <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
           </div>
 

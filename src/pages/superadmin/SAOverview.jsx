@@ -8,9 +8,22 @@ import { Users, ShieldCheck, DollarSign, CreditCard, HeadphonesIcon, WalletCards
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { matchesProviderEnvironment, normalizeProviderEnvironment } from '@/lib/providerEnvironment';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
+}
+
+function normalizeCardStatus(status) {
+  const value = String(status || '').toLowerCase();
+  if (['active', 'approved', 'ready', 'live'].includes(value)) return 'active';
+  if (['frozen', 'suspended', 'paused'].includes(value)) return 'frozen';
+  if (['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(value)) return value;
+  return value || 'pending';
+}
+
+function isCountableCard(card) {
+  return !['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(normalizeCardStatus(card?.status));
 }
 
 function SuperOverviewSkeleton() {
@@ -41,21 +54,24 @@ export default function SAOverview() {
   const usersQuery = useQuery({ queryKey: ['sa-users'], queryFn: () => apiClient.entities.User.list('-created_date', 200), refetchInterval: REFRESH.admin });
   const kycQuery = useQuery({ queryKey: ['sa-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 200), refetchInterval: REFRESH.admin });
   const depositsQuery = useQuery({ queryKey: ['sa-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 200), refetchInterval: REFRESH.admin });
-  const cardsQuery = useQuery({ queryKey: ['sa-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 200), refetchInterval: REFRESH.admin });
+  const companyBalancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const { data: companyBalances } = companyBalancesQuery;
+  const activeEnvironment = normalizeProviderEnvironment(companyBalances?.environment);
+  const cardsQuery = useQuery({ queryKey: ['sa-cards', activeEnvironment || 'current'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 200), enabled: Boolean(activeEnvironment) || companyBalancesQuery.isError, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
   const ticketsQuery = useQuery({ queryKey: ['sa-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 200), refetchInterval: REFRESH.admin });
   const { data: users } = usersQuery;
   const { data: kycSubs } = kycQuery;
   const { data: deposits } = depositsQuery;
-  const { data: cards } = cardsQuery;
+  const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const { data: tickets } = ticketsQuery;
-  const { data: companyBalances } = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const stableCompanyBalance = Number(companyBalances?.totalUsd || companyBalances?.stableUsd || 0);
-  const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
-  const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
+  const countableCards = cards.filter(isCountableCard);
+  const activeCards = countableCards.filter((card) => normalizeCardStatus(card.status) === 'active').length;
+  const frozenCards = countableCards.filter((card) => normalizeCardStatus(card.status) === 'frozen').length;
   const netProfitEtb = (deposits || [])
     .filter((deposit) => deposit.status === 'approved')
     .reduce((sum, deposit) => sum + Math.max(0, Number(deposit.service_fee_etb || 0) - Number(deposit.gateway_fee_etb || 0)), 0);
@@ -76,7 +92,7 @@ export default function SAOverview() {
     toast.success('Dashboard refreshed');
   };
 
-  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery];
+  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, companyBalancesQuery];
   const overviewLoading = overviewQueries.some((query) => query.isLoading);
   const overviewError = overviewQueries.some((query) => query.isError && !query.data);
 
@@ -128,7 +144,7 @@ export default function SAOverview() {
         <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
         <StatCard title="Net Profit" value={`${netProfitEtb.toLocaleString()} ETB`} subtitle={`Avg ${averageProfitEtb.toFixed(0)} ETB / approved deposit`} icon={DollarSign} />
-        <StatCard title="Total Cards" value={cards?.length || 0} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
+        <StatCard title="Total Cards" value={countableCards.length} subtitle={`${activeCards} active / ${frozenCards} frozen`} icon={CreditCard} />
         <StatCard title="Approved Deposits" value={approvedDepositCount} icon={DollarSign} />
         <StatCard title="Open Tickets" value={openTickets} icon={HeadphonesIcon} accentClass={openTickets > 0 ? 'text-accent' : 'text-primary'} />
       </div>

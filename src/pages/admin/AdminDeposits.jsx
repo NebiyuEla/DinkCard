@@ -21,6 +21,12 @@ export default function AdminDeposits() {
     queryFn: () => apiClient.entities.Deposit.list('-created_date', 100),
     refetchInterval: REFRESH.admin
   });
+  const { data: providerTxData } = useQuery({
+    queryKey: ['admin-provider-deposit-transactions'],
+    queryFn: () => apiClient.admin.bitnob.transactions('credit'),
+    refetchInterval: REFRESH.admin,
+    retry: false
+  });
 
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -28,6 +34,8 @@ export default function AdminDeposits() {
   const canManuallyApprove = (deposit) => {
     return Boolean(deposit && MANUAL_APPROVAL_STATUSES.has(deposit.status));
   };
+  const providerTransactions = providerTxData?.transactions || [];
+  const selectedProviderMatches = selected ? providerTransactions.filter((tx) => cryptoDepositLooksMatched(selected, tx)) : [];
 
   const approveDeposit = useMutation({
     mutationFn: (deposit) => apiClient.admin.deposits.approve(deposit.id),
@@ -52,6 +60,8 @@ export default function AdminDeposits() {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold">Deposit Management</h2>
+
+      <ProviderTransactionsPanel rows={providerTransactions} />
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <div className="hidden divide-y divide-border md:block">
@@ -155,8 +165,16 @@ export default function AdminDeposits() {
               )}
 
               {String(selected.payment_method || '').toLowerCase() === 'crypto' && !CONFIRMED_CRYPTO_STATUSES.has(String(selected.provider_status || '').toLowerCase()) && (
-                <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-muted-foreground">
-                  This crypto transfer is not provider-confirmed yet. Use manual approval only after checking the transfer yourself.
+                <div className="space-y-2 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-sm text-muted-foreground">
+                  <p>This crypto transfer is not provider-confirmed yet. The backend will check provider transactions before normal admin approval.</p>
+                  <p className="font-medium text-foreground">{selectedProviderMatches.length ? `${selectedProviderMatches.length} possible provider match found below.` : 'No matching provider transaction is visible yet.'}</p>
+                </div>
+              )}
+
+              {String(selected.payment_method || '').toLowerCase() === 'crypto' && (
+                <div className="rounded-xl border border-border bg-secondary/20 p-3">
+                  <p className="mb-2 text-sm font-semibold">Possible provider matches</p>
+                  <ProviderMiniRows rows={selectedProviderMatches} />
                 </div>
               )}
 
@@ -193,5 +211,74 @@ export default function AdminDeposits() {
       </Dialog>
     </div>
   );
+}
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function cryptoDepositLooksMatched(deposit, tx) {
+  if (!deposit || !tx) return false;
+  const amount = Number(deposit.payment_amount || deposit.final_usd_credit || deposit.requested_usd_amount || 0);
+  const amountMatches = Number.isFinite(amount) && Math.abs(Number(tx.amount || 0) - amount) < 0.000001;
+  const currency = String(deposit.payment_currency || '').toUpperCase();
+  const txCurrency = String(tx.currency || '').toUpperCase();
+  const currencyMatches = !currency || !txCurrency || currency === txCurrency || (currency === 'USDC' && txCurrency === 'USD');
+  if (normalizeText(deposit.transaction_reference) && normalizeText(deposit.transaction_reference) === normalizeText(tx.reference)) return true;
+  if (normalizeText(deposit.tx_hash) && normalizeText(deposit.tx_hash) === normalizeText(tx.txHash)) return true;
+  if (normalizeText(deposit.payment_address) && normalizeText(deposit.payment_address) === normalizeText(tx.address) && currencyMatches && amountMatches) return true;
+  return false;
+}
+
+function ProviderTransactionsPanel({ rows }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="mb-3">
+        <h3 className="text-sm font-semibold">Provider Deposit Transactions</h3>
+        <p className="text-xs text-muted-foreground">Use these provider records to verify crypto deposits before approval.</p>
+      </div>
+      <ProviderMiniRows rows={rows} />
+    </div>
+  );
+}
+
+function ProviderMiniRows({ rows }) {
+  if (!rows?.length) return <div className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">No provider transactions loaded.</div>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[720px] text-xs">
+        <thead className="text-muted-foreground">
+          <tr>
+            <th className="px-2 py-2 text-left">Date</th>
+            <th className="px-2 py-2 text-left">Reference</th>
+            <th className="px-2 py-2 text-left">Type</th>
+            <th className="px-2 py-2 text-right">Amount</th>
+            <th className="px-2 py-2 text-right">Fee</th>
+            <th className="px-2 py-2 text-left">Status</th>
+            <th className="px-2 py-2 text-left">Currency</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border">
+          {rows.slice(0, 30).map((tx, index) => (
+            <tr key={tx.reference || tx.txHash || index}>
+              <td className="whitespace-nowrap px-2 py-2 text-muted-foreground">{formatTxDate(tx.date)}</td>
+              <td className="max-w-[240px] break-all px-2 py-2 font-mono">{tx.reference || tx.txHash || '-'}</td>
+              <td className="px-2 py-2 capitalize">{String(tx.type || '-').replace(/_/g, ' ')}</td>
+              <td className="px-2 py-2 text-right font-mono">${Number(tx.amount || 0).toFixed(2)}</td>
+              <td className="px-2 py-2 text-right font-mono">${Number(tx.fee || 0).toFixed(2)}</td>
+              <td className="px-2 py-2"><StatusBadge status={tx.status || 'unknown'} className="text-[10px]" /></td>
+              <td className="px-2 py-2 font-semibold">{tx.currency || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatTxDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : format(date, 'MMM d, HH:mm');
 }
 

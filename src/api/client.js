@@ -148,6 +148,7 @@ export const apiClient = {
     shareBalance: (payload) => request('/api/wallet/share', { method: 'POST', body: JSON.stringify(payload) })
   },
   notifications: {
+    list: () => request('/api/notifications'),
     markRead: (id) => request(`/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' }),
     markAllRead: () => request('/api/notifications/read-all', { method: 'POST' })
   },
@@ -212,6 +213,7 @@ export const apiClient = {
     },
     bitnob: {
       whoami: () => request('/api/admin/bitnob/whoami'),
+      transactions: (type = 'credit') => request(`/api/admin/bitnob/transactions?type=${encodeURIComponent(type)}`),
       balances: () => request('/api/admin/bitnob/balances')
     },
     walletSummary: () => request('/api/admin/wallet-summary'),

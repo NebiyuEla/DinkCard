@@ -723,10 +723,11 @@ function buildUserDashboard(user) {
   `).get(user.email);
   const cards = db.prepare(`
     SELECT * FROM virtual_cards
-    WHERE user_id = ?
+    WHERE user_id = ? AND environment = ?
+      AND COALESCE(LOWER(status), '') NOT IN ('deleted_remote', 'deleted', 'archived')
     ORDER BY created_at DESC
     LIMIT 50
-  `).all(user.email);
+  `).all(user.email, config.bitnob.env);
   const deposits = db.prepare(`
     SELECT * FROM deposits
     WHERE user_id = ?
@@ -779,6 +780,17 @@ function extractProviderData(payload) {
   return payload?.data?.card || payload?.data?.customer || payload?.data || payload?.card || payload?.customer || payload || {};
 }
 
+function extractProviderCardData(payload) {
+  return payload?.data?.card
+    || payload?.card
+    || payload?.virtual_card
+    || payload?.virtualCard
+    || payload?.data?.virtual_card
+    || payload?.data?.virtualCard
+    || payload?.data
+    || payload || {};
+}
+
 function normalizeProviderList(payload) {
   const preferredKeys = ['customers', 'cards', 'transactions', 'addresses', 'items', 'results', 'records', 'docs', 'rows', 'data'];
   const seen = new Set();
@@ -806,6 +818,71 @@ function normalizeProviderList(payload) {
   return visit(payload);
 }
 
+function providerTransactionValue(tx = {}, keys = []) {
+  for (const key of keys) {
+    const parts = key.split('.');
+    let current = tx;
+    for (const part of parts) current = current?.[part];
+    if (current !== undefined && current !== null && String(current).trim() !== '') return current;
+  }
+  return '';
+}
+
+function normalizeProviderTransaction(tx = {}) {
+  const rawAmount = Number(providerTransactionValue(tx, ['display_amount', 'amount_usd', 'amount', 'value', 'data.amount', 'metadata.amount']));
+  const currency = String(providerTransactionValue(tx, ['currency', 'asset', 'symbol', 'data.currency', 'metadata.currency']) || 'USD').toUpperCase();
+  const amount = Number.isFinite(rawAmount) && Math.abs(rawAmount) >= 100000 && ['USDC', 'USDT', 'USD'].includes(currency)
+    ? rawAmount / 100000
+    : rawAmount;
+  const rawFee = Number(providerTransactionValue(tx, ['display_fee', 'fee_usd', 'fee', 'charges', 'metadata.fee']));
+  const fee = Number.isFinite(rawFee) && Math.abs(rawFee) >= 100000 && ['USDC', 'USDT', 'USD'].includes(currency)
+    ? rawFee / 100000
+    : rawFee;
+
+  return {
+    raw: tx,
+    date: providerTransactionValue(tx, ['created_at', 'createdAt', 'date', 'timestamp', 'updated_at']),
+    reference: String(providerTransactionValue(tx, ['reference', 'tx_ref', 'transaction_reference', 'id', 'transaction_id', 'metadata.reference', 'metadata.tx_ref'])).trim(),
+    txHash: String(providerTransactionValue(tx, ['tx_hash', 'txHash', 'transaction_hash', 'hash', 'metadata.tx_hash'])).trim(),
+    type: String(providerTransactionValue(tx, ['type', 'event', 'transaction_type', 'category']) || 'transaction'),
+    amount: Number.isFinite(amount) ? amount : 0,
+    fee: Number.isFinite(fee) ? fee : 0,
+    status: String(providerTransactionValue(tx, ['status', 'state', 'payment_status']) || ''),
+    currency,
+    address: String(providerTransactionValue(tx, ['address', 'deposit_address', 'wallet_address', 'to_address', 'destination_address', 'recipient_address', 'metadata.address'])).trim(),
+    network: String(providerTransactionValue(tx, ['chain', 'network', 'metadata.chain', 'metadata.network'])).trim()
+  };
+}
+
+function cryptoDepositMatchesProviderTransaction(deposit, tx) {
+  if (!deposit || !tx) return false;
+  const depositReference = String(deposit.transaction_reference || '').trim().toLowerCase();
+  const depositTxHash = String(deposit.tx_hash || '').trim().toLowerCase();
+  const depositAddress = String(deposit.payment_address || '').trim().toLowerCase();
+  const depositNetwork = String(deposit.payment_network || '').trim().toLowerCase();
+  const depositCurrency = String(deposit.payment_currency || '').trim().toUpperCase();
+  const depositAmount = Number(deposit.payment_amount || deposit.final_usd_credit || deposit.requested_usd_amount || 0);
+  const txReference = String(tx.reference || '').trim().toLowerCase();
+  const txHash = String(tx.txHash || '').trim().toLowerCase();
+  const txAddress = String(tx.address || '').trim().toLowerCase();
+  const txNetwork = String(tx.network || '').trim().toLowerCase();
+  const txCurrency = String(tx.currency || '').trim().toUpperCase();
+  const amountMatches = Number.isFinite(depositAmount) && Math.abs(Number(tx.amount || 0) - depositAmount) < 0.000001;
+  const currencyMatches = !depositCurrency || !txCurrency || txCurrency === depositCurrency || (depositCurrency === 'USDC' && txCurrency === 'USD');
+  const networkMatches = !depositNetwork || !txNetwork || txNetwork === depositNetwork;
+
+  if (depositReference && txReference && txReference === depositReference) return true;
+  if (depositTxHash && txHash && txHash === depositTxHash) return true;
+  if (depositAddress && txAddress && txAddress === depositAddress && currencyMatches && networkMatches && amountMatches) return true;
+  return false;
+}
+
+async function findProviderCryptoDepositMatch(deposit) {
+  const provider = await bitnobService.listTransactions('limit=100&type=credit');
+  const transactions = normalizeProviderList(provider).map(normalizeProviderTransaction);
+  return transactions.find((tx) => cryptoDepositMatchesProviderTransaction(deposit, tx)) || null;
+}
+
 function providerCollectionExists(payload, collectionKeys = []) {
   const preferredKeys = [...collectionKeys, 'data', 'items', 'results', 'records', 'docs', 'rows'];
   const seen = new Set();
@@ -826,7 +903,7 @@ function providerCollectionExists(payload, collectionKeys = []) {
 }
 
 function getProviderEntityId(entity = {}) {
-  return entity.id
+  return String(entity.id
     || entity.uuid
     || entity.uid
     || entity.customer_id
@@ -835,19 +912,41 @@ function getProviderEntityId(entity = {}) {
     || entity.card_id
     || entity.cardId
     || entity.reference
-    || '';
+    || '').trim();
 }
 
 function getProviderCardId(entity = {}) {
-  return entity.id
+  entity = entity || {};
+  const card = extractProviderCardData(entity);
+  return String(card.id
     || entity.uuid
+    || card.uuid
     || entity.uid
+    || card.uid
     || entity.card_id
+    || card.card_id
     || entity.cardId
+    || card.cardId
     || entity.provider_card_id
+    || card.provider_card_id
     || entity.virtual_card_id
+    || card.virtual_card_id
     || entity.virtualCardId
-    || '';
+    || card.virtualCardId
+    || '').trim();
+}
+
+function getProviderCardCustomerId(card = {}) {
+  return String(
+    card.customer_id
+      || card.customerId
+      || card.customer?.id
+      || card.customer?.customer_id
+      || card.customer?.customerId
+      || card.bitnob_customer_id
+      || card.customer_reference
+      || ''
+  ).trim();
 }
 
 function providerResponseShape(payload) {
@@ -928,7 +1027,7 @@ function countCreatedCardsForUser(userId, environment = config.bitnob.env) {
     SELECT COUNT(*) AS total FROM virtual_cards
     WHERE user_id = ?
       AND environment = ?
-      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted')
+      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted', 'deleted_remote', 'archived')
   `).get(userId, environment)?.total || 0;
 }
 
@@ -1325,10 +1424,11 @@ async function ensureBitnobCustomerForKyc({ kyc, user, actor, reason, req }) {
 
 function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPayload }) {
   const now = nowIso();
+  card = extractProviderCardData(card);
   const providerCardId = getProviderCardId(card);
   if (!providerCardId) throw new Error('Card provider did not return a card ID.');
 
-  const customerId = card.customer_id || card.customerId || customer?.bitnob_customer_id || customer?.id || '';
+  const customerId = getProviderCardCustomerId(card) || customer?.bitnob_customer_id || customer?.id || '';
   const maskedPan = card.masked_pan || card.maskedPan || card.masked || '';
   const lastFour = card.last_four_digit || card.last_four || card.last4 || maskedPan.replace(/\D/g, '').slice(-4) || '';
   const balance = card.display_amount !== undefined
@@ -1337,7 +1437,7 @@ function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPa
       ? fromBitnobBaseUnits(card.balance_amount)
       : Number(card.balance || 0);
 
-  const existing = db.prepare('SELECT id FROM virtual_cards WHERE provider_card_id = ?').get(providerCardId);
+  const existing = db.prepare('SELECT id FROM virtual_cards WHERE provider_card_id = ? AND environment = ?').get(providerCardId, config.bitnob.env);
 
   if (existing) {
     db.prepare(`
@@ -1376,7 +1476,7 @@ function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPa
       now,
       existing.id
     );
-    return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(existing.id));
+    return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(existing.id, config.bitnob.env));
   }
 
   const id = generateId('crd');
@@ -1406,7 +1506,7 @@ function providerCardToDb({ card, customer, fallbackUserId, nickname, providerPa
     now,
     now
   );
-  return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(id));
+  return mapRow(db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(id, config.bitnob.env));
 }
 
 function addOrigin(allowedOrigins, origin) {
@@ -2154,6 +2254,16 @@ export function createApp() {
     res.json({ user: serializeTwoFactorUser(refreshed) });
   });
 
+  app.get('/api/notifications', authMiddleware(db), (req, res) => {
+    const notifications = db.prepare(`
+      SELECT * FROM notifications
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT 100
+    `).all(req.user.email);
+    res.json(mapRows(notifications));
+  });
+
   app.post('/api/notifications/:id/read', authMiddleware(db), (req, res) => {
     const notification = db.prepare('SELECT * FROM notifications WHERE id = ? AND user_id = ?').get(req.params.id, req.user.email);
     if (!notification) return res.status(404).json({ message: 'Notification not found' });
@@ -2452,6 +2562,11 @@ export function createApp() {
       if (!requireAdmin(req, res)) return;
       res.json({
         environment: config.bitnob.env,
+        requestedEnvironment: config.bitnob.requestedEnv,
+        credentialEnvironment: config.bitnob.credentialEnv || 'live',
+        warning: config.bitnob.requestedEnv !== config.bitnob.env
+          ? `BITNOB_ENV is ${config.bitnob.requestedEnv}, but the configured Bitnob credentials resolve to ${config.bitnob.env}.`
+          : '',
         baseUrl: config.bitnob.baseUrl,
         clientId: config.bitnob.clientId ? `${config.bitnob.clientId.slice(0, 6)}...${config.bitnob.clientId.slice(-4)}` : '',
         webhookUrl: config.bitnob.webhookUrl,
@@ -2559,16 +2674,21 @@ export function createApp() {
           .filter(Boolean)
       );
       const providerCards = normalizeProviderList(cardsProvider);
+      const providerCardsAuthoritative = providerCollectionExists(cardsProvider, ['cards']);
       const savedCards = [];
       const skippedCards = [];
+      const providerCardIds = new Set();
       providerCards.forEach((card, index) => {
         try {
-          const providerCustomerId = card.customer_id || card.customerId || '';
+          const providerCardData = extractProviderCardData(card);
+          const providerCardId = getProviderCardId(providerCardData);
+          if (providerCardId) providerCardIds.add(providerCardId);
+          const providerCustomerId = getProviderCardCustomerId(providerCardData);
           savedCards.push(providerCardToDb({
-            card,
+            card: providerCardData,
             customer: customerByBitnobId.get(providerCustomerId),
-            fallbackUserId: customerByBitnobId.get(providerCustomerId)?.user_id || card.customer_email || card.email || '',
-            nickname: card.name || 'Virtual Card',
+            fallbackUserId: customerByBitnobId.get(providerCustomerId)?.user_id || providerCardData.customer_email || providerCardData.email || '',
+            nickname: providerCardData.name || 'Virtual Card',
             providerPayload: card
           }));
         } catch (error) {
@@ -2579,6 +2699,26 @@ export function createApp() {
           });
         }
       });
+
+      let archivedCards = 0;
+      if (providerCardsAuthoritative) {
+        const localProviderCards = db.prepare(`
+          SELECT * FROM virtual_cards
+          WHERE environment = ?
+            AND provider = 'bitnob'
+            AND COALESCE(LOWER(status), '') NOT IN ('terminated', 'deleted_remote', 'deleted', 'archived')
+        `).all(config.bitnob.env);
+        localProviderCards.forEach((card) => {
+          const cardCustomerId = String(card.bitnob_customer_id || card.customer_reference || '').trim();
+          const cardProviderId = String(card.provider_card_id || '').trim();
+          const providerCardStillExists = cardProviderId && providerCardIds.has(cardProviderId);
+          const providerCustomerStillExists = cardCustomerId && providerCustomerIds.has(cardCustomerId);
+          if (cardProviderId && providerCardStillExists && (!cardCustomerId || providerCustomerStillExists)) return;
+          if (!cardProviderId && (!cardCustomerId || providerCustomerStillExists)) return;
+          db.prepare("UPDATE virtual_cards SET status = 'deleted_remote', updated_at = ? WHERE id = ?").run(nowIso(), card.id);
+          archivedCards += 1;
+        });
+      }
 
       let deletedCustomers = 0;
       let archivedCustomers = 0;
@@ -2620,6 +2760,7 @@ export function createApp() {
           skippedCards,
           deletedCustomers,
           archivedCustomers,
+          archivedCards,
           customerResponseShape: providerResponseShape(customersProvider),
           cardResponseShape: providerResponseShape(cardsProvider)
         },
@@ -2635,6 +2776,7 @@ export function createApp() {
         skippedCards: skippedCards.length,
         deletedCustomers,
         archivedCustomers,
+        archivedCards,
         customers: savedCustomers,
         cards: savedCards,
         diagnostics: {
@@ -2727,6 +2869,13 @@ export function createApp() {
         FROM virtual_cards vc
         LEFT JOIN bitnob_customers bc ON (bc.bitnob_customer_id = vc.bitnob_customer_id OR bc.bitnob_customer_id = vc.customer_reference) AND bc.environment = vc.environment
         WHERE vc.environment = ?
+          AND COALESCE(LOWER(vc.status), '') NOT IN ('deleted_remote', 'deleted', 'archived')
+          AND NOT EXISTS (
+            SELECT 1 FROM bitnob_customers bc2
+            WHERE bc2.environment = vc.environment
+              AND bc2.bitnob_customer_id IN (vc.bitnob_customer_id, vc.customer_reference)
+              AND COALESCE(LOWER(bc2.status), '') IN ('deleted_remote', 'deleted', 'archived')
+          )
         ORDER BY vc.created_at DESC
         LIMIT 500
       `).all(config.bitnob.env).map(mapRow);
@@ -2801,6 +2950,18 @@ export function createApp() {
       res.json({ provider, transactions: normalizeProviderList(provider) });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list transactions.' });
+    }
+  });
+
+  app.get('/api/admin/bitnob/transactions', authMiddleware(db), async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+      const type = String(req.query.type || 'credit').trim();
+      const provider = await bitnobService.listTransactions(`limit=100${type ? `&type=${encodeURIComponent(type)}` : ''}`);
+      const transactions = normalizeProviderList(provider).map(normalizeProviderTransaction);
+      res.json({ provider, transactions });
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Unable to list provider transactions.' });
     }
   });
 
@@ -3404,12 +3565,16 @@ export function createApp() {
     if (!id) return res.status(400).json({ message: 'Enter the record ID.' });
 
     try {
-      let row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+      let row = entity === 'card'
+        ? db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(id, config.bitnob.env)
+        : entity === 'customer'
+          ? db.prepare('SELECT * FROM bitnob_customers WHERE id = ? AND environment = ?').get(id, config.bitnob.env)
+          : db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
       if (!row && entity === 'card') {
-        row = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ? OR customer_reference = ?').get(id, id);
+        row = db.prepare('SELECT * FROM virtual_cards WHERE environment = ? AND (provider_card_id = ? OR customer_reference = ?)').get(config.bitnob.env, id, id);
       }
       if (!row && entity === 'customer') {
-        row = db.prepare('SELECT * FROM bitnob_customers WHERE bitnob_customer_id = ? OR email = ?').get(id, id);
+        row = db.prepare('SELECT * FROM bitnob_customers WHERE environment = ? AND (bitnob_customer_id = ? OR email = ?)').get(config.bitnob.env, id, id);
       }
       if (!row && entity === 'deposit') {
         row = db.prepare('SELECT * FROM deposits WHERE transaction_reference = ? OR provider_reference = ?').get(id, id);
@@ -3832,7 +3997,7 @@ export function createApp() {
   app.post('/api/admin/cards/:id/suspend', authMiddleware(db), async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
-    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(req.params.id);
+    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(req.params.id, config.bitnob.env);
 
     if (!card) return res.status(404).json({ message: 'Card not found' });
     if (card.status === 'terminated') return res.status(400).json({ message: 'Terminated cards cannot be suspended.' });
@@ -3864,7 +4029,7 @@ export function createApp() {
   app.post('/api/admin/cards/:id/activate', authMiddleware(db), async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
-    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(req.params.id);
+    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(req.params.id, config.bitnob.env);
 
     if (!card) return res.status(404).json({ message: 'Card not found' });
     if (card.status === 'terminated') return res.status(400).json({ message: 'Terminated cards cannot be reactivated.' });
@@ -3896,7 +4061,7 @@ export function createApp() {
   app.delete('/api/admin/cards/:id', authMiddleware(db), async (req, res) => {
     if (!requireAdmin(req, res)) return;
 
-    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(req.params.id);
+    const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(req.params.id, config.bitnob.env);
 
     if (!card) return res.status(404).json({ message: 'Card not found' });
 
@@ -3932,8 +4097,40 @@ export function createApp() {
       const deposit = db.prepare('SELECT * FROM deposits WHERE id = ?').get(req.params.id);
 
       if (!deposit) return res.status(404).json({ message: 'Deposit not found' });
+      const isCryptoDeposit = String(deposit.payment_method || '').toLowerCase() === 'crypto';
+      const providerConfirmed = ['deposit_success', 'confirmed', 'completed', 'success'].includes(String(deposit.provider_status || '').toLowerCase());
+      if (isCryptoDeposit && !providerConfirmed) {
+        let providerMatch = null;
+        try {
+          providerMatch = await findProviderCryptoDepositMatch(deposit);
+        } catch {}
+        if (providerMatch) {
+          const now = nowIso();
+          db.prepare(`
+            UPDATE deposits
+            SET provider_reference = COALESCE(NULLIF(?, ''), provider_reference),
+                tx_hash = COALESCE(NULLIF(?, ''), tx_hash),
+                provider_status = ?,
+                provider_payload = ?,
+                verified_at = ?,
+                updated_at = ?
+            WHERE id = ?
+          `).run(
+            providerMatch.reference || null,
+            providerMatch.txHash || null,
+            providerMatch.status || 'confirmed',
+            JSON.stringify(providerMatch.raw || providerMatch),
+            now,
+            now,
+            deposit.id
+          );
+          Object.assign(deposit, db.prepare('SELECT * FROM deposits WHERE id = ?').get(deposit.id));
+        } else if (req.user.role !== 'superadmin') {
+          return res.status(400).json({ message: 'No matching provider transaction was found for this crypto deposit. Check provider transactions before approving.' });
+        }
+      }
       if (
-        String(deposit.payment_method || '').toLowerCase() === 'crypto' &&
+        isCryptoDeposit &&
         !['deposit_success', 'confirmed', 'completed', 'success'].includes(String(deposit.provider_status || '').toLowerCase()) &&
         req.user.role !== 'superadmin'
       ) {
