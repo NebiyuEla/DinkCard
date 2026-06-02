@@ -73,12 +73,14 @@ export default function WalletPage() {
     card_withdrawal: <ArrowDownUp className="w-4 h-4 text-primary" />,
     referral_reward: <DollarSign className="w-4 h-4 text-primary" />,
     balance_share_sent: <ArrowDownUp className="w-4 h-4 text-accent" />,
-    balance_share_received: <ArrowDownUp className="w-4 h-4 text-primary" />
+    balance_share_received: <ArrowDownUp className="w-4 h-4 text-primary" />,
+    crypto_deposit: <QrCode className="w-4 h-4 text-primary" />
   };
 
   const typeLabels = {
     balance_share_sent: 'Legacy transfer',
-    balance_share_received: 'Legacy transfer'
+    balance_share_received: 'Legacy transfer',
+    crypto_deposit: 'Crypto deposit'
   };
 
   const cryptoNetworksQuery = useQuery({
@@ -148,11 +150,36 @@ export default function WalletPage() {
   });
 
   const depositReceiptUrl = (tx) => {
+    if (tx.source_type === 'crypto_deposit_request') return apiClient.payments.invoiceUrl(tx.reference);
     if (tx.type !== 'deposit') return null;
     const ref = String(tx.reference || '');
     if (ref.startsWith('DEP-')) return apiClient.payments.invoiceUrl(ref.slice(4));
     return apiClient.payments.invoiceUrl(ref);
   };
+
+  const cryptoDepositHistory = (deposits || [])
+    .filter((deposit) => ['crypto', 'usdc'].includes(String(deposit.payment_method || '').toLowerCase()))
+    .map((deposit) => {
+      const status = String(deposit.status || 'pending_transfer').toLowerCase();
+      return {
+        id: `crypto-${deposit.id}`,
+        source_type: 'crypto_deposit_request',
+        type: 'crypto_deposit',
+        amount: Number(deposit.final_usd_credit || deposit.payment_amount || deposit.requested_usd_amount || 0),
+        status,
+        reference: deposit.transaction_reference,
+        description: `${deposit.payment_currency || 'Crypto'} deposit${deposit.payment_network ? ` on ${deposit.payment_network}` : ''}`,
+        created_at: deposit.created_at || deposit.created_date,
+        created_date: deposit.created_date || deposit.created_at,
+        balance_after: null
+      };
+    });
+
+  const displayHistory = [...(transactions || []), ...cryptoDepositHistory].sort((left, right) => {
+    const leftDate = new Date(left.created_at || left.created_date || 0).getTime();
+    const rightDate = new Date(right.created_at || right.created_date || 0).getTime();
+    return rightDate - leftDate;
+  });
 
   const copyText = async (value, label) => {
     try {
@@ -204,18 +231,18 @@ export default function WalletPage() {
       <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 md:gap-4">
         <StatCard className="col-span-2 md:col-span-1" title="Available Service Balance" value={walletLoading ? '...' : `$${balance.toFixed(2)}`} subtitle={walletLoading ? 'Loading' : `Approx. ${(balance * rate).toLocaleString()} ETB`} icon={Wallet} />
         <StatCard title="Locked Balance" value={walletLoading ? '...' : `$${locked.toFixed(2)}`} subtitle="Pending operations" icon={Lock} />
-        <StatCard title="History" value={transactionsLoading ? '...' : (transactions?.length || 0)} icon={ArrowDownUp} />
+        <StatCard title="History" value={transactionsLoading ? '...' : displayHistory.length} icon={ArrowDownUp} />
       </div>
 
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">History</h2>
         {transactionsLoading ? (
           <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">Loading history...</div>
-        ) : !transactions?.length ? (
+        ) : !displayHistory.length ? (
           <EmptyState icon={ArrowDownUp} title="No transactions" description="Your service balance transactions will appear here." className="bg-card border border-border rounded-xl" />
         ) : (
           <div className="bg-card border border-border rounded-xl divide-y divide-border overflow-hidden">
-            {transactions.map(tx => (
+            {displayHistory.map(tx => (
               <div key={tx.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-2.5 px-3 py-3 sm:flex sm:items-center sm:px-4">
                 <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center shrink-0">
                   {typeIcons[tx.type] || <ArrowDownUp className="w-4 h-4" />}
@@ -224,14 +251,18 @@ export default function WalletPage() {
                   <div className="flex items-start justify-between gap-2">
                     <p className="min-w-0 truncate text-sm font-medium capitalize leading-tight">{typeLabels[tx.type] || (tx.type || '').replace(/_/g, ' ')}</p>
                     <p className={`shrink-0 whitespace-nowrap text-right font-mono text-sm font-semibold ${Number(tx.amount || 0) >= 0 ? 'text-primary' : 'text-foreground'}`}>
-                      {Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
+                      {tx.source_type === 'crypto_deposit_request' && tx.status !== 'approved' ? '' : Number(tx.amount || 0) >= 0 ? '+' : ''}{Number(tx.amount || 0).toFixed(2)} USD
                     </p>
                   </div>
                   <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">{tx.description || tx.reference}</p>
                   <div className="mt-1 flex items-center justify-between gap-2">
-                    <p className="text-[10px] text-muted-foreground font-mono">
-                      Bal: ${Number(tx.balance_after || 0).toFixed(2)}
-                    </p>
+                    {tx.balance_after === null || tx.balance_after === undefined ? (
+                      <p className="min-w-0 truncate text-[10px] text-muted-foreground font-mono">{tx.reference}</p>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground font-mono">
+                        Bal: ${Number(tx.balance_after || 0).toFixed(2)}
+                      </p>
+                    )}
                     <StatusBadge status={tx.status} className="text-[10px]" />
                   </div>
                 </div>
