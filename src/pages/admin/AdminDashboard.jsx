@@ -13,6 +13,8 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import ThemeToggle from '@/components/ThemeToggle';
 import { Skeleton } from '@/components/ui/skeleton';
+import { matchesProviderEnvironment, normalizeProviderEnvironment } from '@/lib/providerEnvironment';
+import { announceNewNotifications, getNotificationPermission, markNotificationsAsSeen, requestDeviceNotificationPermission } from '@/lib/deviceNotifications';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -20,6 +22,12 @@ function formatUsd(value) {
 
 function hasAnyAdminRoleLocal(user) {
   return ['support', 'support_response', 'kyc_checker', 'admin', 'superadmin'].includes(user?.role);
+}
+
+function getAlertsButtonLabel(permission) {
+  if (permission === 'granted') return 'Alerts Enabled';
+  if (permission === 'denied') return 'Alerts Blocked';
+  return 'Enable Alerts';
 }
 
 const ADMIN_SOUND_KEY = 'dinkcard_admin_sounds';
@@ -90,7 +98,9 @@ export default function AdminDashboard() {
   const { data: currentUser } = useCurrentUser();
   const { data: adminNotifications } = useNotifications(currentUser?.email);
   const [soundMuted, setSoundMuted] = useState(() => localStorage.getItem(ADMIN_SOUND_KEY) === 'muted');
+  const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const previousStatsRef = useRef(null);
+  const previousNotificationIdsRef = useRef(null);
   const access = roleNavAccess[currentUser?.role] || roleNavAccess.support;
   const visibleNav = adminNav.filter((item) => {
     if (currentUser?.role === 'superadmin') return true;
@@ -101,16 +111,18 @@ export default function AdminDashboard() {
   const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const kycQuery = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const depositsQuery = useQuery({ queryKey: ['admin-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
-  const cardsQuery = useQuery({ queryKey: ['admin-cards'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), refetchInterval: REFRESH.admin });
+  const companyBalancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const { data: companyBalances } = companyBalancesQuery;
+  const activeEnvironment = normalizeProviderEnvironment(companyBalances?.environment);
+  const cardsQuery = useQuery({ queryKey: ['admin-overview-cards', activeEnvironment || 'current'], queryFn: () => apiClient.entities.VirtualCard.list('-created_date', 100), enabled: Boolean(activeEnvironment) || companyBalancesQuery.isError, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
   const ticketsQuery = useQuery({ queryKey: ['admin-tickets'], queryFn: () => apiClient.entities.SupportTicket.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const walletSummaryQuery = useQuery({ queryKey: ['admin-wallet-summary'], queryFn: apiClient.admin.walletSummary, refetchInterval: REFRESH.admin });
   const { data: users } = usersQuery;
   const { data: kycSubs } = kycQuery;
   const { data: deposits } = depositsQuery;
-  const { data: cards } = cardsQuery;
+  const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const { data: tickets } = ticketsQuery;
   const { data: walletSummary } = walletSummaryQuery;
-  const { data: companyBalances } = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false });
 
   const pendingKYC = kycSubs?.filter(k => k.status === 'pending')?.length || 0;
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
@@ -120,6 +132,7 @@ export default function AdminDashboard() {
   const activeCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'active')?.length || 0;
   const frozenCards = cards?.filter((card) => String(card.status || '').toLowerCase() === 'frozen')?.length || 0;
   const unreadAdminNotifications = adminNotifications?.filter((item) => !item.read)?.length || 0;
+  const alertsLabel = getAlertsButtonLabel(notificationPermission);
 
   useEffect(() => {
     localStorage.setItem(ADMIN_SOUND_KEY, soundMuted ? 'muted' : 'enabled');
@@ -144,7 +157,7 @@ export default function AdminDashboard() {
   }, [cards?.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
 
   const isOverview = location.pathname === '/admin';
-  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, walletSummaryQuery];
+  const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, walletSummaryQuery, companyBalancesQuery];
   const overviewLoading = isOverview && overviewQueries.some((query) => query.isLoading);
   const overviewError = isOverview && overviewQueries.some((query) => query.isError && !query.data);
   const syncProvider = useMutation({
@@ -162,8 +175,52 @@ export default function AdminDashboard() {
     toast.success('Dashboard refreshed');
   };
 
+  const requestAlerts = async () => {
+    if (notificationPermission === 'granted') {
+      toast.success('Admin device alerts are already enabled.');
+      return;
+    }
+    const result = await requestDeviceNotificationPermission();
+    setNotificationPermission(result);
+    if (result === 'granted') toast.success('Admin device alerts enabled.');
+    else toast.error(result === 'denied' ? 'Alerts are blocked in this browser. Allow notifications in browser settings.' : 'Device alerts were not enabled.');
+  };
+
+  useEffect(() => {
+    if (!currentUser?.email || !window.EventSource) return undefined;
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+    const events = new EventSource(`${baseUrl}/api/events`, { withCredentials: true });
+
+    events.addEventListener('notification_count', () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard', currentUser.email] });
+      queryClient.invalidateQueries({ queryKey: ['notifications', currentUser.email] });
+      invalidateOperationalData(queryClient);
+    });
+
+    events.onerror = () => {};
+
+    return () => events.close();
+  }, [currentUser?.email, queryClient]);
+
+  useEffect(() => {
+    if (!currentUser?.email || !adminNotifications?.length) return;
+    const unreadIds = new Set(adminNotifications.filter((item) => !item.read && item.id).map((item) => item.id));
+    const previousIds = previousNotificationIdsRef.current;
+    previousNotificationIdsRef.current = unreadIds;
+
+    if (notificationPermission === 'granted') {
+      announceNewNotifications(adminNotifications);
+    } else {
+      markNotificationsAsSeen(adminNotifications.filter((item) => item.read));
+    }
+
+    if (!previousIds || soundMuted || !hasAnyAdminRoleLocal(currentUser)) return;
+    const hasFreshUnread = [...unreadIds].some((id) => !previousIds.has(id));
+    if (hasFreshUnread) playAdminTone('support');
+  }, [adminNotifications, currentUser, notificationPermission, soundMuted]);
+
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-6 pt-4 md:pt-6 lg:px-4">
+    <div className="mx-auto w-full max-w-7xl space-y-5 overflow-x-hidden px-2 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(1rem+env(safe-area-inset-top))] sm:space-y-6 sm:px-0 sm:pb-4 md:pt-6 lg:px-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <Link to="/dashboard">
@@ -176,18 +233,27 @@ export default function AdminDashboard() {
             <p className="text-sm text-muted-foreground">Platform management</p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <ThemeToggle compact />
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <ThemeToggle compact className="w-full justify-center sm:w-auto" />
+          {notificationPermission !== 'unsupported' && (
+            <button
+              type="button"
+              onClick={requestAlerts}
+              className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3 text-sm font-medium text-primary transition-colors hover:bg-primary/15 sm:w-auto"
+            >
+              <BellRing className="h-4 w-4" /> {alertsLabel}
+            </button>
+          )}
           <Link
             to="/notifications"
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary sm:w-auto"
           >
             <BellRing className="h-4 w-4" /> Alerts{unreadAdminNotifications ? ` (${unreadAdminNotifications})` : ''}
           </Link>
           <button
             type="button"
             onClick={() => setSoundMuted((current) => !current)}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary sm:w-auto"
             title={soundMuted ? 'Turn admin notification sounds on' : 'Turn admin notification sounds off'}
           >
             <BellRing className="h-4 w-4" /> {soundMuted ? 'Sounds Off' : 'Sounds On'}
@@ -195,7 +261,7 @@ export default function AdminDashboard() {
           <button
             type="button"
             onClick={refreshDashboard}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-secondary sm:w-auto"
           >
             <RefreshCw className="h-4 w-4" /> Refresh
           </button>
@@ -203,7 +269,7 @@ export default function AdminDashboard() {
             type="button"
             onClick={() => syncProvider.mutate()}
             disabled={syncProvider.isPending}
-            className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60"
+            className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity disabled:opacity-60 sm:w-auto"
           >
             <RefreshCw className={cn('h-4 w-4', syncProvider.isPending && 'animate-spin')} />
             {syncProvider.isPending ? 'Syncing...' : 'Sync Provider'}
@@ -212,6 +278,25 @@ export default function AdminDashboard() {
       </div>
 
       {/* Admin nav tabs */}
+      {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Enable admin alerts</p>
+              <p className="text-xs text-muted-foreground">
+                Turn on browser alerts and sound so new deposits, KYC reviews, tickets, and card updates reach you instantly.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={requestAlerts}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground sm:w-auto"
+            >
+              <BellRing className="h-4 w-4" /> {alertsLabel}
+            </button>
+          </div>
+        </div>
+      )}
       <div className="rounded-2xl border border-border bg-card p-2">
         <div className="flex gap-1 overflow-x-auto">
         {visibleNav.map(item => (

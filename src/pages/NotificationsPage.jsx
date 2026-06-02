@@ -61,31 +61,42 @@ export default function NotificationsPage() {
   });
 
   const unreadCount = notifications?.filter(n => !n.read)?.length || 0;
+  const alertsLabel =
+    permission === 'granted'
+      ? 'Alerts Enabled'
+      : permission === 'denied'
+        ? 'Alerts Blocked'
+        : 'Enable Alerts';
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="min-w-0 space-y-5 overflow-x-hidden">
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Notifications</h1>
           <p className="text-sm text-muted-foreground">{unreadCount} unread</p>
         </div>
-        <div className="flex items-center gap-2">
-          {permission !== 'granted' && permission !== 'unsupported' && (
+        <div className="grid w-full grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:w-auto sm:items-center">
+          {permission !== 'unsupported' && (
             <Button
               variant="outline"
               size="sm"
+              className="w-full whitespace-normal text-center leading-tight sm:w-auto sm:whitespace-nowrap"
               onClick={async () => {
+                if (permission === 'granted') {
+                  toast.success('Device alerts are already enabled.');
+                  return;
+                }
                 const result = await requestDeviceNotificationPermission();
                 setPermission(result);
                 if (result === 'granted') toast.success('Device alerts enabled.');
-                else toast.error('Device alerts were not enabled.');
+                else toast.error(result === 'denied' ? 'Alerts are blocked in this browser. Allow notifications in browser settings.' : 'Device alerts were not enabled.');
               }}
             >
-              Enable Device Alerts
+              {alertsLabel}
             </Button>
           )}
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
+            <Button variant="outline" size="sm" className="w-full whitespace-normal text-center leading-tight sm:w-auto sm:whitespace-nowrap" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
               <CheckCheck className="w-4 h-4 mr-2" /> {markAllRead.isPending ? 'Marking...' : 'Mark All Read'}
             </Button>
           )}
@@ -95,6 +106,11 @@ export default function NotificationsPage() {
       {permission === 'granted' && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
           Device alerts are on. Dink Card will show important account, deposit, card, and KYC updates on this device.
+        </div>
+      )}
+      {permission === 'denied' && (
+        <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700 dark:text-yellow-400">
+          Browser notifications are blocked. Allow notifications for Dink Card in your browser settings, then tap <span className="font-medium">Alerts Blocked</span> again.
         </div>
       )}
 
