@@ -159,6 +159,7 @@ export default function WalletPage() {
 
   const cryptoDepositHistory = (deposits || [])
     .filter((deposit) => ['crypto', 'usdc'].includes(String(deposit.payment_method || '').toLowerCase()))
+    .filter((deposit) => String(deposit.status || '').toLowerCase() !== 'approved')
     .map((deposit) => {
       const status = String(deposit.status || 'pending_transfer').toLowerCase();
       return {

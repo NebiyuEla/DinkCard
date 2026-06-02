@@ -1569,11 +1569,22 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function receiptLogoDataUri() {
+  const logoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#0f766e"/><path d="M18 19h21c8 0 13 5 13 13s-5 13-13 13H18V19Zm9 8v10h12c3 0 5-2 5-5s-2-5-5-5H27Z" fill="#ffffff"/><path d="M14 24h8v16h-8z" fill="#99f6e4"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(logoSvg)}`;
+}
+
 function invoiceHtml(deposit) {
   const status = String(deposit.status || '').replace(/_/g, ' ');
   const serviceProcessingFee = Number(deposit.service_fee_etb || 0) || Math.max(0, Number(deposit.total_payable_etb || 0) - Number(deposit.etb_amount || 0));
   const isStablecoinDeposit = ['usdc', 'crypto'].includes(String(deposit.payment_method || '').toLowerCase());
-  const receiptTitle = isStablecoinDeposit ? 'Funding Receipt' : 'Payment Receipt';
+  const receiptTitle = 'Receipt';
+  const receiptSubtitle = isStablecoinDeposit ? 'Crypto service balance funding' : 'ETB service balance funding';
+  const receiptDate = deposit.created_at || deposit.created_date || '';
+  const mainAmount = isStablecoinDeposit
+    ? `${Number(deposit.payment_amount || deposit.final_usd_credit || 0).toFixed(2)} ${deposit.payment_currency || 'USDC'}`
+    : `${Number(deposit.total_payable_etb || 0).toLocaleString()} ETB`;
+  const creditedAmount = `$${Number(deposit.final_usd_credit || deposit.requested_usd_amount || 0).toFixed(2)}`;
   const rows = isStablecoinDeposit
     ? [
         ['Payment reference', deposit.transaction_reference],
@@ -1601,41 +1612,192 @@ function invoiceHtml(deposit) {
 <html>
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(receiptTitle)} ${escapeHtml(deposit.transaction_reference)}</title>
   <style>
-    body { font-family: Arial, sans-serif; color: #111827; margin: 0; padding: 32px; background: #f8fafc; }
-    .invoice { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 18px; padding: 28px; }
-    .brand { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 18px; margin-bottom: 18px; }
-    h1 { margin: 0; font-size: 28px; }
-    .status { text-transform: capitalize; color: #047857; font-weight: 700; }
-    table { width: 100%; border-collapse: collapse; margin-top: 18px; }
-    td { border-bottom: 1px solid #f1f5f9; padding: 11px 0; font-size: 14px; }
-    td:first-child { color: #64748b; }
-    td:last-child { text-align: right; font-weight: 600; }
-    .note { margin-top: 22px; padding: 14px; border-radius: 12px; background: #ecfdf5; color: #065f46; font-size: 13px; line-height: 1.5; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #0f172a;
+      margin: 0;
+      padding: 32px 16px;
+      background:
+        radial-gradient(circle at top left, rgba(20, 184, 166, 0.16), transparent 30%),
+        linear-gradient(135deg, #ecfdf5 0%, #f8fafc 45%, #f1f5f9 100%);
+    }
+    .receipt {
+      max-width: 820px;
+      margin: 0 auto;
+      overflow: hidden;
+      background: #ffffff;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      border-radius: 28px;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.14);
+    }
+    .hero {
+      padding: 28px;
+      color: #ffffff;
+      background:
+        radial-gradient(circle at 85% 15%, rgba(153, 246, 228, 0.26), transparent 28%),
+        linear-gradient(135deg, #064e3b 0%, #0f766e 58%, #14b8a6 100%);
+    }
+    .brand { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .brand-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .logo { width: 48px; height: 48px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22); }
+    .brand-name { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.02em; }
+    .brand-sub { margin: 2px 0 0; color: rgba(255, 255, 255, 0.74); font-size: 12px; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: rgba(255, 255, 255, 0.13);
+      color: #ecfeff;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: capitalize;
+      white-space: nowrap;
+    }
+    .headline { display: grid; gap: 18px; margin-top: 36px; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+    h1 { margin: 0; font-size: 40px; letter-spacing: -0.04em; line-height: 1; }
+    .subtitle { margin: 10px 0 0; color: rgba(255, 255, 255, 0.76); font-size: 14px; }
+    .amount-card {
+      min-width: 220px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 20px;
+      padding: 16px;
+      background: rgba(2, 6, 23, 0.2);
+      backdrop-filter: blur(12px);
+      text-align: right;
+    }
+    .amount-label { margin: 0; color: rgba(255, 255, 255, 0.7); font-size: 12px; }
+    .amount { margin: 5px 0 0; font-size: 24px; font-weight: 900; letter-spacing: -0.03em; }
+    .content { padding: 28px; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .summary-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 18px;
+      padding: 14px;
+      background: #f8fafc;
+    }
+    .summary-card p { margin: 0; }
+    .summary-label { color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .summary-value { margin-top: 6px !important; font-size: 15px; font-weight: 850; word-break: break-word; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 18px; }
+    tbody { display: table-row-group; }
+    tr:not(:last-child) { border-bottom: 1px solid #e2e8f0; }
+    td { padding: 14px 16px; vertical-align: top; font-size: 14px; }
+    td:first-child { width: 36%; color: #64748b; background: #f8fafc; font-weight: 700; }
+    td:last-child { text-align: right; font-weight: 750; word-break: break-word; }
+    .note {
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      border-radius: 18px;
+      background: #ecfdf5;
+      color: #065f46;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 22px;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .print {
+      position: fixed;
+      right: 20px;
+      bottom: 20px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      background: #0f766e;
+      color: #ffffff;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 14px 32px rgba(15, 118, 110, 0.28);
+    }
+    @media (max-width: 680px) {
+      body { padding: 12px; }
+      .hero, .content { padding: 20px; }
+      .headline, .summary { grid-template-columns: 1fr; }
+      .amount-card { min-width: 0; text-align: left; }
+      h1 { font-size: 32px; }
+      td { display: block; width: 100% !important; text-align: left !important; }
+      td:first-child { padding-bottom: 4px; }
+      td:last-child { padding-top: 4px; }
+      .footer { flex-direction: column; }
+    }
+    @media print {
+      body { padding: 0; background: #ffffff; }
+      .receipt { box-shadow: none; border-radius: 0; border: 0; }
+      .print { display: none; }
+    }
   </style>
 </head>
 <body>
-  <section class="invoice">
-    <div class="brand">
-      <div>
-        <h1>${escapeHtml(receiptTitle)}</h1>
-        <p>${escapeHtml(receiptTitle)}</p>
+  <section class="receipt">
+    <div class="hero">
+      <div class="brand">
+        <div class="brand-left">
+          <img class="logo" src="${receiptLogoDataUri()}" alt="Dink Card" />
+          <div>
+            <p class="brand-name">Dink Card</p>
+            <p class="brand-sub">Official funding receipt</p>
+          </div>
+        </div>
+        <div class="status">${escapeHtml(status)}</div>
       </div>
-      <div>
-        <p class="status">${escapeHtml(status)}</p>
-        <p>${escapeHtml(deposit.created_at)}</p>
+      <div class="headline">
+        <div>
+          <h1>${escapeHtml(receiptTitle)}</h1>
+          <p class="subtitle">${escapeHtml(receiptSubtitle)}</p>
+        </div>
+        <div class="amount-card">
+          <p class="amount-label">${isStablecoinDeposit ? 'Funding amount' : 'Total paid'}</p>
+          <p class="amount">${escapeHtml(mainAmount)}</p>
+        </div>
       </div>
     </div>
-    <table>
-      <tbody>
-        ${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}
-      </tbody>
-    </table>
-    <div class="note">
-      Dink Card is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants.
+    <div class="content">
+      <div class="summary">
+        <div class="summary-card">
+          <p class="summary-label">Reference</p>
+          <p class="summary-value">${escapeHtml(deposit.transaction_reference)}</p>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Credited</p>
+          <p class="summary-value">${escapeHtml(creditedAmount)}</p>
+        </div>
+        <div class="summary-card">
+          <p class="summary-label">Date</p>
+          <p class="summary-value">${escapeHtml(receiptDate || '-')}</p>
+        </div>
+      </div>
+      <table>
+        <tbody>
+          ${rows.map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(value)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+      <div class="note">
+        Dink Card is not a bank or financial institution. Card issuance, payment processing, merchant acceptance, refunds, and transaction rules may depend on authorized third-party providers and merchants.
+      </div>
+      <div class="footer">
+        <span>Dink Card</span>
+        <span>Keep this receipt for your records.</span>
+      </div>
     </div>
   </section>
+  <button class="print" onclick="window.print()">Print / Save PDF</button>
 </body>
 </html>`;
 }
