@@ -326,10 +326,94 @@ export function setWalletBalance(userId, amount, description, reference) {
   return money(nextBalance);
 }
 
+const closedDepositStatuses = new Set(['rejected', 'failed', 'refunded', 'cancelled', 'canceled']);
+
+function isCryptoDeposit(deposit = {}) {
+  return ['crypto', 'usdc'].includes(String(deposit.payment_method || '').toLowerCase());
+}
+
+function normalizedDepositValue(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function findApprovedCryptoDuplicate(deposit) {
+  if (!isCryptoDeposit(deposit)) return null;
+
+  const txHash = normalizedDepositValue(deposit.tx_hash);
+  const providerReference = normalizedDepositValue(deposit.provider_reference);
+  const address = normalizedDepositValue(deposit.payment_address);
+  const network = normalizedDepositValue(deposit.payment_network);
+  const currency = normalizedDepositValue(deposit.payment_currency);
+  const amount = Number(deposit.payment_amount || deposit.final_usd_credit || deposit.requested_usd_amount || 0);
+
+  if (txHash) {
+    const duplicate = db.prepare(`
+      SELECT * FROM deposits
+      WHERE id <> ?
+        AND user_id = ?
+        AND payment_method IN ('crypto', 'usdc')
+        AND status = 'approved'
+        AND LOWER(COALESCE(tx_hash, '')) = ?
+      LIMIT 1
+    `).get(deposit.id, deposit.user_id, txHash);
+    if (duplicate) return duplicate;
+  }
+
+  if (providerReference) {
+    const duplicate = db.prepare(`
+      SELECT * FROM deposits
+      WHERE id <> ?
+        AND user_id = ?
+        AND payment_method IN ('crypto', 'usdc')
+        AND status = 'approved'
+        AND LOWER(COALESCE(provider_reference, '')) = ?
+      LIMIT 1
+    `).get(deposit.id, deposit.user_id, providerReference);
+    if (duplicate) return duplicate;
+  }
+
+  if (address && network && currency && Number.isFinite(amount) && amount > 0) {
+    return db.prepare(`
+      SELECT * FROM deposits
+      WHERE id <> ?
+        AND user_id = ?
+        AND payment_method IN ('crypto', 'usdc')
+        AND status = 'approved'
+        AND LOWER(COALESCE(payment_address, '')) = ?
+        AND LOWER(COALESCE(payment_network, '')) = ?
+        AND LOWER(COALESCE(payment_currency, '')) = ?
+        AND ABS(COALESCE(payment_amount, final_usd_credit, requested_usd_amount, 0) - ?) < 0.000001
+      LIMIT 1
+    `).get(deposit.id, deposit.user_id, address, network, currency, amount);
+  }
+
+  return null;
+}
+
 export function approveDeposit(deposit, approvedBy) {
   if (deposit.status === 'approved') return deposit;
-  if (['rejected', 'failed', 'refunded'].includes(deposit.status)) {
+  if (closedDepositStatuses.has(String(deposit.status || '').toLowerCase())) {
     throw new Error('This funding request can no longer be approved.');
+  }
+  const duplicateCryptoDeposit = findApprovedCryptoDuplicate(deposit);
+  if (duplicateCryptoDeposit) {
+    const now = nowIso();
+    db.prepare(`
+      UPDATE deposits
+      SET status = 'rejected',
+          rejection_reason = ?,
+          approved_by = ?,
+          approved_at = ?,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      `Duplicate crypto transfer already credited on request ${duplicateCryptoDeposit.transaction_reference || duplicateCryptoDeposit.id}.`,
+      approvedBy,
+      now,
+      now,
+      deposit.id
+    );
+    throw new Error('This crypto transfer was already credited through another funding request. It was not credited again.');
   }
   const now = nowIso();
   const newBalance = creditWallet(
