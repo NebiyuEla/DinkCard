@@ -128,7 +128,7 @@ export default function SuperAdminLayout() {
   }, [notifications, permission, soundMuted, user?.email]);
 
   return (
-    <div className="min-h-[100dvh] overflow-x-hidden bg-background md:flex">
+    <div className="min-h-[100dvh] overflow-x-hidden bg-background">
       <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur md:hidden">
         <div className="h-14 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ export default function SuperAdminLayout() {
         </nav>
       </header>
       {/* Sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
+      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
         <div className="h-16 flex items-center gap-2.5 px-5 border-b border-border">
           <BrandLogo to="/superadmin/dashboard" imageClassName="h-8 w-8 rounded-lg" showLabel={false} />
           <div>
@@ -189,14 +189,14 @@ export default function SuperAdminLayout() {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-hidden px-3 py-4">
+        <nav className="flex-1 space-y-1 overflow-hidden px-3 py-3">
           {nav.map(item => {
             const badge = badges[item.path] || 0;
             const active = location.pathname === item.path;
             return (
               <Link key={item.path} to={item.path}>
                 <div className={cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+                  'flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all',
                   active ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'
                 )}>
                   <item.icon className="w-4 h-4 shrink-0" />
@@ -212,13 +212,13 @@ export default function SuperAdminLayout() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-border">
-          <ThemeToggle className="mb-2 w-full justify-start" />
+        <div className="shrink-0 border-t border-border p-2">
+          <ThemeToggle className="mb-1.5 w-full justify-start" />
           {permission !== 'unsupported' && (
             <Button
               variant="outline"
               size="sm"
-              className="mb-2 w-full justify-start"
+              className="mb-1.5 h-8 w-full justify-start text-xs"
               onClick={requestAlerts}
             >
               <BellRing className="mr-2 h-4 w-4" />
@@ -228,14 +228,14 @@ export default function SuperAdminLayout() {
           <Button
             variant="ghost"
             size="sm"
-            className="mb-2 w-full justify-start text-muted-foreground"
+            className="mb-1.5 h-8 w-full justify-start text-xs text-muted-foreground"
             onClick={() => setSoundMuted((current) => !current)}
           >
             {soundMuted ? <VolumeX className="mr-2 h-4 w-4" /> : <Volume2 className="mr-2 h-4 w-4" />}
             {soundMuted ? 'Sounds Off' : 'Sounds On'}
             {unreadCount > 0 && <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] text-primary-foreground">{unreadCount}</span>}
           </Button>
-          <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={handleLogout}>
+          <Button variant="ghost" size="sm" className="h-8 w-full justify-start text-xs text-muted-foreground hover:text-destructive" onClick={handleLogout}>
             <LogOut className="w-4 h-4 mr-2" />
             Sign Out
           </Button>
@@ -243,7 +243,7 @@ export default function SuperAdminLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="min-w-0 flex-1 overflow-x-hidden">
+      <main className="min-w-0 overflow-x-hidden md:ml-56">
         <div className="mx-auto w-full max-w-6xl space-y-4 px-3 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-4 sm:px-4 md:p-6">
           {permission !== 'granted' && permission !== 'unsupported' && (
             <div className="rounded-2xl border border-primary/20 bg-primary/8 p-4">
