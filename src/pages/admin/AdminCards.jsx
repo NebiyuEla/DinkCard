@@ -34,6 +34,7 @@ const CARD_TABS = [
   { value: 'customers', label: 'Customers' },
   { value: 'cards', label: 'Cards' },
   { value: 'funding', label: 'Funding' },
+  { value: 'transactions', label: 'Transactions' },
   { value: 'activity', label: 'Activity' },
   { value: 'settings', label: 'Settings' }
 ];
@@ -101,13 +102,13 @@ export default function AdminCards() {
   const customersQuery = useQuery({ queryKey: ['bitnob-customers', environmentKey], queryFn: apiClient.admin.customers.list, enabled: providerReady, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
   const cardsQuery = useQuery({ queryKey: ['admin-cards', environmentKey], queryFn: apiClient.admin.cards.list, enabled: providerReady, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
   const txQuery = useQuery({ queryKey: ['bitnob-transactions', environmentKey], queryFn: apiClient.admin.cards.allTransactions, enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
-  const providerDepositTxQuery = useQuery({ queryKey: ['bitnob-deposit-transactions', environmentKey], queryFn: () => apiClient.admin.bitnob.transactions('credit'), enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const providerTransactionsQuery = useQuery({ queryKey: ['bitnob-provider-transactions', environmentKey], queryFn: () => apiClient.admin.bitnob.transactions('all'), enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
   const auditQuery = useQuery({ queryKey: ['audit-logs'], queryFn: apiClient.admin.auditLogs, refetchInterval: REFRESH.admin });
 
   const customers = (customersQuery.data || []).filter((customer) => matchesProviderEnvironment(customer, activeEnvironment));
   const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const transactions = txQuery.data?.transactions || [];
-  const providerDepositTransactions = providerDepositTxQuery.data?.transactions || [];
+  const providerTransactions = providerTransactionsQuery.data?.transactions || [];
   const auditLogs = auditQuery.data || [];
 
   const filteredCustomers = customers.filter((customer) => {
@@ -372,11 +373,14 @@ export default function AdminCards() {
           ))}
         </TabsContent>
 
-        <TabsContent value="activity" className="grid gap-3 lg:grid-cols-2">
-          <div className="lg:col-span-2">
-            <p className="mb-2 text-sm font-semibold">Provider deposit transactions</p>
-            <ProviderTransactionsTable rows={providerDepositTransactions} empty="No provider deposit transactions returned yet." />
+        <TabsContent value="transactions">
+          <div>
+            <p className="mb-2 text-sm font-semibold">Provider transactions</p>
+            <ProviderTransactionsTable rows={providerTransactions} empty="No provider transactions returned yet." />
           </div>
+        </TabsContent>
+
+        <TabsContent value="activity" className="grid gap-3 lg:grid-cols-2">
           <div>
             <p className="mb-2 text-sm font-semibold">Card transactions</p>
             <SimpleRows rows={transactions} empty="No card transactions returned yet." />

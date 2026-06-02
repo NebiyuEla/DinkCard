@@ -59,7 +59,7 @@ function countUserCreatedCards(userId, environment = config.bitnob.env) {
     SELECT COUNT(*) AS total FROM virtual_cards
     WHERE user_id = ?
       AND environment = ?
-      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted')
+      AND COALESCE(LOWER(status), '') NOT IN ('failed', 'rejected', 'deleted', 'deleted_remote', 'archived')
   `).get(userId, environment)?.total || 0;
 }
 
@@ -212,7 +212,7 @@ export const bitnobService = {
   generateAddress: (data) => safeBitnob('POST', '/api/addresses', data),
   listAddresses: () => safeBitnob('GET', '/api/addresses'),
   getAddress: (idOrAddress) => safeBitnob('GET', `/api/addresses/${encodeURIComponent(idOrAddress)}`),
-  listTransactions: (query = 'limit=100&type=credit') => safeBitnob('GET', `/api/transactions?${query}`),
+  listTransactions: (query = 'limit=100') => safeBitnob('GET', `/api/transactions?${query}`),
   getTransaction: (idOrReference) => safeBitnob('GET', `/api/transactions/${encodeURIComponent(idOrReference)}`),
   getSupportedChains: () => safeBitnob('GET', '/api/stablecoins/supported-chains')
 };
@@ -402,7 +402,7 @@ export async function createVirtualCardForUser(user, payload) {
       now,
       now
     );
-    const created = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ?').get(card.id);
+    const created = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ? AND environment = ?').get(card.id, config.bitnob.env);
     writeCardNotification(created, 'Card Request Submitted', 'Your virtual card request was created and is waiting for provider activation.');
     return created;
   } catch (error) {
@@ -418,7 +418,7 @@ export async function createVirtualCardForUser(user, payload) {
 }
 
 export async function fundVirtualCard(user, cardId, amount) {
-  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND user_id = ?').get(cardId, user.email);
+  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND user_id = ? AND environment = ?').get(cardId, user.email, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   card = await refreshLocalCardFromProvider(card);
   if (!['active', 'frozen'].includes(card.status)) {
@@ -461,7 +461,7 @@ export async function changeCardStatus(user, cardId, status, pin) {
   if (!['active', 'frozen'].includes(status)) {
     throw new Error('Unsupported card status action.');
   }
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(cardId, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   if (user.role === 'user') {
@@ -478,7 +478,7 @@ export async function changeCardStatus(user, cardId, status, pin) {
 }
 
 export async function terminateCard(user, cardId, pin, providerReason = 'User terminated card') {
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(cardId, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   if (user.role === 'user' && card.card_pin_hash) {
@@ -499,7 +499,7 @@ export async function terminateCard(user, cardId, pin, providerReason = 'User te
 }
 
 export async function setCardPin(user, cardId, pin) {
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(cardId, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   const normalizedPin = String(pin || '').trim();
@@ -509,11 +509,11 @@ export async function setCardPin(user, cardId, pin) {
   db.prepare('UPDATE virtual_cards SET card_pin_hash = ?, card_pin_enabled_at = ?, updated_at = ? WHERE id = ?')
     .run(pinHash, now, now, card.id);
   writeCardNotification(card, 'Card PIN Saved', 'Your 4-digit card PIN is now active for reveal, lock, unlock, and terminate actions.');
-  return db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id);
+  return db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(card.id, config.bitnob.env);
 }
 
 export async function revealCardDetails(user, cardId, pin) {
-  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  let card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(cardId, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   if (!card.card_pin_hash) throw new Error('Set a 4-digit card PIN first.');
@@ -557,7 +557,7 @@ export async function revealCardDetails(user, cardId, pin) {
 }
 
 export async function getVirtualCardTransactions(user, cardId) {
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(cardId);
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(cardId, config.bitnob.env);
   if (!card) throw new Error('Card not found');
   if (user.role === 'user' && card.user_id !== user.email) throw new Error('Forbidden');
   if (!card.provider_card_id) return [];
@@ -645,7 +645,7 @@ async function refreshLocalCardFromProvider(card) {
       nowIso(),
       card.id
     );
-    const refreshed = db.prepare('SELECT * FROM virtual_cards WHERE id = ?').get(card.id) || card;
+    const refreshed = db.prepare('SELECT * FROM virtual_cards WHERE id = ? AND environment = ?').get(card.id, config.bitnob.env) || card;
     if (previousStatus !== 'active' && nextStatus === 'active') {
       writeCardNotification(refreshed, 'Virtual Card Active', 'Your virtual card is active and ready to use.');
     }
@@ -660,11 +660,12 @@ export async function reconcileVirtualCards({ userId, limit = 100 } = {}) {
     SELECT * FROM virtual_cards
     WHERE provider = 'bitnob'
       AND provider_card_id IS NOT NULL
+      AND environment = ?
       AND status != 'terminated'
       ${userId ? 'AND user_id = ?' : ''}
     ORDER BY updated_at DESC, created_at DESC
     LIMIT ?
-  `).all(...(userId ? [userId, limit] : [limit]));
+  `).all(...(userId ? [config.bitnob.env, userId, limit] : [config.bitnob.env, limit]));
 
   const refreshed = [];
   for (const row of rows) {
@@ -1110,7 +1111,7 @@ export function handleBitnobWebhook(payload) {
 
   const providerCardId = extractProviderCardId(payload);
   if (!providerCardId) return;
-  const card = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ?').get(providerCardId);
+  const card = db.prepare('SELECT * FROM virtual_cards WHERE provider_card_id = ? AND environment = ?').get(providerCardId, config.bitnob.env);
   if (!card) return;
 
   if (eventIsOneOf(event, ['virtualcard.created.complete', 'virtualcard.created.success'])) {

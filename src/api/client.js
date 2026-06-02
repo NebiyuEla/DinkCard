@@ -213,7 +213,7 @@ export const apiClient = {
     },
     bitnob: {
       whoami: () => request('/api/admin/bitnob/whoami'),
-      transactions: (type = 'credit') => request(`/api/admin/bitnob/transactions?type=${encodeURIComponent(type)}`),
+      transactions: (type = 'all') => request(`/api/admin/bitnob/transactions?type=${encodeURIComponent(type)}`),
       balances: () => request('/api/admin/bitnob/balances')
     },
     walletSummary: () => request('/api/admin/wallet-summary'),

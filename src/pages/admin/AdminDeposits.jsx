@@ -23,7 +23,7 @@ export default function AdminDeposits() {
   });
   const { data: providerTxData } = useQuery({
     queryKey: ['admin-provider-deposit-transactions'],
-    queryFn: () => apiClient.admin.bitnob.transactions('credit'),
+    queryFn: () => apiClient.admin.bitnob.transactions('all'),
     refetchInterval: REFRESH.admin,
     retry: false
   });
@@ -220,13 +220,20 @@ function normalizeText(value) {
 function cryptoDepositLooksMatched(deposit, tx) {
   if (!deposit || !tx) return false;
   const amount = Number(deposit.payment_amount || deposit.final_usd_credit || deposit.requested_usd_amount || 0);
-  const amountMatches = Number.isFinite(amount) && Math.abs(Number(tx.amount || 0) - amount) < 0.000001;
+  const amountCovers = Number.isFinite(amount) && Number(tx.amount || 0) + 0.000001 >= amount;
   const currency = String(deposit.payment_currency || '').toUpperCase();
   const txCurrency = String(tx.currency || '').toUpperCase();
   const currencyMatches = !currency || !txCurrency || currency === txCurrency || (currency === 'USDC' && txCurrency === 'USD');
-  if (normalizeText(deposit.transaction_reference) && normalizeText(deposit.transaction_reference) === normalizeText(tx.reference)) return true;
-  if (normalizeText(deposit.tx_hash) && normalizeText(deposit.tx_hash) === normalizeText(tx.txHash)) return true;
-  if (normalizeText(deposit.payment_address) && normalizeText(deposit.payment_address) === normalizeText(tx.address) && currencyMatches && amountMatches) return true;
+  const network = normalizeText(deposit.payment_network);
+  const txNetwork = normalizeText(tx.network);
+  const networkMatches = !network || !txNetwork || network === txNetwork;
+  const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx.status))
+    && normalizeText(tx.type).includes('deposit')
+    && Number(tx.amount || 0) > 0;
+  if (!successfulDepositTx) return false;
+  if (normalizeText(deposit.transaction_reference) && normalizeText(deposit.transaction_reference) === normalizeText(tx.reference) && currencyMatches && amountCovers) return true;
+  if (normalizeText(deposit.tx_hash) && normalizeText(deposit.tx_hash) === normalizeText(tx.txHash) && currencyMatches && amountCovers) return true;
+  if (normalizeText(deposit.payment_address) && normalizeText(deposit.payment_address) === normalizeText(tx.address) && currencyMatches && networkMatches && amountCovers) return true;
   return false;
 }
 

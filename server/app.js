@@ -828,16 +828,35 @@ function providerTransactionValue(tx = {}, keys = []) {
   return '';
 }
 
+function parseProviderFormattedAmount(value) {
+  const match = String(value || '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
+}
+
+function providerAmountDecimals(currency) {
+  const value = String(currency || '').toUpperCase();
+  if (['USDC', 'USDT', 'USD'].includes(value)) return 6;
+  if (value === 'BTC') return 8;
+  return 6;
+}
+
+function normalizeProviderBaseAmount(value, currency) {
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) return 0;
+  const divisor = 10 ** providerAmountDecimals(currency);
+  return raw / divisor;
+}
+
 function normalizeProviderTransaction(tx = {}) {
-  const rawAmount = Number(providerTransactionValue(tx, ['display_amount', 'amount_usd', 'amount', 'value', 'data.amount', 'metadata.amount']));
   const currency = String(providerTransactionValue(tx, ['currency', 'asset', 'symbol', 'data.currency', 'metadata.currency']) || 'USD').toUpperCase();
-  const amount = Number.isFinite(rawAmount) && Math.abs(rawAmount) >= 100000 && ['USDC', 'USDT', 'USD'].includes(currency)
-    ? rawAmount / 100000
-    : rawAmount;
-  const rawFee = Number(providerTransactionValue(tx, ['display_fee', 'fee_usd', 'fee', 'charges', 'metadata.fee']));
-  const fee = Number.isFinite(rawFee) && Math.abs(rawFee) >= 100000 && ['USDC', 'USDT', 'USD'].includes(currency)
-    ? rawFee / 100000
-    : rawFee;
+  const formattedAmount = parseProviderFormattedAmount(providerTransactionValue(tx, ['amount_formatted', 'formatted_amount']));
+  const amount = Number.isFinite(formattedAmount)
+    ? formattedAmount
+    : normalizeProviderBaseAmount(providerTransactionValue(tx, ['display_amount', 'amount_usd', 'amount', 'value', 'data.amount', 'metadata.amount']), currency);
+  const formattedFee = parseProviderFormattedAmount(providerTransactionValue(tx, ['fee_formatted', 'formatted_fee']));
+  const fee = Number.isFinite(formattedFee)
+    ? formattedFee
+    : normalizeProviderBaseAmount(providerTransactionValue(tx, ['display_fee', 'fee_usd', 'fee', 'charges', 'metadata.fee']), currency);
 
   return {
     raw: tx,
@@ -867,18 +886,22 @@ function cryptoDepositMatchesProviderTransaction(deposit, tx) {
   const txAddress = String(tx.address || '').trim().toLowerCase();
   const txNetwork = String(tx.network || '').trim().toLowerCase();
   const txCurrency = String(tx.currency || '').trim().toUpperCase();
-  const amountMatches = Number.isFinite(depositAmount) && Math.abs(Number(tx.amount || 0) - depositAmount) < 0.000001;
+  const amountCovers = Number.isFinite(depositAmount) && Number(tx.amount || 0) + 0.000001 >= depositAmount;
   const currencyMatches = !depositCurrency || !txCurrency || txCurrency === depositCurrency || (depositCurrency === 'USDC' && txCurrency === 'USD');
   const networkMatches = !depositNetwork || !txNetwork || txNetwork === depositNetwork;
+  const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(String(tx.status || '').toLowerCase())
+    && String(tx.type || '').toLowerCase().includes('deposit')
+    && Number(tx.amount || 0) > 0;
 
-  if (depositReference && txReference && txReference === depositReference) return true;
-  if (depositTxHash && txHash && txHash === depositTxHash) return true;
-  if (depositAddress && txAddress && txAddress === depositAddress && currencyMatches && networkMatches && amountMatches) return true;
+  if (!successfulDepositTx) return false;
+  if (depositReference && txReference && txReference === depositReference && currencyMatches && amountCovers) return true;
+  if (depositTxHash && txHash && txHash === depositTxHash && currencyMatches && amountCovers) return true;
+  if (depositAddress && txAddress && txAddress === depositAddress && currencyMatches && networkMatches && amountCovers) return true;
   return false;
 }
 
 async function findProviderCryptoDepositMatch(deposit) {
-  const provider = await bitnobService.listTransactions('limit=100&type=credit');
+  const provider = await bitnobService.listTransactions('limit=100');
   const transactions = normalizeProviderList(provider).map(normalizeProviderTransaction);
   return transactions.find((tx) => cryptoDepositMatchesProviderTransaction(deposit, tx)) || null;
 }
@@ -2956,10 +2979,23 @@ export function createApp() {
   app.get('/api/admin/bitnob/transactions', authMiddleware(db), async (req, res) => {
     try {
       if (!requireAdmin(req, res)) return;
-      const type = String(req.query.type || 'credit').trim();
-      const provider = await bitnobService.listTransactions(`limit=100${type ? `&type=${encodeURIComponent(type)}` : ''}`);
-      const transactions = normalizeProviderList(provider).map(normalizeProviderTransaction);
-      res.json({ provider, transactions });
+      const type = String(req.query.type || '').trim();
+      const transactions = [];
+      const pages = [];
+      let cursor = '';
+      for (let page = 0; page < 5; page += 1) {
+        const query = [
+          'limit=100',
+          type && type !== 'all' ? `type=${encodeURIComponent(type)}` : '',
+          cursor ? `cursor=${encodeURIComponent(cursor)}` : ''
+        ].filter(Boolean).join('&');
+        const provider = await bitnobService.listTransactions(query);
+        pages.push(provider);
+        transactions.push(...normalizeProviderList(provider).map(normalizeProviderTransaction));
+        cursor = String(provider?.data?.next_cursor || provider?.next_cursor || '').trim();
+        if (!cursor) break;
+      }
+      res.json({ provider: pages[0] || null, transactions, pages: pages.length, hasMore: Boolean(cursor) });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list provider transactions.' });
     }
