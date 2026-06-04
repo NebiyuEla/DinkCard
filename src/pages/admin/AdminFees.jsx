@@ -79,9 +79,8 @@ export default function AdminFees() {
     { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
     { key: 'service_margin_percentage', label: 'Platform fee percent', suffix: '%' },
     { key: 'gateway_fee_percentage', label: 'Gateway fee percent', suffix: '%' },
-    { key: 'total_amount_fee_percentage', label: 'Total amount fee percent', suffix: '%' },
-    { key: 'minimum_service_fee_etb', label: 'Minimum fee amount', suffix: 'ETB' },
-    { key: 'maximum_service_fee_etb', label: 'Maximum fee amount', suffix: 'ETB' },
+    { key: 'total_amount_fee_percentage', label: 'Exact total fee percent', suffix: '%' },
+    { key: 'checkout_preview_fee_percentage', label: 'Checkout preview fee percent', suffix: '%' },
     { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
   ];
 
@@ -151,8 +150,8 @@ export default function AdminFees() {
               <p className="font-mono font-semibold">{preview.feesAndChargesEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Total payable</p>
-              <p className="font-mono font-semibold">{preview.totalPayableEtb.toLocaleString()} ETB</p>
+              <p className="text-muted-foreground">Chargeable total</p>
+              <p className="font-mono font-semibold">{preview.chargeableTotalEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Exchange rate</p>
@@ -167,8 +166,20 @@ export default function AdminFees() {
               <p className="font-mono font-semibold">{form.show_gateway_fee_percentage ? `${preview.gatewayFeePercentage.toFixed(2)}%` : 'Hidden'}</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Total amount fee</p>
+              <p className="text-muted-foreground">Exact total fee</p>
               <p className="font-mono font-semibold">{preview.totalAmountFeeEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Checkout preview fee</p>
+              <p className="font-mono font-semibold">{preview.checkoutPreviewFeeEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Total payable preview</p>
+              <p className="font-mono font-semibold">{preview.checkoutPreviewTotalEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Profit preview</p>
+              <p className="font-mono font-semibold">{preview.platformFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
               <p className="text-muted-foreground">Locked provider rules</p>
@@ -182,17 +193,6 @@ export default function AdminFees() {
           {pricingFields.map(renderField)}
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="flex items-start gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-sm">
-            <Checkbox
-              checked={Boolean(form.enable_minimum_fee)}
-              onCheckedChange={(checked) => updateToggle('enable_minimum_fee', Boolean(checked))}
-              className="mt-0.5"
-            />
-            <span>
-              <span className="block font-medium">Enable minimum fee</span>
-              <span className="text-xs text-muted-foreground">Use the minimum fee amount when the percentage fee is too small.</span>
-            </span>
-          </label>
           <label className="flex items-start gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-sm">
             <Checkbox
               checked={Boolean(form.show_gateway_fee_percentage)}

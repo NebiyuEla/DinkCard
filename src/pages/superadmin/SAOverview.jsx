@@ -158,7 +158,7 @@ export default function SAOverview() {
   const frozenCards = countableCards.filter((card) => normalizeCardStatus(card.status) === 'frozen').length;
   const netProfitEtb = (deposits || [])
     .filter((deposit) => deposit.status === 'approved')
-    .reduce((sum, deposit) => sum + Math.max(0, Number(deposit.service_fee_etb || 0) - Number(deposit.gateway_fee_etb || 0)), 0);
+    .reduce((sum, deposit) => sum + Math.max(0, Number(deposit.service_fee_etb || 0)), 0);
   const approvedDepositCount = deposits?.filter((deposit) => deposit.status === 'approved')?.length || 0;
   const averageProfitEtb = approvedDepositCount ? netProfitEtb / approvedDepositCount : 0;
   const searchRows = useMemo(

@@ -175,7 +175,7 @@ export default function AddMoney() {
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold">Total payable</span>
-                  <span className="text-right font-mono text-lg font-bold text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span>
+                  <span className="text-right font-mono text-lg font-bold text-primary">{fees.checkoutPreviewTotalEtb.toLocaleString()} ETB</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} service balance.</p>
               </div>

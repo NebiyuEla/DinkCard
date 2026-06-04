@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { generateId, money, nowIso, hmacSha256Hex } from './utils.js';
 
 export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 5.6;
-export const DEFAULT_FIXED_CHARGE_ETB = 100;
+export const DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE = 2.5;
 export const DEFAULT_PERCENT_CHARGE = 5;
 const PENDING_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -40,10 +40,8 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const rate = Math.max(0, safeNumber(settings?.usd_to_etb_rate, 190));
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
-  const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, DEFAULT_FIXED_CHARGE_ETB));
-  const maximumServiceFeeEtb = Math.max(0, safeNumber(settings?.maximum_service_fee_etb, 0));
   const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, 0));
-  const enableMinimumFee = Number(settings?.enable_minimum_fee ?? 1) ? true : false;
+  const checkoutPreviewFeePercentage = Math.max(0, safeNumber(settings?.checkout_preview_fee_percentage, DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE));
   const showGatewayFeePercent = Number(settings?.show_gateway_fee_percentage ?? 1) ? true : false;
   const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));
   const feeDisplayStyle = ['simple', 'detailed', 'hybrid'].includes(settings?.customer_fee_display_style)
@@ -51,9 +49,7 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     : 'simple';
 
   const cardAmountEtb = money(usd * rate);
-  const platformPercentFeeEtb = money(cardAmountEtb * serviceMarginPercentage / 100);
-  const platformFeeWithMinimum = enableMinimumFee ? Math.max(platformPercentFeeEtb, minimumServiceFeeEtb) : platformPercentFeeEtb;
-  const platformFeeEtb = money(maximumServiceFeeEtb > 0 ? Math.min(platformFeeWithMinimum, maximumServiceFeeEtb) : platformFeeWithMinimum);
+  const platformFeeEtb = money(cardAmountEtb * serviceMarginPercentage / 100);
   const gatewayFeeBaseEtb = money(cardAmountEtb + platformFeeEtb);
   const gatewayFeeEtb = money(gatewayFeeBaseEtb * gatewayFeePercentage / 100);
   const subtotalBeforeTotalFeeEtb = money(cardAmountEtb + platformFeeEtb + gatewayFeeEtb);
@@ -62,8 +58,11 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const grossTotalBeforeRoundEtb = money(subtotalBeforeTotalFeeEtb + totalAmountFeeEtb);
   const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
   const roundingAdjustmentEtb = money(Math.max(0, totalPayableEtb - grossTotalBeforeRoundEtb));
-  const serviceAndProcessingFeeEtb = money(feesAndChargesEtb + roundingAdjustmentEtb);
-  const effectivePayableRate = usd > 0 ? money(totalPayableEtb / usd) : 0;
+  const chargeableFeesEtb = money(feesAndChargesEtb + roundingAdjustmentEtb);
+  const checkoutPreviewFeeEtb = money(totalPayableEtb * checkoutPreviewFeePercentage / 100);
+  const checkoutPreviewTotalEtb = money(totalPayableEtb + checkoutPreviewFeeEtb);
+  const customerFeesAndChargesEtb = money(checkoutPreviewTotalEtb - cardAmountEtb);
+  const effectivePayableRate = usd > 0 ? money(checkoutPreviewTotalEtb / usd) : 0;
   const providerCostUsd = 0;
   const providerCostEtb = 0;
 
@@ -76,15 +75,20 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     platformFeeEtb,
     platformFeePercentage: serviceMarginPercentage,
     serviceFeeEtb: platformFeeEtb,
-    serviceAndProcessingFeeEtb,
-    feesAndChargesEtb: serviceAndProcessingFeeEtb,
+    serviceAndProcessingFeeEtb: customerFeesAndChargesEtb,
+    feesAndChargesEtb: customerFeesAndChargesEtb,
+    chargeableFeesEtb,
     gatewayFeeEtb,
     gatewayFeePercentage,
     totalAmountFeeEtb,
     totalAmountFeePercentage,
     subtotalBeforeTotalFeeEtb,
+    checkoutPreviewFeeEtb,
+    checkoutPreviewFeePercentage,
+    checkoutPreviewTotalEtb,
     showGatewayFeePercent,
     totalPayableEtb,
+    chargeableTotalEtb: totalPayableEtb,
     effectivePayableRate,
     finalUsdCredit: money(usd),
     providerCostUsd,
@@ -98,9 +102,9 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     grossTotalBeforeRoundEtb,
     roundingAdjustmentEtb,
     roundingRuleEtb,
-    minimumFeeAmountEtb: minimumServiceFeeEtb,
-    maximumFeeAmountEtb: maximumServiceFeeEtb,
-    enableMinimumFee,
+    minimumFeeAmountEtb: 0,
+    maximumFeeAmountEtb: 0,
+    enableMinimumFee: false,
     feeDisplayStyle
   };
 }
@@ -262,7 +266,8 @@ export async function initializeChapaPayment({ user, amountUsd, phoneNumber }) {
     txRef,
     checkoutUrl: payload.data.checkout_url,
     amountUsd: usd,
-    amountEtb: calc.totalPayableEtb
+    amountEtb: calc.totalPayableEtb,
+    checkoutPreviewAmountEtb: calc.checkoutPreviewTotalEtb
   };
 }
 
