@@ -42,6 +42,7 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
   const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, DEFAULT_FIXED_CHARGE_ETB));
   const maximumServiceFeeEtb = Math.max(0, safeNumber(settings?.maximum_service_fee_etb, 0));
+  const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, 0));
   const enableMinimumFee = Number(settings?.enable_minimum_fee ?? 1) ? true : false;
   const showGatewayFeePercent = Number(settings?.show_gateway_fee_percentage ?? 1) ? true : false;
   const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));
@@ -55,8 +56,10 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const platformFeeEtb = money(maximumServiceFeeEtb > 0 ? Math.min(platformFeeWithMinimum, maximumServiceFeeEtb) : platformFeeWithMinimum);
   const gatewayFeeBaseEtb = money(cardAmountEtb + platformFeeEtb);
   const gatewayFeeEtb = money(gatewayFeeBaseEtb * gatewayFeePercentage / 100);
-  const feesAndChargesEtb = money(platformFeeEtb + gatewayFeeEtb);
-  const grossTotalBeforeRoundEtb = money(cardAmountEtb + feesAndChargesEtb);
+  const subtotalBeforeTotalFeeEtb = money(cardAmountEtb + platformFeeEtb + gatewayFeeEtb);
+  const totalAmountFeeEtb = money(subtotalBeforeTotalFeeEtb * totalAmountFeePercentage / 100);
+  const feesAndChargesEtb = money(platformFeeEtb + gatewayFeeEtb + totalAmountFeeEtb);
+  const grossTotalBeforeRoundEtb = money(subtotalBeforeTotalFeeEtb + totalAmountFeeEtb);
   const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
   const roundingAdjustmentEtb = money(Math.max(0, totalPayableEtb - grossTotalBeforeRoundEtb));
   const serviceAndProcessingFeeEtb = money(feesAndChargesEtb + roundingAdjustmentEtb);
@@ -77,6 +80,9 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
     feesAndChargesEtb: serviceAndProcessingFeeEtb,
     gatewayFeeEtb,
     gatewayFeePercentage,
+    totalAmountFeeEtb,
+    totalAmountFeePercentage,
+    subtotalBeforeTotalFeeEtb,
     showGatewayFeePercent,
     totalPayableEtb,
     effectivePayableRate,

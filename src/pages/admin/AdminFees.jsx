@@ -79,6 +79,7 @@ export default function AdminFees() {
     { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
     { key: 'service_margin_percentage', label: 'Platform fee percent', suffix: '%' },
     { key: 'gateway_fee_percentage', label: 'Gateway fee percent', suffix: '%' },
+    { key: 'total_amount_fee_percentage', label: 'Total amount fee percent', suffix: '%' },
     { key: 'minimum_service_fee_etb', label: 'Minimum fee amount', suffix: 'ETB' },
     { key: 'maximum_service_fee_etb', label: 'Maximum fee amount', suffix: 'ETB' },
     { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
@@ -164,6 +165,10 @@ export default function AdminFees() {
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Gateway display</p>
               <p className="font-mono font-semibold">{form.show_gateway_fee_percentage ? `${preview.gatewayFeePercentage.toFixed(2)}%` : 'Hidden'}</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Total amount fee</p>
+              <p className="font-mono font-semibold">{preview.totalAmountFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
               <p className="text-muted-foreground">Locked provider rules</p>

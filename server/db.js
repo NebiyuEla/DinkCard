@@ -239,6 +239,7 @@ CREATE TABLE IF NOT EXISTS fee_settings (
   maximum_service_fee_etb REAL NOT NULL DEFAULT 0,
   enable_minimum_fee INTEGER NOT NULL DEFAULT 1,
   show_gateway_fee_percentage INTEGER NOT NULL DEFAULT 1,
+  total_amount_fee_percentage REAL NOT NULL DEFAULT 0,
   safety_buffer_percentage REAL NOT NULL DEFAULT 0,
   chapa_settlement_fee_etb REAL NOT NULL DEFAULT 0,
   card_creation_fee_usd REAL NOT NULL DEFAULT 1,
@@ -380,6 +381,7 @@ ensureColumn('fee_settings', 'minimum_service_fee_etb', 'REAL NOT NULL DEFAULT 1
 ensureColumn('fee_settings', 'maximum_service_fee_etb', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'enable_minimum_fee', 'INTEGER NOT NULL DEFAULT 1');
 ensureColumn('fee_settings', 'show_gateway_fee_percentage', 'INTEGER NOT NULL DEFAULT 1');
+ensureColumn('fee_settings', 'total_amount_fee_percentage', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'safety_buffer_percentage', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'chapa_settlement_fee_etb', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('fee_settings', 'bitnob_topup_fee_under_100_usd', 'REAL NOT NULL DEFAULT 1');
@@ -633,6 +635,7 @@ db.prepare(`
       maximum_service_fee_etb = COALESCE(maximum_service_fee_etb, 0),
       enable_minimum_fee = COALESCE(enable_minimum_fee, 1),
       show_gateway_fee_percentage = COALESCE(show_gateway_fee_percentage, 1),
+      total_amount_fee_percentage = COALESCE(total_amount_fee_percentage, 0),
       safety_buffer_percentage = 0,
       chapa_settlement_fee_etb = COALESCE(chapa_settlement_fee_etb, 0),
       bitnob_topup_fee_under_100_usd = COALESCE(bitnob_topup_fee_under_100_usd, 1),
