@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
+import { ExistingImageEditButton } from '@/components/EditableImageUpload';
 import { Check, X, Eye, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -86,6 +87,21 @@ export default function AdminKYC() {
       setSelected(null);
     },
     onError: (error) => toast.error(error.message || 'Could not update KYC status')
+  });
+
+  const updateDocument = useMutation({
+    mutationFn: async ({ kyc, field, file }) => {
+      const upload = await apiClient.integrations.Core.UploadFile({ file });
+      return apiClient.admin.kyc.updateDocument(kyc.id, { field, url: upload.file_url });
+    },
+    onSuccess: (updatedKyc) => {
+      queryClient.setQueryData(['admin-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      queryClient.setQueryData(['sa-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      setSelected(updatedKyc);
+      invalidateOperationalData(queryClient);
+      toast.success('KYC document updated');
+    },
+    onError: (error) => toast.error(error.message || 'Could not update KYC document')
   });
 
   const toggleField = (field, checked) => {
@@ -185,8 +201,22 @@ export default function AdminKYC() {
                 <div className="col-span-2"><span className="text-muted-foreground">Street Address:</span> {selected.street_address || selected.address || '-'}</div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <FilePreview url={selected.front_id_url} label="Front ID" />
-                <FilePreview url={selected.selfie_url} label="Selfie" />
+                <KycDocumentReview
+                  label="Front ID"
+                  url={selected.front_id_url}
+                  field="front_id_url"
+                  selected={selected}
+                  onSave={(payload) => updateDocument.mutateAsync(payload)}
+                  disabled={updateDocument.isPending}
+                />
+                <KycDocumentReview
+                  label="Selfie"
+                  url={selected.selfie_url}
+                  field="selfie_url"
+                  selected={selected}
+                  onSave={(payload) => updateDocument.mutateAsync(payload)}
+                  disabled={updateDocument.isPending}
+                />
               </div>
               {APPROVABLE_KYC_STATUSES.has(selected.status) && (
                 <div className="flex gap-2">
@@ -274,6 +304,22 @@ export default function AdminKYC() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function KycDocumentReview({ label, url, field, selected, onSave, disabled }) {
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-3">
+      <Label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</Label>
+      <FilePreview url={url} label={label} />
+      <ExistingImageEditButton
+        url={url}
+        label="Crop / rotate"
+        disabled={disabled || !url}
+        className="w-full"
+        onSave={(file) => onSave({ kyc: selected, field, file })}
+      />
     </div>
   );
 }

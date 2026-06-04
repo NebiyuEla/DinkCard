@@ -915,7 +915,12 @@ function cryptoDepositMatchesProviderTransaction(deposit, tx) {
   const amountCovers = Number.isFinite(depositAmount) && Number(tx.amount || 0) + 0.000001 >= depositAmount;
   const currencyMatches = !depositCurrency || !txCurrency || txCurrency === depositCurrency || (depositCurrency === 'USDC' && txCurrency === 'USD');
   const networkMatches = !depositNetwork || !txNetwork || txNetwork === depositNetwork;
-  const depositLike = String(tx.type || '').toLowerCase().includes('deposit') || String(tx.side || '').toLowerCase() === 'credit';
+  const raw = tx.raw || {};
+  const metadata = raw.metadata || {};
+  const typeValue = String(tx.type || '').toLowerCase();
+  const depositLike = typeValue.includes('deposit')
+    || String(metadata.deposit_type || '').toLowerCase().includes('deposit')
+    || String(metadata.flow_type || '').toLowerCase() === 'deposit';
   const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(String(tx.status || '').toLowerCase())
     && depositLike
     && Number(tx.amount || 0) > 0;
@@ -4570,6 +4575,52 @@ export function createApp() {
     } catch (error) {
       console.error('KYC correction request failed:', error);
       res.status(400).json({ message: error.message || 'KYC correction request failed.' });
+    }
+  });
+
+  app.post('/api/admin/kyc/:id/document', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+
+      const field = String(req.body.field || '').trim();
+      const url = String(req.body.url || '').trim();
+      const allowedFields = new Set(['front_id_url', 'back_id_url', 'selfie_url']);
+      if (!allowedFields.has(field)) {
+        return res.status(400).json({ message: 'Invalid KYC document field.' });
+      }
+      if (!url.startsWith('/uploads/')) {
+        return res.status(400).json({ message: 'Upload the corrected image before applying it.' });
+      }
+
+      const oldValue = kyc[field];
+      const now = nowIso();
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET ${field} = ?,
+            reviewed_by = ?,
+            reviewed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(url, req.user.email, now, now, kyc.id);
+
+      writeAudit({
+        actor: req.user.email,
+        userId: kyc.user_id,
+        action: 'kyc_document_replaced',
+        entityType: 'kyc_submission',
+        entityId: kyc.id,
+        oldValue: { [field]: oldValue },
+        newValue: { [field]: url },
+        reason: String(req.body.reason || 'Admin corrected uploaded document image').trim(),
+        req
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not update KYC document.' });
     }
   });
 

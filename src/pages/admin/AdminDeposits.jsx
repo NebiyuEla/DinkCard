@@ -237,8 +237,10 @@ function cryptoDepositLooksMatched(deposit, tx) {
   const txNetwork = normalizeText(tx.network);
   const networkMatches = !network || !txNetwork || network === txNetwork;
   const type = normalizeText(tx.type);
-  const side = normalizeText(tx.side || tx.raw?.side);
-  const depositLike = type.includes('deposit') || side === 'credit' || normalizeText(tx.raw?.metadata?.deposit_type).includes('deposit');
+  const metadata = tx.raw?.metadata || {};
+  const depositLike = type.includes('deposit')
+    || normalizeText(metadata.deposit_type).includes('deposit')
+    || normalizeText(metadata.flow_type) === 'deposit';
   const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx.status))
     && depositLike
     && Number(tx.amount || 0) > 0;
@@ -251,9 +253,10 @@ function cryptoDepositLooksMatched(deposit, tx) {
 
 function isCryptoDepositProviderTx(tx) {
   const type = normalizeText(tx?.type);
-  const side = normalizeText(tx?.side || tx?.raw?.side);
   const metadata = tx?.raw?.metadata || {};
-  const depositLike = type.includes('deposit') || normalizeText(metadata.deposit_type).includes('deposit') || side === 'credit';
+  const depositLike = type.includes('deposit')
+    || normalizeText(metadata.deposit_type).includes('deposit')
+    || normalizeText(metadata.flow_type) === 'deposit';
   return ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx?.status))
     && depositLike
     && ['USDC', 'USDT', 'BTC'].includes(String(tx?.currency || '').toUpperCase())

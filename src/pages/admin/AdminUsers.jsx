@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
+import { ExistingImageEditButton } from '@/components/EditableImageUpload';
 import SecretInput from '@/components/SecretInput';
 
 function getActionCopy(action, user) {
@@ -250,6 +251,18 @@ export default function AdminUsers() {
     onError: (error) => toast.error(error.message || 'Could not create staff account.')
   });
 
+  const updateKycDocument = useMutation({
+    mutationFn: async ({ kyc, field, file }) => {
+      const upload = await apiClient.integrations.Core.UploadFile({ file });
+      return apiClient.admin.kyc.updateDocument(kyc.id, { field, url: upload.file_url });
+    },
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('KYC document updated');
+    },
+    onError: (error) => toast.error(error.message || 'Could not update KYC document')
+  });
+
   const openAction = (user, action) => {
     setPendingAction({ user, action });
     setReason('');
@@ -388,8 +401,22 @@ export default function AdminUsers() {
                     {kyc?.rejection_reason && <div className="md:col-span-2 rounded-xl border border-orange-500/20 bg-orange-500/10 p-3 text-sm text-orange-600">{kyc.rejection_reason}</div>}
                   </div>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Front ID</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.front_id_url} label="Front ID" /></div></div>
-                    <div><Label className="mb-2 block text-xs uppercase tracking-[0.14em] text-muted-foreground">Selfie</Label><div className="rounded-xl border border-border p-3"><FilePreview url={kyc?.selfie_url} label="Selfie" /></div></div>
+                    <AdminUserKycDocument
+                      label="Front ID"
+                      url={kyc?.front_id_url}
+                      kyc={kyc}
+                      field="front_id_url"
+                      disabled={updateKycDocument.isPending}
+                      onSave={(payload) => updateKycDocument.mutateAsync(payload)}
+                    />
+                    <AdminUserKycDocument
+                      label="Selfie"
+                      url={kyc?.selfie_url}
+                      kyc={kyc}
+                      field="selfie_url"
+                      disabled={updateKycDocument.isPending}
+                      onSave={(payload) => updateKycDocument.mutateAsync(payload)}
+                    />
                   </div>
                 </div>
               </div>
@@ -534,6 +561,22 @@ export default function AdminUsers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function AdminUserKycDocument({ label, url, kyc, field, disabled, onSave }) {
+  return (
+    <div className="space-y-2 rounded-xl border border-border p-3">
+      <Label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</Label>
+      <FilePreview url={url} label={label} />
+      <ExistingImageEditButton
+        url={url}
+        label="Crop / rotate"
+        disabled={disabled || !url || !kyc?.id}
+        className="w-full"
+        onSave={(file) => onSave({ kyc, field, file })}
+      />
     </div>
   );
 }
