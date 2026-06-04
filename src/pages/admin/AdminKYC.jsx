@@ -173,6 +173,7 @@ export default function AdminKYC() {
                 <div><span className="text-muted-foreground">KYC ID:</span> <span className="font-mono">{selected.id}</span></div>
                 <div><span className="text-muted-foreground">First / Last:</span> {[selected.first_name, selected.last_name].filter(Boolean).join(' ') || '-'}</div>
                 <div><span className="text-muted-foreground">DOB:</span> {selected.date_of_birth}</div>
+                <div><span className="text-muted-foreground">Gender:</span> <span className="capitalize">{selected.gender || '-'}</span></div>
                 <div><span className="text-muted-foreground">Phone:</span> {selected.phone}</div>
                 <div><span className="text-muted-foreground">Email:</span> {selected.email}</div>
                 <div><span className="text-muted-foreground">City:</span> {selected.city}</div>

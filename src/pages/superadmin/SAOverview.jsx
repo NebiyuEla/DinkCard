@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { matchesProviderEnvironment, normalizeProviderEnvironment } from '@/lib/providerEnvironment';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import FilePreview from '@/components/FilePreview';
 
 function formatUsd(value) {
   return `$${Number(value || 0).toFixed(2)}`;
@@ -51,6 +52,56 @@ function buildSearchRows({ users = [], kycSubs = [], deposits = [], cards = [], 
     ...walletTransactions.map((record) => ({ type: 'Transaction', title: record.description || record.type, subtitle: `${record.user_id || ''} ${record.reference || ''} ${record.amount || ''}`, record })),
     ...auditLogs.map((record) => ({ type: 'Audit', title: record.action || record.entity_type, subtitle: `${record.admin_id || ''} ${record.user_id || ''} ${record.entity_id || ''}`, record }))
   ];
+}
+
+function matchesUser(record = {}, user = {}) {
+  const userKeys = [user.email, user.id, user.phone, user.username].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
+  if (!userKeys.length) return false;
+  const recordKeys = [record.user_id, record.email, record.id, record.admin_id, record.actor, record.entity_id].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
+  return recordKeys.some((value) => userKeys.includes(value));
+}
+
+function DetailGrid({ title, record }) {
+  if (!record) return null;
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {Object.entries(record || {}).map(([key, value]) => (
+          <div key={key} className="min-w-0 rounded-lg border border-border bg-card p-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{key.replace(/_/g, ' ')}</p>
+            <p className="mt-1 break-words font-mono text-xs">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '-')}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RelatedRows({ title, rows = [], empty = 'No related records.' }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold">{title}</h3>
+      {!rows.length ? (
+        <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">{empty}</div>
+      ) : (
+        <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+          {rows.map((row, index) => (
+            <div key={row.id || row.reference || row.transaction_reference || index} className="rounded-lg border border-border bg-card p-3 text-xs">
+              <div className="grid gap-2 sm:grid-cols-2">
+                {Object.entries(row).slice(0, 12).map(([key, value]) => (
+                  <div key={key} className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">{key.replace(/_/g, ' ')}</p>
+                    <p className="break-words font-mono">{typeof value === 'object' ? JSON.stringify(value) : String(value ?? '-')}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SuperOverviewSkeleton() {
@@ -119,6 +170,24 @@ export default function SAOverview() {
     if (!query) return [];
     return searchRows.filter((item) => `${item.type} ${item.title} ${item.subtitle} ${recordText(item.record)}`.toLowerCase().includes(query)).slice(0, 30);
   }, [searchRows, searchTerm]);
+  const selectedDetails = useMemo(() => {
+    if (!selectedRecord) return null;
+    const record = selectedRecord.record || {};
+    const user = selectedRecord.type === 'User'
+      ? record
+      : (users || []).find((candidate) => matchesUser(record, candidate));
+    const userKyc = user
+      ? (kycSubs || []).filter((item) => matchesUser(item, user))
+      : selectedRecord.type === 'KYC'
+        ? [record]
+        : [];
+    const userCards = user ? cards.filter((item) => matchesUser(item, user)) : [];
+    const userDeposits = user ? (deposits || []).filter((item) => matchesUser(item, user)) : [];
+    const userTickets = user ? (tickets || []).filter((item) => matchesUser(item, user)) : [];
+    const userTransactions = user ? (walletTransactions || []).filter((item) => matchesUser(item, user)) : [];
+    const userAudits = user ? (auditLogs || []).filter((item) => matchesUser(item, user)) : [];
+    return { user, userKyc, userCards, userDeposits, userTickets, userTransactions, userAudits };
+  }, [selectedRecord, users, kycSubs, cards, deposits, tickets, walletTransactions, auditLogs]);
   const syncProvider = useMutation({
     mutationFn: apiClient.admin.customers.syncBitnob,
     onSuccess: async (result) => {
@@ -280,14 +349,44 @@ export default function SAOverview() {
                 <p className="text-sm font-semibold">{selectedRecord.title}</p>
                 <p className="mt-1 break-words text-xs text-muted-foreground">{selectedRecord.subtitle}</p>
               </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {Object.entries(selectedRecord.record || {}).map(([key, value]) => (
-                  <div key={key} className="min-w-0 rounded-lg border border-border bg-card p-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{key.replace(/_/g, ' ')}</p>
-                    <p className="mt-1 break-words font-mono text-xs">{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '-')}</p>
+              {selectedDetails?.user && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    {selectedDetails.user.avatar_url ? (
+                      <img src={selectedDetails.user.avatar_url} alt={selectedDetails.user.full_name || selectedDetails.user.email} className="h-16 w-16 rounded-2xl object-cover" />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/15 text-lg font-bold text-primary">
+                        {String(selectedDetails.user.full_name || selectedDetails.user.email || '?').slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold">{selectedDetails.user.full_name || selectedDetails.user.email}</p>
+                      <p className="break-words text-xs text-muted-foreground">{selectedDetails.user.email} • {selectedDetails.user.phone || 'No phone'} • {selectedDetails.user.role || 'user'}</p>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
+              <DetailGrid title={`${selectedRecord.type} record`} record={selectedRecord.record} />
+              {selectedDetails?.user && selectedRecord.type !== 'User' && <DetailGrid title="Linked user account" record={selectedDetails.user} />}
+              {selectedDetails?.userKyc?.map((kycRecord) => (
+                <div key={kycRecord.id} className="space-y-3 rounded-xl border border-border bg-secondary/20 p-3">
+                  <DetailGrid title="KYC identity details" record={kycRecord} />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <FilePreview url={kycRecord.front_id_url} label="Front ID" />
+                    <FilePreview url={kycRecord.back_id_url} label="Back ID" />
+                    <FilePreview url={kycRecord.selfie_url} label="Selfie" />
+                  </div>
+                </div>
+              ))}
+              {selectedDetails?.user && (
+                <>
+                  <RelatedRows title="Cards" rows={selectedDetails.userCards} />
+                  <RelatedRows title="Deposits" rows={selectedDetails.userDeposits} />
+                  <RelatedRows title="Wallet transactions" rows={selectedDetails.userTransactions} />
+                  <RelatedRows title="Support tickets" rows={selectedDetails.userTickets} />
+                  <RelatedRows title="Audit logs" rows={selectedDetails.userAudits} />
+                </>
+              )}
             </div>
           )}
         </DialogContent>

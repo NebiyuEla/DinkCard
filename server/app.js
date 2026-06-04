@@ -869,26 +869,33 @@ function normalizeProviderBaseAmount(value, currency) {
 function normalizeProviderTransaction(tx = {}) {
   const currency = String(providerTransactionValue(tx, ['currency', 'asset', 'symbol', 'data.currency', 'metadata.currency']) || 'USD').toUpperCase();
   const formattedAmount = parseProviderFormattedAmount(providerTransactionValue(tx, ['amount_formatted', 'formatted_amount']));
+  const displayAmount = Number(providerTransactionValue(tx, ['display_amount', 'displayAmount', 'amount_usd', 'usd_amount', 'metadata.display_amount', 'metadata.usd_amount', 'metadata.original_amount']));
   const amount = Number.isFinite(formattedAmount)
     ? formattedAmount
-    : normalizeProviderBaseAmount(providerTransactionValue(tx, ['display_amount', 'amount_usd', 'amount', 'value', 'data.amount', 'metadata.amount']), currency);
+    : Number.isFinite(displayAmount)
+      ? displayAmount
+      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['amount', 'value', 'data.amount', 'metadata.amount']), currency);
   const formattedFee = parseProviderFormattedAmount(providerTransactionValue(tx, ['fee_formatted', 'formatted_fee']));
+  const displayFee = Number(providerTransactionValue(tx, ['display_fee', 'displayFee', 'fee_usd', 'metadata.display_fee']));
   const fee = Number.isFinite(formattedFee)
     ? formattedFee
-    : normalizeProviderBaseAmount(providerTransactionValue(tx, ['display_fee', 'fee_usd', 'fee', 'charges', 'metadata.fee']), currency);
+    : Number.isFinite(displayFee)
+      ? displayFee
+      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['fee', 'charges', 'metadata.fee']), currency);
 
   return {
     raw: tx,
     date: providerTransactionValue(tx, ['created_at', 'createdAt', 'date', 'timestamp', 'updated_at']),
-    reference: String(providerTransactionValue(tx, ['reference', 'tx_ref', 'transaction_reference', 'id', 'transaction_id', 'metadata.reference', 'metadata.tx_ref'])).trim(),
-    txHash: String(providerTransactionValue(tx, ['tx_hash', 'txHash', 'transaction_hash', 'hash', 'metadata.tx_hash'])).trim(),
-    type: String(providerTransactionValue(tx, ['type', 'event', 'transaction_type', 'category']) || 'transaction'),
+    reference: String(providerTransactionValue(tx, ['reference', 'tx_ref', 'transaction_reference', 'id', 'transaction_id', 'metadata.reference', 'metadata.tx_ref', 'metadata.request_id'])).trim(),
+    txHash: String(providerTransactionValue(tx, ['tx_hash', 'txHash', 'transaction_hash', 'hash', 'metadata.tx_hash', 'metadata.txHash', 'metadata.transaction_hash'])).trim(),
+    type: String(providerTransactionValue(tx, ['type', 'event', 'transaction_type', 'category', 'metadata.type', 'metadata.deposit_type']) || 'transaction'),
+    side: String(providerTransactionValue(tx, ['side', 'direction', 'metadata.side']) || ''),
     amount: Number.isFinite(amount) ? amount : 0,
     fee: Number.isFinite(fee) ? fee : 0,
     status: String(providerTransactionValue(tx, ['status', 'state', 'payment_status']) || ''),
     currency,
-    address: String(providerTransactionValue(tx, ['address', 'deposit_address', 'wallet_address', 'to_address', 'destination_address', 'recipient_address', 'metadata.address'])).trim(),
-    network: String(providerTransactionValue(tx, ['chain', 'network', 'metadata.chain', 'metadata.network'])).trim()
+    address: String(providerTransactionValue(tx, ['address', 'deposit_address', 'wallet_address', 'to_address', 'destination_address', 'recipient_address', 'metadata.address', 'metadata.wallet_address'])).trim(),
+    network: String(providerTransactionValue(tx, ['chain', 'network', 'metadata.chain', 'metadata.network', 'metadata.channel'])).trim()
   };
 }
 
@@ -908,8 +915,9 @@ function cryptoDepositMatchesProviderTransaction(deposit, tx) {
   const amountCovers = Number.isFinite(depositAmount) && Number(tx.amount || 0) + 0.000001 >= depositAmount;
   const currencyMatches = !depositCurrency || !txCurrency || txCurrency === depositCurrency || (depositCurrency === 'USDC' && txCurrency === 'USD');
   const networkMatches = !depositNetwork || !txNetwork || txNetwork === depositNetwork;
+  const depositLike = String(tx.type || '').toLowerCase().includes('deposit') || String(tx.side || '').toLowerCase() === 'credit';
   const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(String(tx.status || '').toLowerCase())
-    && String(tx.type || '').toLowerCase().includes('deposit')
+    && depositLike
     && Number(tx.amount || 0) > 0;
 
   if (!successfulDepositTx) return false;
@@ -3178,20 +3186,31 @@ export function createApp() {
       const type = String(req.query.type || '').trim();
       const transactions = [];
       const pages = [];
-      let cursor = '';
-      for (let page = 0; page < 5; page += 1) {
-        const query = [
-          'limit=100',
-          type && type !== 'all' ? `type=${encodeURIComponent(type)}` : '',
-          cursor ? `cursor=${encodeURIComponent(cursor)}` : ''
-        ].filter(Boolean).join('&');
-        const provider = await bitnobService.listTransactions(query);
-        pages.push(provider);
-        transactions.push(...normalizeProviderList(provider).map(normalizeProviderTransaction));
-        cursor = String(provider?.data?.next_cursor || provider?.next_cursor || '').trim();
-        if (!cursor) break;
+      const seen = new Set();
+      const queryTypes = type && type !== 'all' ? [type] : ['', 'credit'];
+      let hasMore = false;
+      for (const queryType of queryTypes) {
+        let cursor = '';
+        for (let page = 0; page < 5; page += 1) {
+          const query = [
+            'limit=100',
+            queryType ? `type=${encodeURIComponent(queryType)}` : '',
+            cursor ? `cursor=${encodeURIComponent(cursor)}` : ''
+          ].filter(Boolean).join('&');
+          const provider = await bitnobService.listTransactions(query);
+          pages.push(provider);
+          for (const tx of normalizeProviderList(provider).map(normalizeProviderTransaction)) {
+            const key = [tx.reference, tx.txHash, tx.date, tx.type, tx.amount, tx.currency].filter(Boolean).join('|');
+            if (seen.has(key)) continue;
+            seen.add(key);
+            transactions.push(tx);
+          }
+          cursor = String(provider?.data?.next_cursor || provider?.next_cursor || '').trim();
+          hasMore = hasMore || Boolean(cursor);
+          if (!cursor) break;
+        }
       }
-      res.json({ provider: pages[0] || null, transactions, pages: pages.length, hasMore: Boolean(cursor) });
+      res.json({ provider: pages[0] || null, transactions, pages: pages.length, hasMore });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list provider transactions.' });
     }

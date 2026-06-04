@@ -22,7 +22,7 @@ export default function AdminDeposits() {
     queryFn: () => apiClient.entities.Deposit.list('-created_date', 100),
     refetchInterval: REFRESH.admin
   });
-  const { data: providerTxData } = useQuery({
+  const providerTxQuery = useQuery({
     queryKey: ['admin-provider-deposit-transactions'],
     queryFn: () => apiClient.admin.bitnob.transactions('all'),
     refetchInterval: REFRESH.admin,
@@ -35,6 +35,7 @@ export default function AdminDeposits() {
   const canManuallyApprove = (deposit) => {
     return Boolean(deposit && MANUAL_APPROVAL_STATUSES.has(deposit.status));
   };
+  const providerTxData = providerTxQuery.data;
   const providerTransactions = providerTxData?.transactions || [];
   const latestCryptoDepositTransactions = providerTransactions.filter(isCryptoDepositProviderTx).slice(0, 8);
   const selectedProviderMatches = selected ? providerTransactions.filter((tx) => cryptoDepositLooksMatched(selected, tx)) : [];
@@ -116,7 +117,7 @@ export default function AdminDeposits() {
         </div>
       </div>
 
-      <ProviderTransactionsPanel rows={latestCryptoDepositTransactions} />
+      <ProviderTransactionsPanel rows={latestCryptoDepositTransactions} isError={providerTxQuery.isError} error={providerTxQuery.error} />
 
       {/* Detail dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
@@ -235,8 +236,11 @@ function cryptoDepositLooksMatched(deposit, tx) {
   const network = normalizeText(deposit.payment_network);
   const txNetwork = normalizeText(tx.network);
   const networkMatches = !network || !txNetwork || network === txNetwork;
+  const type = normalizeText(tx.type);
+  const side = normalizeText(tx.side || tx.raw?.side);
+  const depositLike = type.includes('deposit') || side === 'credit' || normalizeText(tx.raw?.metadata?.deposit_type).includes('deposit');
   const successfulDepositTx = ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx.status))
-    && normalizeText(tx.type).includes('deposit')
+    && depositLike
     && Number(tx.amount || 0) > 0;
   if (!successfulDepositTx) return false;
   if (normalizeText(deposit.transaction_reference) && normalizeText(deposit.transaction_reference) === normalizeText(tx.reference) && currencyMatches && amountCovers) return true;
@@ -246,13 +250,17 @@ function cryptoDepositLooksMatched(deposit, tx) {
 }
 
 function isCryptoDepositProviderTx(tx) {
+  const type = normalizeText(tx?.type);
+  const side = normalizeText(tx?.side || tx?.raw?.side);
+  const metadata = tx?.raw?.metadata || {};
+  const depositLike = type.includes('deposit') || normalizeText(metadata.deposit_type).includes('deposit') || side === 'credit';
   return ['settled', 'success', 'successful', 'confirmed', 'completed'].includes(normalizeText(tx?.status))
-    && normalizeText(tx?.type).includes('deposit')
+    && depositLike
     && ['USDC', 'USDT', 'BTC'].includes(String(tx?.currency || '').toUpperCase())
     && Number(tx?.amount || 0) > 0;
 }
 
-function ProviderTransactionsPanel({ rows }) {
+function ProviderTransactionsPanel({ rows, isError = false, error = null }) {
   return (
     <div className="rounded-xl border border-border bg-card p-3 shadow-sm">
       <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -262,7 +270,13 @@ function ProviderTransactionsPanel({ rows }) {
         </div>
         <span className="text-[11px] text-muted-foreground">Showing latest {Math.min(rows?.length || 0, 8)}</span>
       </div>
-      <ProviderMiniRows rows={rows} />
+      {isError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
+          Provider transactions could not load: {error?.message || 'Check provider credentials and transaction permissions.'}
+        </div>
+      ) : (
+        <ProviderMiniRows rows={rows} />
+      )}
     </div>
   );
 }

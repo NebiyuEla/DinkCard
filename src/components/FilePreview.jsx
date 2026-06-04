@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ExternalLink, FileText, RotateCcw, RotateCw } from 'lucide-react';
+import React from 'react';
+import { ExternalLink, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 function isImageUrl(url = '') {
@@ -15,7 +15,6 @@ function isVideoUrl(url = '') {
 }
 
 export default function FilePreview({ url, label = 'Uploaded file', className = '' }) {
-  const [rotation, setRotation] = useState(0);
   if (!url) return null;
   const isImage = isImageUrl(url);
 
@@ -27,9 +26,8 @@ export default function FilePreview({ url, label = 'Uploaded file', className = 
             <img
               src={url}
               alt={label}
-              className="max-h-full max-w-full object-contain transition-transform"
+              className="max-h-full max-w-full object-contain"
               loading="lazy"
-              style={{ transform: `rotate(${rotation}deg)` }}
             />
           </div>
         </a>
@@ -46,16 +44,6 @@ export default function FilePreview({ url, label = 'Uploaded file', className = 
         </div>
       )}
       <div className="border-t border-border p-2">
-        {isImage && (
-          <div className="mb-2 grid grid-cols-2 gap-2">
-            <Button type="button" variant="secondary" size="sm" onClick={() => setRotation((value) => value - 90)}>
-              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Rotate
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => setRotation((value) => value + 90)}>
-              <RotateCw className="mr-1.5 h-3.5 w-3.5" /> Rotate
-            </Button>
-          </div>
-        )}
         <Button asChild variant="outline" size="sm" className="w-full">
           <a href={url} target="_blank" rel="noreferrer">
             <ExternalLink className="w-3.5 h-3.5 mr-2" />
