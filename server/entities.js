@@ -1,4 +1,5 @@
 import { db, mapRow } from './db.js';
+import { config } from './config.js';
 import { generateId, nowIso } from './utils.js';
 
 const tableMap = {
@@ -22,7 +23,7 @@ const fieldMap = {
   Wallet: ['id', 'user_id', 'currency', 'available_balance', 'locked_balance', 'status', 'created_at', 'updated_at'],
   WalletTransaction: ['id', 'user_id', 'wallet_id', 'type', 'amount', 'currency', 'balance_before', 'balance_after', 'status', 'reference', 'description', 'metadata', 'created_at'],
   KYCSubmission: ['id', 'user_id', 'first_name', 'last_name', 'legal_name', 'date_of_birth', 'gender', 'phone', 'email', 'address', 'street_address', 'city', 'state', 'postal_code', 'country', 'id_type', 'id_number', 'front_id_url', 'back_id_url', 'selfie_url', 'level', 'status', 'rejection_reason', 'resubmission_scope', 'resubmission_fields', 'reviewed_by', 'reviewed_at', 'created_at', 'updated_at'],
-  VirtualCard: ['id', 'user_id', 'provider', 'provider_card_id', 'customer_reference', 'card_nickname', 'card_type', 'brand', 'currency', 'last_four', 'expiry_month', 'expiry_year', 'balance', 'status', 'billing_address', 'masked_pan', 'card_pin_enabled_at', 'meta', 'created_at', 'updated_at'],
+  VirtualCard: ['id', 'user_id', 'provider', 'provider_card_id', 'customer_reference', 'card_nickname', 'card_type', 'brand', 'currency', 'last_four', 'expiry_month', 'expiry_year', 'balance', 'status', 'billing_address', 'masked_pan', 'card_pin_enabled_at', 'environment', 'meta', 'created_at', 'updated_at'],
   Deposit: ['id', 'user_id', 'payment_method', 'payment_currency', 'payment_network', 'payment_address', 'payment_amount', 'tx_hash', 'requested_usd_amount', 'exchange_rate', 'etb_amount', 'service_fee_etb', 'gateway_fee_etb', 'total_payable_etb', 'final_usd_credit', 'proof_url', 'sender_name', 'sender_phone', 'transaction_reference', 'status', 'rejection_reason', 'approved_by', 'approved_at', 'admin_note', 'promo_code', 'provider_reference', 'provider_status', 'provider_payload', 'source', 'verified_at', 'checkout_url', 'created_at', 'updated_at'],
   Notification: ['id', 'user_id', 'title', 'message', 'type', 'read', 'link', 'created_at'],
   SupportTicket: ['id', 'user_id', 'category', 'subject', 'message', 'contact_name', 'contact_email', 'contact_phone', 'contact_target_email', 'screenshot_url', 'related_transaction_id', 'related_card_id', 'status', 'priority', 'created_at', 'updated_at'],
@@ -97,6 +98,23 @@ function requireFields(payload, fields, message) {
   }
 }
 
+function normalizeKycPayload(payload) {
+  const next = { ...payload, country: 'Ethiopia' };
+  next.id_type = String(next.id_type || '').trim().toLowerCase();
+  next.id_number = String(next.id_number || '').trim();
+  if (next.id_type === 'national_id') {
+    const digits = next.id_number.replace(/\D/g, '');
+    if (digits.length !== 16) {
+      throw new Error('National ID number must be exactly 16 digits.');
+    }
+    next.id_number = digits.replace(/(\d{4})(?=\d)/g, '$1-');
+  }
+  if (['passport', 'drivers_license'].includes(next.id_type)) {
+    next.back_id_url = '';
+  }
+  return next;
+}
+
 function getOwnerField(entity) {
   return ['Wallet', 'KYCSubmission', 'VirtualCard', 'Deposit', 'Notification', 'WalletTransaction', 'SupportTicket', 'CardFundingRequest'].includes(entity)
     ? 'user_id'
@@ -130,6 +148,19 @@ export function queryEntities(entity, { filter = {}, sort, limit }, user) {
   if (user.role === 'user' && entity === 'User') {
     clauses.push('email = ?');
     params.push(user.email);
+  }
+  if (entity === 'VirtualCard') {
+    clauses.push('environment = ?');
+    params.push(config.bitnob.env);
+    clauses.push("COALESCE(LOWER(status), '') NOT IN ('deleted_remote', 'deleted', 'archived')");
+    clauses.push(`
+      NOT EXISTS (
+        SELECT 1 FROM bitnob_customers bc
+        WHERE bc.environment = virtual_cards.environment
+          AND bc.bitnob_customer_id IN (virtual_cards.bitnob_customer_id, virtual_cards.customer_reference)
+          AND COALESCE(LOWER(bc.status), '') IN ('deleted_remote', 'deleted', 'archived')
+      )
+    `);
   }
 
   Object.entries(filter || {}).forEach(([key, value]) => {
@@ -178,6 +209,7 @@ export function createEntity(entity, data, user) {
     payload.status = 'pending';
     payload.level = 2;
     requireFields(payload, ['first_name', 'last_name', 'date_of_birth', 'phone', 'street_address', 'city', 'state', 'postal_code', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before submitting.');
+    payload = normalizeKycPayload(payload);
   }
 
   if (entity === 'FeeSettings') {
@@ -286,6 +318,7 @@ export function updateEntity(entity, id, data, user) {
     payload.reviewed_by = null;
     payload.reviewed_at = null;
     requireFields(payload, ['first_name', 'last_name', 'date_of_birth', 'phone', 'street_address', 'city', 'state', 'postal_code', 'id_type', 'id_number', 'front_id_url', 'selfie_url'], 'Complete all required KYC fields and uploads before resubmitting.');
+    payload = normalizeKycPayload(payload);
   }
   if (entity === 'PaymentMethod' && !isOwner(user)) throw new Error('Owner access required');
   if (entity === 'AuditLog') throw new Error('Audit logs are immutable');

@@ -287,6 +287,25 @@ function normalizeUsername(value) {
   return toUsername(value);
 }
 
+function normalizeEmailAddress(value) {
+  const clean = String(value || '').trim().toLowerCase();
+  if (!clean.includes('@')) return clean;
+  const [localPart, rawDomain = ''] = clean.split('@');
+  const compactDomain = rawDomain.replace(/\s+/g, '');
+  const domainFixes = new Map([
+    ['gmai.com', 'gmail.com'],
+    ['gmial.com', 'gmail.com'],
+    ['gmail.con', 'gmail.com'],
+    ['gmail.co', 'gmail.com'],
+    ['gmal.com', 'gmail.com'],
+    ['hotmial.com', 'hotmail.com'],
+    ['hotmai.com', 'hotmail.com'],
+    ['yaho.com', 'yahoo.com'],
+    ['yahoo.con', 'yahoo.com']
+  ]);
+  return `${localPart}@${domainFixes.get(compactDomain) || compactDomain}`;
+}
+
 const uploadStorage = multer.diskStorage({
   destination: config.uploadDir,
   filename: (req, file, callback) => {
@@ -1245,7 +1264,7 @@ function compactPayload(payload) {
 }
 
 function findUserByIdentifier(identifier) {
-  const normalized = String(identifier || '').trim().toLowerCase();
+  const normalized = normalizeEmailAddress(identifier);
   if (!normalized) return null;
   let normalizedPhone = null;
   try {
@@ -1939,7 +1958,7 @@ export function createApp() {
       return res.status(400).json({ message: 'You must agree to the Terms & Conditions before using the platform.' });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedEmail = normalizeEmailAddress(email);
     const normalizedUsername = normalizeUsername(username);
     const normalizedPhone = normalizeEthiopianPhone(phone);
     const cleanFirstName = formatPersonName(firstName);
@@ -2000,7 +2019,7 @@ export function createApp() {
 
   app.post('/api/auth/login', authLimiter, async (req, res) => {
     const { identifier, email, username, password, portal } = req.body;
-    const normalized = String(identifier || email || username || '').trim().toLowerCase();
+    const normalized = normalizeEmailAddress(identifier || email || username);
 
     if (!normalized || !password) {
       return res.status(400).json({ message: 'Email and password are required.' });
@@ -2052,7 +2071,7 @@ export function createApp() {
   });
 
   app.post('/api/auth/password-reset/request', authLimiter, (req, res) => {
-    const identifier = String(req.body.identifier || '').trim().toLowerCase();
+    const identifier = normalizeEmailAddress(req.body.identifier);
     const providedLastName = String(req.body.lastName || '').trim().toLowerCase();
     const providedDob = String(req.body.dateOfBirth || '').trim();
     if (!identifier) return res.status(400).json({ message: 'Enter your email, phone number, or username.' });
@@ -2271,6 +2290,8 @@ export function createApp() {
   app.patch('/api/auth/me', authMiddleware(db), (req, res) => {
     const updates = [];
     const values = [];
+    const currentUser = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!currentUser) return res.status(404).json({ message: 'User not found.' });
     const approvedKyc = db.prepare(`
       SELECT id FROM kyc_submissions
       WHERE user_id = ? AND status = 'approved'
@@ -2300,13 +2321,26 @@ export function createApp() {
 
     if (typeof req.body.username === 'string') {
       const username = normalizeUsername(req.body.username);
+      const currentUsername = normalizeUsername(currentUser.username);
+      const usernameChanged = username !== currentUsername;
       if (username) {
         if (!/^[a-z0-9_]+$/.test(username)) return res.status(400).json({ message: 'Username can only contain letters, numbers, and underscore.' });
         const existing = db.prepare('SELECT id FROM users WHERE lower(username) = ? AND id != ?').get(username, req.user.id);
         if (existing) return res.status(409).json({ message: 'That username is already in use.' });
       }
+      if (usernameChanged && currentUser.username_changed_at) {
+        const nextAllowed = Date.parse(currentUser.username_changed_at) + 15 * 24 * 60 * 60 * 1000;
+        if (Number.isFinite(nextAllowed) && Date.now() < nextAllowed) {
+          const remainingDays = Math.ceil((nextAllowed - Date.now()) / (24 * 60 * 60 * 1000));
+          return res.status(429).json({ message: `You can change your username again in ${remainingDays} day${remainingDays === 1 ? '' : 's'}.` });
+        }
+      }
       updates.push('username = ?');
       values.push(username || null);
+      if (usernameChanged) {
+        updates.push('username_changed_at = ?');
+        values.push(nowIso());
+      }
     }
 
     if (req.body.terms_accepted_version) {

@@ -92,11 +92,6 @@ export default function AdminDeposits() {
                 <Button variant="ghost" size="sm" onClick={() => setSelected(d)}>
                   <Eye className="w-4 h-4" />
                 </Button>
-                {canManuallyApprove(d) && (
-                  <Button size="sm" onClick={() => approveDeposit.mutate(d)} disabled={approveDeposit.isPending} className="bg-primary text-primary-foreground">
-                    Approve
-                  </Button>
-                )}
               </div>
             </div>
           ))}

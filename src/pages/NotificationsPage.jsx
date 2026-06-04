@@ -68,6 +68,16 @@ export default function NotificationsPage() {
         ? 'Alerts Blocked'
         : 'Enable Alerts';
 
+  const notificationLink = (link) => {
+    const raw = String(link || '');
+    if (!raw) return '';
+    if (user?.role === 'superadmin' && raw.startsWith('/admin')) {
+      if (raw === '/admin' || raw === '/admin/dashboard') return '/superadmin/dashboard';
+      return raw.replace(/^\/admin/, '/superadmin');
+    }
+    return raw;
+  };
+
   return (
     <div className="min-w-0 space-y-5 overflow-x-hidden">
       <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -132,11 +142,11 @@ export default function NotificationsPage() {
                 <div className="flex-1 min-w-0">
                   <p className={cn("text-sm font-medium", !notif.read && "text-foreground")}>{notif.title}</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-xs text-muted-foreground">{notif.message}</p>
-                  {notif.link?.startsWith('/uploads/') && (
-                    <FilePreview url={notif.link} label="Notification attachment" className="mt-2 max-w-md" />
+                  {notificationLink(notif.link)?.startsWith('/uploads/') && (
+                    <FilePreview url={notificationLink(notif.link)} label="Notification attachment" className="mt-2 max-w-md" />
                   )}
-                  {notif.link && !notif.link.startsWith('/uploads/') && (
-                    <a href={notif.link} className="mt-2 inline-flex text-xs font-medium text-primary hover:underline" onClick={(event) => event.stopPropagation()}>
+                  {notificationLink(notif.link) && !notificationLink(notif.link).startsWith('/uploads/') && (
+                    <a href={notificationLink(notif.link)} className="mt-2 inline-flex text-xs font-medium text-primary hover:underline" onClick={(event) => event.stopPropagation()}>
                       Open
                     </a>
                   )}

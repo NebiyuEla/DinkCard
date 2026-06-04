@@ -65,6 +65,18 @@ function normalizeEtPhone(value) {
   return digits.slice(0, 9);
 }
 
+function formatNationalId(value) {
+  return String(value || '')
+    .replace(/\D/g, '')
+    .slice(0, 16)
+    .replace(/(\d{4})(?=\d)/g, '$1-');
+}
+
+function normalizeIdNumber(idType, value) {
+  if (idType === 'national_id') return formatNationalId(value);
+  return String(value || '').trim().replace(/\s+/g, '');
+}
+
 export default function KYCPage() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
@@ -156,8 +168,10 @@ export default function KYCPage() {
         ...form,
         legal_name: `${String(form.first_name || '').trim()} ${String(form.last_name || '').trim()}`.trim(),
         phone: normalizeEtPhone(form.phone),
+        country: 'Ethiopia',
+        id_number: normalizeIdNumber(form.id_type, form.id_number),
         front_id_url: frontIdUrl,
-        back_id_url: backIdUrl,
+        back_id_url: ['passport', 'drivers_license'].includes(form.id_type) ? '' : backIdUrl,
         selfie_url: selfieUrl,
         level: 2,
         status: 'pending'
@@ -180,6 +194,8 @@ export default function KYCPage() {
   });
 
   const needsBackId = false;
+  const nationalIdDigits = String(form.id_number || '').replace(/\D/g, '');
+  const nationalIdInvalid = form.id_type === 'national_id' && nationalIdDigits.length !== 16;
   const requiredMissing = [
     !form.first_name && 'First name',
     !form.last_name && 'Last name',
@@ -190,6 +206,7 @@ export default function KYCPage() {
     !form.postal_code && 'Postal code',
     !form.id_type && 'ID type',
     !form.id_number && 'ID number',
+    nationalIdInvalid && '16-digit National ID number',
     !frontIdUrl && 'Front of ID',
     !selfieUrl && 'Selfie'
   ].filter(Boolean);
@@ -346,7 +363,31 @@ export default function KYCPage() {
               </SelectContent>
             </Select>
           </div>
-          <div><Label className="text-sm">{form.id_type === 'passport' ? 'Passport Number' : form.id_type === 'drivers_license' ? 'Driver&apos;s License Number' : 'National ID Number'}</Label><Input value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value.trim()})} className="mt-1.5" /></div>
+          <div>
+            <Label className="text-sm">{form.id_type === 'passport' ? 'Passport Number' : form.id_type === 'drivers_license' ? 'Driver&apos;s License Number' : 'National ID Number'}</Label>
+            <Input
+              value={form.id_number}
+              inputMode={form.id_type === 'national_id' ? 'numeric' : undefined}
+              maxLength={form.id_type === 'national_id' ? 19 : undefined}
+              placeholder={form.id_type === 'national_id' ? '1234-5678-9012-3456' : undefined}
+              onChange={e => setForm({ ...form, id_number: normalizeIdNumber(form.id_type, e.target.value) })}
+              className="mt-1.5"
+            />
+            {form.id_type === 'national_id' && (
+              <p className="mt-1 text-xs text-muted-foreground">{nationalIdDigits.length}/16 digits</p>
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-xs sm:grid-cols-2">
+          <div className="rounded-lg border border-primary/25 bg-primary/5 p-3">
+            <p className="font-semibold text-primary">Good upload</p>
+            <p className="mt-1 text-muted-foreground">Clear, full document visible, no glare, real selfie, readable ID number.</p>
+          </div>
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-3">
+            <p className="font-semibold text-destructive">Bad upload</p>
+            <p className="mt-1 text-muted-foreground">Blurry, cropped edges, edited image, covered face, glare, or unreadable document.</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -34,6 +34,13 @@ function maskIdNumber(value) {
   return `${'*'.repeat(Math.max(0, clean.length - 4))}${clean.slice(-4)}`;
 }
 
+function usernameCooldownDays(user) {
+  if (!user?.username_changed_at) return 0;
+  const nextAllowed = Date.parse(user.username_changed_at) + 15 * 24 * 60 * 60 * 1000;
+  if (!Number.isFinite(nextAllowed) || Date.now() >= nextAllowed) return 0;
+  return Math.ceil((nextAllowed - Date.now()) / (24 * 60 * 60 * 1000));
+}
+
 export default function AccountPage() {
   const queryClient = useQueryClient();
   const { data: user } = useCurrentUser();
@@ -95,6 +102,8 @@ export default function AccountPage() {
   );
   const twoFactorEnabled = Boolean(user?.two_factor_enabled);
   const kycLocked = kyc?.status === 'approved';
+  const usernameWaitDays = usernameCooldownDays(user);
+  const usernameChanged = String(form.username || '') !== String(user?.username || '');
 
   const refreshUser = async () => {
     await queryClient.invalidateQueries({ queryKey: ['currentUser'] });
@@ -242,7 +251,13 @@ export default function AccountPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Username</Label>
-                <Input value={form.username} onChange={(event) => setForm((current) => ({ ...current, username: event.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '') }))} />
+                <Input
+                  value={form.username}
+                  onChange={(event) => setForm((current) => ({ ...current, username: event.target.value.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9_]/g, '') }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {usernameWaitDays > 0 ? `Username can be changed again in ${usernameWaitDays} day${usernameWaitDays === 1 ? '' : 's'}.` : 'Username can be changed once every 15 days.'}
+                </p>
               </div>
               <div className="space-y-1.5">
                 <Label>Phone</Label>
@@ -251,7 +266,7 @@ export default function AccountPage() {
             </div>
             {kycLocked && <p className="mt-3 text-xs text-muted-foreground">Your identity details are locked after approved KYC. You can still change password and security settings.</p>}
             <div className="mt-4 flex justify-end">
-              <Button type="button" onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
+              <Button type="button" onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending || (usernameWaitDays > 0 && usernameChanged)}>
                 {updateProfile.isPending ? 'Saving...' : 'Save profile'}
               </Button>
             </div>

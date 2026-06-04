@@ -15,6 +15,20 @@ import BrandLogo from '@/components/BrandLogo';
 import SecretInput from '@/components/SecretInput';
 import ThemeToggle from '@/components/ThemeToggle';
 
+function normalizeEmailInput(value) {
+  const clean = String(value || '').trim().toLowerCase();
+  if (!clean.includes('@')) return clean;
+  const [local, domain = ''] = clean.split('@');
+  const fixes = {
+    'gmai.com': 'gmail.com',
+    'gmial.com': 'gmail.com',
+    'gmail.con': 'gmail.com',
+    'gmail.co': 'gmail.com',
+    'gmal.com': 'gmail.com'
+  };
+  return `${local}@${fixes[domain] || domain}`;
+}
+
 export default function Register() {
   const { setAuthenticatedUser } = useAuth();
   const navigate = useNavigate();
@@ -96,7 +110,7 @@ export default function Register() {
           </div>
           <div>
             <Label>Email</Label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1.5" />
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setEmail((current) => normalizeEmailInput(current))} className="mt-1.5" />
           </div>
           <div>
             <Label>Phone Number</Label>

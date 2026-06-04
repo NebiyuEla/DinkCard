@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
@@ -107,6 +107,7 @@ function AdminOverviewSkeleton() {
 export default function AdminDashboard() {
   const queryClient = useQueryClient();
   const location = useLocation();
+  const navigate = useNavigate();
   const { data: currentUser } = useCurrentUser();
   const { data: adminNotifications } = useNotifications(currentUser?.email);
   const [soundMuted, setSoundMuted] = useState(() => localStorage.getItem(ADMIN_SOUND_KEY) === 'muted');
@@ -120,6 +121,14 @@ export default function AdminDashboard() {
     if (item.ownerOnly) return false;
     return access?.has(item.path);
   });
+
+  useEffect(() => {
+    if (currentUser?.role !== 'superadmin' || !location.pathname.startsWith('/admin')) return;
+    const nextPath = location.pathname === '/admin' || location.pathname === '/admin/dashboard'
+      ? '/superadmin/dashboard'
+      : location.pathname.replace(/^\/admin/, '/superadmin');
+    navigate(nextPath, { replace: true });
+  }, [currentUser?.role, location.pathname, navigate]);
 
   const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const kycQuery = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });

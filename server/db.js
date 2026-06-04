@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
   two_factor_temp_secret TEXT,
   two_factor_recovery_codes TEXT,
   two_factor_enabled_at TEXT,
+  username_changed_at TEXT,
   password_reset_token_hash TEXT,
   password_reset_expires_at TEXT,
   created_at TEXT NOT NULL,
@@ -105,7 +106,7 @@ CREATE TABLE IF NOT EXISTS virtual_cards (
   user_id TEXT NOT NULL,
   provider TEXT NOT NULL DEFAULT 'bitnob',
   bitnob_customer_id TEXT,
-  provider_card_id TEXT UNIQUE,
+  provider_card_id TEXT,
   customer_reference TEXT,
   card_nickname TEXT NOT NULL,
   card_type TEXT NOT NULL DEFAULT 'general',
@@ -359,10 +360,16 @@ ensureColumn('virtual_cards', 'card_pin_hash', 'TEXT');
 ensureColumn('virtual_cards', 'card_pin_enabled_at', 'TEXT');
 ensureColumn('virtual_cards', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 db.prepare("UPDATE virtual_cards SET environment = 'sandbox' WHERE environment IS NULL OR environment = ''").run();
+db.prepare("UPDATE virtual_cards SET environment = LOWER(TRIM(environment)) WHERE environment IS NOT NULL").run();
+db.prepare("UPDATE virtual_cards SET environment = 'live' WHERE environment IN ('prod', 'production')").run();
+db.prepare("UPDATE virtual_cards SET environment = 'sandbox' WHERE environment IN ('test', 'testing')").run();
 ensureColumn('wallet_transactions', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'environment', "TEXT NOT NULL DEFAULT 'sandbox'");
 ensureColumn('bitnob_customers', 'provider', "TEXT NOT NULL DEFAULT 'bitnob'");
 db.prepare("UPDATE bitnob_customers SET environment = 'sandbox' WHERE environment IS NULL OR environment = ''").run();
+db.prepare("UPDATE bitnob_customers SET environment = LOWER(TRIM(environment)) WHERE environment IS NOT NULL").run();
+db.prepare("UPDATE bitnob_customers SET environment = 'live' WHERE environment IN ('prod', 'production')").run();
+db.prepare("UPDATE bitnob_customers SET environment = 'sandbox' WHERE environment IN ('test', 'testing')").run();
 db.prepare("UPDATE bitnob_customers SET provider = 'bitnob' WHERE provider IS NULL OR provider = ''").run();
 ensureColumn('fee_settings', 'gateway_fee_percentage', 'REAL NOT NULL DEFAULT 2.5');
 ensureColumn('fee_settings', 'service_margin_percentage', 'REAL NOT NULL DEFAULT 15');
@@ -435,6 +442,81 @@ function migrateBitnobCustomersEnvironmentUniqueness() {
 migrateBitnobCustomersEnvironmentUniqueness();
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_bitnob_customers_provider_env_id ON bitnob_customers(provider, environment, bitnob_customer_id);');
 
+function migrateVirtualCardsEnvironmentUniqueness() {
+  const hasLegacyUniqueIndex = db
+    .prepare("PRAGMA index_list('virtual_cards')")
+    .all()
+    .some((row) => row.origin === 'u');
+
+  if (!hasLegacyUniqueIndex) return;
+
+  db.exec(`
+    ALTER TABLE virtual_cards RENAME TO virtual_cards_legacy_unique;
+
+    CREATE TABLE virtual_cards (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL DEFAULT 'bitnob',
+      bitnob_customer_id TEXT,
+      provider_card_id TEXT,
+      customer_reference TEXT,
+      card_nickname TEXT NOT NULL,
+      card_type TEXT NOT NULL DEFAULT 'general',
+      brand TEXT NOT NULL DEFAULT 'visa',
+      currency TEXT NOT NULL DEFAULT 'USD',
+      last_four TEXT,
+      expiry_month TEXT,
+      expiry_year TEXT,
+      balance REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      billing_address TEXT,
+      masked_pan TEXT,
+      card_pin_hash TEXT,
+      card_pin_enabled_at TEXT,
+      environment TEXT NOT NULL DEFAULT 'sandbox',
+      meta TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    INSERT INTO virtual_cards (
+      id, user_id, provider, bitnob_customer_id, provider_card_id, customer_reference, card_nickname, card_type, brand, currency,
+      last_four, expiry_month, expiry_year, balance, status, billing_address, masked_pan, card_pin_hash, card_pin_enabled_at,
+      environment, meta, created_at, updated_at
+    )
+    SELECT
+      id,
+      user_id,
+      COALESCE(NULLIF(provider, ''), 'bitnob'),
+      bitnob_customer_id,
+      provider_card_id,
+      customer_reference,
+      card_nickname,
+      card_type,
+      brand,
+      currency,
+      last_four,
+      expiry_month,
+      expiry_year,
+      balance,
+      status,
+      billing_address,
+      masked_pan,
+      card_pin_hash,
+      card_pin_enabled_at,
+      COALESCE(NULLIF(environment, ''), 'sandbox'),
+      meta,
+      created_at,
+      updated_at
+    FROM virtual_cards_legacy_unique;
+
+    DROP TABLE virtual_cards_legacy_unique;
+  `);
+}
+
+migrateVirtualCardsEnvironmentUniqueness();
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_virtual_cards_provider_env_card_id ON virtual_cards(provider, environment, provider_card_id) WHERE provider_card_id IS NOT NULL AND provider_card_id != '';");
+
 ensureColumn('deposits', 'provider_status', 'TEXT');
 ensureColumn('deposits', 'provider_payload', 'TEXT');
 ensureColumn('deposits', 'source', "TEXT NOT NULL DEFAULT 'dinkcard'");
@@ -458,6 +540,7 @@ ensureColumn('users', 'two_factor_secret', 'TEXT');
 ensureColumn('users', 'two_factor_temp_secret', 'TEXT');
 ensureColumn('users', 'two_factor_recovery_codes', 'TEXT');
 ensureColumn('users', 'two_factor_enabled_at', 'TEXT');
+ensureColumn('users', 'username_changed_at', 'TEXT');
 ensureColumn('users', 'password_reset_token_hash', 'TEXT');
 ensureColumn('users', 'password_reset_expires_at', 'TEXT');
 ensureColumn('support_tickets', 'contact_name', 'TEXT');
