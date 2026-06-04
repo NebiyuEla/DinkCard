@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { apiClient } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
 import SecretInput from '@/components/SecretInput';
+import { getRoleHome } from '@/lib/adminRoles';
 
 export default function SuperAdminLogin() {
   const { user, isAuthenticated, setAuthenticatedUser } = useAuth();
@@ -17,8 +18,8 @@ export default function SuperAdminLogin() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isAuthenticated && user?.role === 'superadmin') {
-      navigate('/superadmin/dashboard', { replace: true });
+    if (isAuthenticated) {
+      navigate(getRoleHome(user), { replace: true });
     }
   }, [isAuthenticated, navigate, user]);
 
@@ -29,7 +30,7 @@ export default function SuperAdminLogin() {
     try {
       const result = await apiClient.auth.login({ identifier: username, password, portal: 'superadmin' });
       setAuthenticatedUser(result.user);
-      navigate('/superadmin/dashboard', { replace: true });
+      navigate(getRoleHome(result.user), { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

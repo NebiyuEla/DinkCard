@@ -263,6 +263,15 @@ export default function AdminUsers() {
     onError: (error) => toast.error(error.message || 'Could not update KYC document')
   });
 
+  const revertKycDocument = useMutation({
+    mutationFn: ({ kyc, field }) => apiClient.admin.kyc.revertDocument(kyc.id, { field }),
+    onSuccess: () => {
+      invalidateOperationalData(queryClient);
+      toast.success('KYC document reverted');
+    },
+    onError: (error) => toast.error(error.message || 'No previous version found')
+  });
+
   const openAction = (user, action) => {
     setPendingAction({ user, action });
     setReason('');
@@ -406,16 +415,18 @@ export default function AdminUsers() {
                       url={kyc?.front_id_url}
                       kyc={kyc}
                       field="front_id_url"
-                      disabled={updateKycDocument.isPending}
+                      disabled={updateKycDocument.isPending || revertKycDocument.isPending}
                       onSave={(payload) => updateKycDocument.mutateAsync(payload)}
+                      onRevert={(payload) => revertKycDocument.mutateAsync(payload)}
                     />
                     <AdminUserKycDocument
                       label="Selfie"
                       url={kyc?.selfie_url}
                       kyc={kyc}
                       field="selfie_url"
-                      disabled={updateKycDocument.isPending}
+                      disabled={updateKycDocument.isPending || revertKycDocument.isPending}
                       onSave={(payload) => updateKycDocument.mutateAsync(payload)}
+                      onRevert={(payload) => revertKycDocument.mutateAsync(payload)}
                     />
                   </div>
                 </div>
@@ -565,18 +576,28 @@ export default function AdminUsers() {
   );
 }
 
-function AdminUserKycDocument({ label, url, kyc, field, disabled, onSave }) {
+function AdminUserKycDocument({ label, url, kyc, field, disabled, onSave, onRevert }) {
   return (
     <div className="space-y-2 rounded-xl border border-border p-3">
       <Label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</Label>
       <FilePreview url={url} label={label} />
       <ExistingImageEditButton
         url={url}
-        label="Crop / rotate"
+        label="Adjust image"
         disabled={disabled || !url || !kyc?.id}
         className="w-full"
         onSave={(file) => onSave({ kyc, field, file })}
       />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || !url || !kyc?.id}
+        className="w-full"
+        onClick={() => onRevert({ kyc, field })}
+      >
+        Revert last edit
+      </Button>
     </div>
   );
 }

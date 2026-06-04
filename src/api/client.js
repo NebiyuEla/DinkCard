@@ -170,6 +170,7 @@ export const apiClient = {
       approve: (id) => request(`/api/admin/kyc/${id}/approve`, { method: 'POST' }),
       unapprove: (id, payload) => request(`/api/admin/kyc/${id}/unapprove`, { method: 'POST', body: JSON.stringify(payload || {}) }),
       updateDocument: (id, payload) => request(`/api/admin/kyc/${id}/document`, { method: 'POST', body: JSON.stringify(payload || {}) }),
+      revertDocument: (id, payload) => request(`/api/admin/kyc/${id}/document/revert`, { method: 'POST', body: JSON.stringify(payload || {}) }),
       requestFix: (id, payload) => request(`/api/admin/kyc/${id}/reject`, { method: 'POST', body: JSON.stringify(payload) }),
       manualReview: (id, payload) => request(`/api/admin/kyc/${id}/manual-review`, { method: 'POST', body: JSON.stringify(payload || {}) })
     },

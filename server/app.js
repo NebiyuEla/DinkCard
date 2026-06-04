@@ -231,6 +231,15 @@ function writeAudit({
   }
 }
 
+function parseStoredJson(value, fallback = null) {
+  if (!value) return fallback;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+}
+
 function createNotification(userId, title, message, type = 'system', link = null) {
   try {
     db.prepare(`
@@ -2045,7 +2054,7 @@ export function createApp() {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    if (portal === 'superadmin' && user.role !== 'superadmin') {
+    if (portal === 'superadmin' && user.role !== 'superadmin' && !hasAnyAdminRole(user)) {
       writeAudit({ actor: user.email, userId: user.email, action: 'login_failed', entityType: 'auth', reason: 'superadmin_access_required' });
       return res.status(403).json({ message: 'Superadmin access required.' });
     }
@@ -4621,6 +4630,67 @@ export function createApp() {
       res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
     } catch (error) {
       res.status(400).json({ message: error.message || 'Could not update KYC document.' });
+    }
+  });
+
+  app.post('/api/admin/kyc/:id/document/revert', authMiddleware(db), (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) return;
+
+      const kyc = db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(req.params.id);
+      if (!kyc) return res.status(404).json({ message: 'KYC submission not found' });
+
+      const field = String(req.body.field || '').trim();
+      const allowedFields = new Set(['front_id_url', 'back_id_url', 'selfie_url']);
+      if (!allowedFields.has(field)) {
+        return res.status(400).json({ message: 'Invalid KYC document field.' });
+      }
+
+      const logs = db.prepare(`
+        SELECT old_value, new_value, created_at
+        FROM audit_logs
+        WHERE entity_type = 'kyc_submission'
+          AND entity_id = ?
+          AND action IN ('kyc_document_replaced', 'kyc_document_reverted')
+        ORDER BY created_at DESC
+        LIMIT 30
+      `).all(kyc.id);
+
+      const currentValue = kyc[field] || null;
+      const restoreUrl = logs
+        .map((log) => parseStoredJson(log.old_value, {}))
+        .map((oldValue) => oldValue?.[field])
+        .find((value) => value && value !== currentValue);
+
+      if (!restoreUrl) {
+        return res.status(400).json({ message: 'No previous document version found for this field.' });
+      }
+
+      const now = nowIso();
+      db.prepare(`
+        UPDATE kyc_submissions
+        SET ${field} = ?,
+            reviewed_by = ?,
+            reviewed_at = ?,
+            updated_at = ?
+        WHERE id = ?
+      `).run(restoreUrl, req.user.email, now, now, kyc.id);
+
+      writeAudit({
+        actor: req.user.email,
+        userId: kyc.user_id,
+        action: 'kyc_document_reverted',
+        entityType: 'kyc_submission',
+        entityId: kyc.id,
+        oldValue: { [field]: currentValue },
+        newValue: { [field]: restoreUrl },
+        reason: String(req.body.reason || 'Admin reverted KYC document to the previous version').trim(),
+        req
+      });
+
+      res.json(mapRow(db.prepare('SELECT * FROM kyc_submissions WHERE id = ?').get(kyc.id)));
+    } catch (error) {
+      res.status(400).json({ message: error.message || 'Could not revert KYC document.' });
     }
   });
 

@@ -11,6 +11,7 @@ import PoweredByDinkDev from '@/components/PoweredByDinkDev';
 import BrandLogo from '@/components/BrandLogo';
 import SecretInput from '@/components/SecretInput';
 import ThemeToggle from '@/components/ThemeToggle';
+import { getRoleHome, hasAdminRole } from '@/lib/adminRoles';
 
 export default function Login() {
   const { setAuthenticatedUser } = useAuth();
@@ -38,7 +39,7 @@ export default function Login() {
         return;
       }
       setAuthenticatedUser(result.user);
-      navigate(destination, { replace: true });
+      navigate(hasAdminRole(result.user) ? getRoleHome(result.user) : destination, { replace: true });
     } catch (err) {
       setError(err.message || 'Sign in failed');
     } finally {
@@ -53,7 +54,7 @@ export default function Login() {
     try {
       const result = await apiClient.auth.verifyTwoFactorLogin({ challengeToken, code: twoFactorCode });
       setAuthenticatedUser(result.user);
-      navigate(destination, { replace: true });
+      navigate(hasAdminRole(result.user) ? getRoleHome(result.user) : destination, { replace: true });
     } catch (err) {
       setError(err.message || 'Authentication failed');
     } finally {

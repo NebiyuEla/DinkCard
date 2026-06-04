@@ -5,6 +5,7 @@ import React from 'react';
 import { ThemeProvider } from 'next-themes';
 import { BrowserRouter as Router, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import { ADMIN_ROLES, getRoleHome, hasAdminRole } from '@/lib/adminRoles';
 import AppLayout from '@/components/layout/AppLayout';
 import PageNotFound from './lib/PageNotFound';
 import SEO from './components/SEO';
@@ -120,8 +121,9 @@ function RequireAuth({ roles }) {
   }
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />;
   if (roles && !roles.includes(user?.role)) {
-    return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
+    return <Navigate to={getRoleHome(user)} replace />;
   }
+  if (!roles && hasAdminRole(user)) return <Navigate to={getRoleHome(user)} replace />;
   return <Outlet />;
 }
 
@@ -132,7 +134,7 @@ function PublicOnly({ children }) {
     return <AuthProblemScreen message={authError.message} onRetry={checkUserAuth} />;
   }
   if (!isAuthenticated) return children;
-  return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
+  return <Navigate to={getRoleHome(user)} replace />;
 }
 
 function HomeRoute() {
@@ -141,7 +143,7 @@ function HomeRoute() {
   if (authError && authError.type !== 'auth_required') {
     return <AuthProblemScreen message={authError.message} onRetry={checkUserAuth} />;
   }
-  if (isAuthenticated) return <Navigate to={user?.role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />;
+  if (isAuthenticated) return <Navigate to={getRoleHome(user)} replace />;
   return <Landing />;
 }
 
@@ -198,7 +200,7 @@ function AppRoutes() {
         </Route>
       </Route>
 
-      <Route element={<RequireAuth roles={['support', 'support_response', 'kyc_checker', 'admin', 'superadmin']} />}>
+      <Route element={<RequireAuth roles={ADMIN_ROLES} />}>
         <Route path="/admin" element={<AdminDashboard />}>
           <Route path="users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
           <Route path="kyc" element={<AdminKYC />} />

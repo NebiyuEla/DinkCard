@@ -104,6 +104,18 @@ export default function AdminKYC() {
     onError: (error) => toast.error(error.message || 'Could not update KYC document')
   });
 
+  const revertDocument = useMutation({
+    mutationFn: ({ kyc, field }) => apiClient.admin.kyc.revertDocument(kyc.id, { field }),
+    onSuccess: (updatedKyc) => {
+      queryClient.setQueryData(['admin-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      queryClient.setQueryData(['sa-kyc'], (current = []) => current.map((item) => item.id === updatedKyc.id ? updatedKyc : item));
+      setSelected(updatedKyc);
+      invalidateOperationalData(queryClient);
+      toast.success('KYC document reverted');
+    },
+    onError: (error) => toast.error(error.message || 'No previous version found')
+  });
+
   const toggleField = (field, checked) => {
     setResubmissionFields(prev => checked ? [...new Set([...prev, field])] : prev.filter(item => item !== field));
   };
@@ -207,7 +219,8 @@ export default function AdminKYC() {
                   field="front_id_url"
                   selected={selected}
                   onSave={(payload) => updateDocument.mutateAsync(payload)}
-                  disabled={updateDocument.isPending}
+                  onRevert={(payload) => revertDocument.mutateAsync(payload)}
+                  disabled={updateDocument.isPending || revertDocument.isPending}
                 />
                 <KycDocumentReview
                   label="Selfie"
@@ -215,7 +228,8 @@ export default function AdminKYC() {
                   field="selfie_url"
                   selected={selected}
                   onSave={(payload) => updateDocument.mutateAsync(payload)}
-                  disabled={updateDocument.isPending}
+                  onRevert={(payload) => revertDocument.mutateAsync(payload)}
+                  disabled={updateDocument.isPending || revertDocument.isPending}
                 />
               </div>
               {APPROVABLE_KYC_STATUSES.has(selected.status) && (
@@ -308,18 +322,28 @@ export default function AdminKYC() {
   );
 }
 
-function KycDocumentReview({ label, url, field, selected, onSave, disabled }) {
+function KycDocumentReview({ label, url, field, selected, onSave, onRevert, disabled }) {
   return (
     <div className="space-y-2 rounded-xl border border-border p-3">
       <Label className="block text-xs uppercase tracking-[0.14em] text-muted-foreground">{label}</Label>
       <FilePreview url={url} label={label} />
       <ExistingImageEditButton
         url={url}
-        label="Crop / rotate"
+        label="Adjust image"
         disabled={disabled || !url}
         className="w-full"
         onSave={(file) => onSave({ kyc: selected, field, file })}
       />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || !url}
+        className="w-full"
+        onClick={() => onRevert({ kyc: selected, field })}
+      >
+        <Undo2 className="mr-2 h-4 w-4" /> Revert last edit
+      </Button>
     </div>
   );
 }

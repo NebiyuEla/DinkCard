@@ -130,6 +130,13 @@ export default function AdminDashboard() {
     navigate(nextPath, { replace: true });
   }, [currentUser?.role, location.pathname, navigate]);
 
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'superadmin') return;
+    if (!location.pathname.startsWith('/admin')) return;
+    if (access?.has(location.pathname)) return;
+    navigate(visibleNav[0]?.path || '/admin', { replace: true });
+  }, [access, currentUser, location.pathname, navigate, visibleNav]);
+
   const usersQuery = useQuery({ queryKey: ['admin-users'], queryFn: () => apiClient.entities.User.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const kycQuery = useQuery({ queryKey: ['admin-kyc'], queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100), refetchInterval: REFRESH.admin });
   const depositsQuery = useQuery({ queryKey: ['admin-deposits'], queryFn: () => apiClient.entities.Deposit.list('-created_date', 100), refetchInterval: REFRESH.admin });
