@@ -164,18 +164,24 @@ export default function AddMoney() {
               </div>
               <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
                 <span className="text-muted-foreground">Fees & charges</span>
-                <span className="text-right font-mono font-semibold">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span>
+                <span className="text-right font-mono font-semibold">{fees.feesAndChargesEtb.toLocaleString()} ETB</span>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                <span className="text-muted-foreground">Gateway fee (%)</span>
-                <span className="text-right font-mono font-semibold">{fees.gatewayFeePercentage.toFixed(2)}%</span>
-              </div>
+              {fees.showGatewayFeePercent && (
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+                  <span className="text-muted-foreground">Gateway fee (%)</span>
+                  <span className="text-right font-mono font-semibold">{fees.gatewayFeePercentage.toFixed(2)}%</span>
+                </div>
+              )}
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold">Total payable</span>
                   <span className="text-right font-mono text-lg font-bold text-primary">{fees.totalPayableEtb.toLocaleString()} ETB</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} service balance.</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
+                <span className="text-muted-foreground">Effective rate</span>
+                <span className="text-right font-mono font-semibold">{fees.effectivePayableRate.toLocaleString()} ETB/USD</span>
               </div>
 
               {displayStyle === 'hybrid' && (
@@ -189,11 +195,8 @@ export default function AddMoney() {
               )}
 
               {shouldShowDetails && (
-                <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Fixed charge</span><span className="font-mono">{(settings?.minimum_service_fee_etb ?? 100).toLocaleString()} ETB</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Charge percentage</span><span className="font-mono">{(settings?.service_margin_percentage ?? 15).toFixed(2)}%</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Payment processing fee</span><span className="font-mono">{fees.gatewayFeeEtb.toLocaleString()} ETB</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">Service fee</span><span className="font-mono">{fees.dinkServiceFeeEtb.toLocaleString()} ETB</span></div>
+                <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
+                  Fees & charges include service processing, payment gateway cost, and rounding where applicable. The final amount shown above is the amount payable before you continue.
                 </div>
               )}
             </div>

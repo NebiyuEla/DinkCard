@@ -4,6 +4,7 @@ import { apiClient } from '@/api/client';
 import { calculateDepositFees, DEFAULT_SETTINGS, getEffectiveMinCardCreation, getEffectiveMinCardFunding } from '@/lib/feeCalculator';
 import { REFRESH, invalidateOperationalData } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
@@ -76,10 +77,10 @@ export default function AdminFees() {
 
   const pricingFields = [
     { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
-    { key: 'minimum_service_fee_etb', label: 'Fixed charge', suffix: 'ETB' },
-    { key: 'service_margin_percentage', label: 'Charge percentage', suffix: '%' },
-    { key: 'gateway_fee_percentage', label: 'Gateway fee', suffix: '%' },
-    { key: 'chapa_settlement_fee_etb', label: 'Settlement/transfer fee', suffix: 'ETB' },
+    { key: 'service_margin_percentage', label: 'Platform fee percent', suffix: '%' },
+    { key: 'gateway_fee_percentage', label: 'Gateway fee percent', suffix: '%' },
+    { key: 'minimum_service_fee_etb', label: 'Minimum fee amount', suffix: 'ETB' },
+    { key: 'maximum_service_fee_etb', label: 'Maximum fee amount', suffix: 'ETB' },
     { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
   ];
 
@@ -110,6 +111,10 @@ export default function AdminFees() {
     </div>
   );
 
+  const updateToggle = (key, checked) => {
+    setForm({ ...form, [key]: checked ? 1 : 0 });
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -133,24 +138,32 @@ export default function AdminFees() {
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">${previewUsd.toFixed(2)} preview</p>
+              <p className="text-muted-foreground">Card amount</p>
+              <p className="font-mono font-semibold">${preview.cardAmountUsd.toFixed(2)}</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Conversion</p>
+              <p className="font-mono font-semibold">{preview.etbAmount.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Fees & charges</p>
+              <p className="font-mono font-semibold">{preview.feesAndChargesEtb.toLocaleString()} ETB</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Total payable</p>
               <p className="font-mono font-semibold">{preview.totalPayableEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Visible fee</p>
-              <p className="font-mono font-semibold">{preview.dinkServiceFeeEtb.toLocaleString()} ETB</p>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Chapa covered</p>
-              <p className="font-mono font-semibold">{preview.gatewayFeeEtb.toLocaleString()} ETB</p>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Rate</p>
+              <p className="text-muted-foreground">Exchange rate</p>
               <p className="font-mono font-semibold">{preview.exchangeRate.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Effective rate</p>
-              <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB</p>
+              <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB/USD</p>
+            </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Gateway display</p>
+              <p className="font-mono font-semibold">{form.show_gateway_fee_percentage ? `${preview.gatewayFeePercentage.toFixed(2)}%` : 'Hidden'}</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
               <p className="text-muted-foreground">Locked provider rules</p>
@@ -162,6 +175,30 @@ export default function AdminFees() {
         <h3 className="mb-3 text-sm font-semibold">Pricing Formula</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {pricingFields.map(renderField)}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-sm">
+            <Checkbox
+              checked={Boolean(form.enable_minimum_fee)}
+              onCheckedChange={(checked) => updateToggle('enable_minimum_fee', Boolean(checked))}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block font-medium">Enable minimum fee</span>
+              <span className="text-xs text-muted-foreground">Use the minimum fee amount when the percentage fee is too small.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 rounded-xl border border-border bg-secondary/25 p-3 text-sm">
+            <Checkbox
+              checked={Boolean(form.show_gateway_fee_percentage)}
+              onCheckedChange={(checked) => updateToggle('show_gateway_fee_percentage', Boolean(checked))}
+              className="mt-0.5"
+            />
+            <span>
+              <span className="block font-medium">Show gateway fee percent</span>
+              <span className="text-xs text-muted-foreground">Customer sees only the percentage, not internal payment provider details.</span>
+            </span>
+          </label>
         </div>
 
         <h3 className="mb-3 mt-8 text-sm font-semibold">Limits</h3>

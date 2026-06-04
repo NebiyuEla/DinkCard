@@ -1,6 +1,6 @@
-export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 5.6;
 export const DEFAULT_FIXED_CHARGE_ETB = 100;
-export const DEFAULT_PERCENT_CHARGE = 15;
+export const DEFAULT_PERCENT_CHARGE = 5;
 
 export function getGatewayFeePercentage(settings = {}) {
   const value = Number(settings.gateway_fee_percentage ?? DEFAULT_GATEWAY_FEE_PERCENTAGE);
@@ -47,23 +47,28 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
   const rate = Math.max(0, safeNumber(exchangeRate || settings?.usd_to_etb_rate, 190));
   const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
   const minimumServiceFeeEtb = Math.max(0, safeNumber(settings?.minimum_service_fee_etb, DEFAULT_FIXED_CHARGE_ETB));
-  const settlementFeeEtb = Math.max(0, safeNumber(settings?.chapa_settlement_fee_etb, 0));
+  const maximumServiceFeeEtb = Math.max(0, safeNumber(settings?.maximum_service_fee_etb, 0));
+  const enableMinimumFee = Number(settings?.enable_minimum_fee ?? 1) ? true : false;
+  const showGatewayFeePercent = Number(settings?.show_gateway_fee_percentage ?? 1) ? true : false;
   const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));
   const feeDisplayStyle = ['simple', 'detailed', 'hybrid'].includes(settings?.customer_fee_display_style)
     ? settings.customer_fee_display_style
     : 'simple';
+
   const etbAmount = money(usdAmount * rate);
+  const platformPercentFeeEtb = money(etbAmount * serviceMarginPercentage / 100);
+  const platformFeeWithMinimum = enableMinimumFee ? Math.max(platformPercentFeeEtb, minimumServiceFeeEtb) : platformPercentFeeEtb;
+  const platformFeeEtb = money(maximumServiceFeeEtb > 0 ? Math.min(platformFeeWithMinimum, maximumServiceFeeEtb) : platformFeeWithMinimum);
+  const gatewayFeeBaseEtb = money(etbAmount + platformFeeEtb);
+  const gatewayFeeEtb = money(gatewayFeeBaseEtb * gatewayFeePercentage / 100);
+  const feesAndChargesEtb = money(platformFeeEtb + gatewayFeeEtb);
+  const grossTotalBeforeRoundEtb = money(etbAmount + feesAndChargesEtb);
+  const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
+  const roundingAdjustmentEtb = money(Math.max(0, totalPayableEtb - grossTotalBeforeRoundEtb));
+  const serviceAndProcessingFeeEtb = money(feesAndChargesEtb + roundingAdjustmentEtb);
+  const effectivePayableRate = usdAmount > 0 ? money(totalPayableEtb / usdAmount) : 0;
   const providerCostUsd = 0;
   const providerCostEtb = 0;
-  const baseCostEtb = etbAmount;
-  const safetyBufferEtb = 0;
-  const dinkServiceFeeEtb = money(minimumServiceFeeEtb + (etbAmount * serviceMarginPercentage / 100));
-  const requiredBeforeChapaEtb = money(baseCostEtb + dinkServiceFeeEtb + settlementFeeEtb);
-  const grossTotalBeforeRoundEtb = money(requiredBeforeChapaEtb + (requiredBeforeChapaEtb * gatewayFeePercentage / 100));
-  const totalPayableEtb = roundUpTo(grossTotalBeforeRoundEtb, roundingRuleEtb);
-  const gatewayFeeEtb = money(Math.max(0, totalPayableEtb - requiredBeforeChapaEtb));
-  const serviceAndProcessingFeeEtb = money(Math.max(0, totalPayableEtb - etbAmount));
-  const effectivePayableRate = usdAmount > 0 ? money(totalPayableEtb / usdAmount) : 0;
 
   return {
     usdAmount,
@@ -71,10 +76,15 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
     cardAmountEtb: etbAmount,
     exchangeRate: rate,
     etbAmount,
-    serviceFeeEtb: dinkServiceFeeEtb,
+    conversionAmountEtb: etbAmount,
+    platformFeeEtb,
+    platformFeePercentage: serviceMarginPercentage,
+    serviceFeeEtb: platformFeeEtb,
     serviceAndProcessingFeeEtb,
+    feesAndChargesEtb: serviceAndProcessingFeeEtb,
     gatewayFeeEtb,
     gatewayFeePercentage,
+    showGatewayFeePercent,
     totalPayableEtb,
     effectivePayableRate,
     finalUsdCredit: money(usdAmount),
@@ -82,13 +92,16 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
     providerCostEtb,
     topupFeeUsd: 0,
     topupFeeEtb: providerCostEtb,
-    safetyBufferEtb,
-    dinkServiceFeeEtb,
-    settlementFeeEtb,
-    requiredBeforeChapaEtb,
+    safetyBufferEtb: 0,
+    dinkServiceFeeEtb: platformFeeEtb,
+    settlementFeeEtb: 0,
+    requiredBeforeChapaEtb: gatewayFeeBaseEtb,
     grossTotalBeforeRoundEtb,
-    roundingAdjustmentEtb: money(Math.max(0, totalPayableEtb - grossTotalBeforeRoundEtb)),
+    roundingAdjustmentEtb,
     roundingRuleEtb,
+    minimumFeeAmountEtb: minimumServiceFeeEtb,
+    maximumFeeAmountEtb: maximumServiceFeeEtb,
+    enableMinimumFee,
     feeDisplayStyle
   };
 }
@@ -117,11 +130,14 @@ export function calculateCardFundingFees(amount, settings = {}) {
 
 export const DEFAULT_SETTINGS = {
   usd_to_etb_rate: 190,
-  gateway_fee_percentage: 2.5,
+  gateway_fee_percentage: 5.6,
   deposit_fee_percentage: 0,
   deposit_fixed_fee_etb: 0,
-  service_margin_percentage: 15,
+  service_margin_percentage: 5,
   minimum_service_fee_etb: 100,
+  maximum_service_fee_etb: 0,
+  enable_minimum_fee: 1,
+  show_gateway_fee_percentage: 1,
   safety_buffer_percentage: 0,
   chapa_settlement_fee_etb: 0,
   card_creation_fee_usd: 1,
