@@ -146,6 +146,8 @@ export default function CardsPage() {
   const selectedBillingAddress = parseJson(selectedCard?.billing_address);
   const shownAddress = secureDetails?.billing_address || selectedBillingAddress || {};
   const selectedStatus = normalizeCardStatus(selectedCard?.status);
+  const creationFeeUsd = Number(settings?.card_creation_fee_usd || 1);
+  const selectedCardBalance = Number(selectedCard?.balance || 0);
   const cardTransactions = useQuery({
     queryKey: ['card-transactions', selectedCard?.id],
     queryFn: () => apiClient.cards.transactions(selectedCard.id),
@@ -308,7 +310,9 @@ export default function CardsPage() {
 
               <div className="space-y-3 rounded-xl border border-border bg-card p-3 text-sm sm:p-4">
                 <div className="flex justify-between"><span className="text-muted-foreground">Status</span><StatusBadge status={selectedStatus} /></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-mono font-semibold text-primary">${Number(selectedCard.balance || 0).toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Card balance</span><span className="font-mono font-semibold text-primary">${selectedCardBalance.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Creation fee</span><span className="font-mono font-semibold">${creationFeeUsd.toFixed(2)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Balance + fee</span><span className="font-mono font-semibold">${(selectedCardBalance + creationFeeUsd).toFixed(2)}</span></div>
               </div>
 
               <div className="rounded-xl border border-border bg-card p-3 sm:p-4">

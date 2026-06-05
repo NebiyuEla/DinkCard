@@ -34,7 +34,11 @@ export default function AdminTickets() {
     queryKey: ['ticketMessages', selected?.id],
     queryFn: () => apiClient.entities.SupportMessage.filter({ ticket_id: selected.id }, 'created_date'),
     enabled: !!selected,
-    refetchInterval: selected ? REFRESH.admin : false
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: selected ? REFRESH.notifications : false,
+    refetchIntervalInBackground: true
   });
 
   const sendReply = useMutation({
@@ -53,6 +57,7 @@ export default function AdminTickets() {
     onSuccess: () => {
       invalidateOperationalData(queryClient);
       setReply('');
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }), 40);
       toast.success('Reply sent');
     }
   });
@@ -181,6 +186,7 @@ export default function AdminTickets() {
                 <div className="max-w-[88%] rounded-xl bg-secondary px-3 py-2.5 sm:max-w-[80%] sm:px-4">
                   <p className="text-xs font-medium text-muted-foreground mb-1">User (original)</p>
                   <p className="break-words text-sm">{selected.message}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{selected.created_date ? format(new Date(selected.created_date), 'MMM d, h:mm a') : ''}</p>
                 </div>
               </div>
             )}
@@ -189,6 +195,7 @@ export default function AdminTickets() {
                 <div className={`max-w-[88%] rounded-xl px-3 py-2.5 sm:max-w-[80%] sm:px-4 ${msg.sender_type === 'user' ? 'bg-secondary' : 'bg-primary/10'}`}>
                   <p className="text-xs font-medium text-muted-foreground capitalize mb-1">{msg.sender_type}</p>
                   <p className="break-words text-sm">{msg.message}</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{msg.created_date ? format(new Date(msg.created_date), 'MMM d, h:mm a') : ''}</p>
                 </div>
               </div>
             ))}

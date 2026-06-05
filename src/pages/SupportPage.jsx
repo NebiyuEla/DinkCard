@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useCurrentUser, useSupportTickets } from '@/hooks/useAppData';
 import { apiClient } from '@/api/client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { REFRESH } from '@/lib/realtime';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,7 +48,12 @@ export default function SupportPage() {
       if (!selectedTicket) return [];
       return await apiClient.entities.SupportMessage.filter({ ticket_id: selectedTicket.id }, 'created_date');
     },
-    enabled: !!selectedTicket
+    enabled: !!selectedTicket,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: selectedTicket ? REFRESH.notifications : false,
+    refetchIntervalInBackground: true
   });
 
   const createTicket = useMutation({
@@ -70,6 +76,7 @@ export default function SupportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['supportTickets'] });
+      queryClient.invalidateQueries({ queryKey: ['ticketMessages'] });
       setShowCreate(false);
       setNewTicket({ category: '', subject: '', message: '' });
       setNewTicketAttachment('');
@@ -89,6 +96,7 @@ export default function SupportPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticketMessages'] });
+      queryClient.invalidateQueries({ queryKey: ['supportTickets'] });
       setReply('');
       setReplyAttachment('');
       setTimeout(() => scrollToLatest('smooth'), 50);
@@ -187,7 +195,7 @@ export default function SupportPage() {
                     <p className="text-xs font-medium text-muted-foreground mb-1 capitalize">{msg.sender_type}</p>
                     <p className="text-sm">{msg.message}</p>
                     <FilePreview url={msg.attachment_url} label="Support attachment" className="mt-2" />
-                    <p className="text-[10px] text-muted-foreground mt-1">{msg.created_date ? format(new Date(msg.created_date), 'h:mm a') : ''}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{msg.created_date ? format(new Date(msg.created_date), 'MMM d, h:mm a') : ''}</p>
                   </div>
                 </div>
               ))}

@@ -11,9 +11,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
 import { ExistingImageEditButton } from '@/components/EditableImageUpload';
-import { Check, X, Eye, Undo2 } from 'lucide-react';
+import { AlertTriangle, Check, X, Eye, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { getNameMismatch } from '@/lib/identityMismatch';
 
 const KYC_FIX_OPTIONS = [
   { value: 'personal_info', label: 'Personal information' },
@@ -35,6 +36,12 @@ export default function AdminKYC() {
     queryFn: () => apiClient.entities.KYCSubmission.list('-created_date', 100),
     refetchInterval: REFRESH.admin
   });
+  const { data: users } = useQuery({
+    queryKey: ['admin-users'],
+    queryFn: () => apiClient.entities.User.list('-created_date', 200),
+    refetchInterval: REFRESH.admin
+  });
+  const userByEmail = new Map((users || []).map((user) => [user.email, user]));
 
   const [selected, setSelected] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -157,17 +164,25 @@ export default function AdminKYC() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {(submissions || []).map(k => (
-                <tr key={k.id} className="hover:bg-secondary/20">
-                  <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{k.id}</td>
-                  <td className="px-4 py-3 text-xs">{k.user_id}</td>
-                  <td className="px-4 py-3">{k.legal_name}</td>
-                  <td className="px-4 py-3 capitalize text-xs">{(k.id_type || '').replace(/_/g, ' ')}</td>
-                  <td className="px-4 py-3"><StatusBadge status={k.status} className="text-[10px]" /></td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">{k.created_date ? format(new Date(k.created_date), 'MMM d') : ''}</td>
-                  <td className="px-4 py-3"><Button variant="ghost" size="sm" onClick={() => setSelected(k)}><Eye className="w-4 h-4" /></Button></td>
-                </tr>
-              ))}
+              {(submissions || []).map(k => {
+                const mismatch = getNameMismatch(userByEmail.get(k.user_id), k);
+                return (
+                  <tr key={k.id} className="hover:bg-secondary/20">
+                    <td className="px-4 py-3 font-mono text-[11px] text-muted-foreground">{k.id}</td>
+                    <td className="px-4 py-3 text-xs">{k.user_id}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span>{k.legal_name}</span>
+                        {mismatch && <span className="inline-flex items-center gap-1 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-2 py-0.5 text-[10px] font-semibold text-yellow-500"><AlertTriangle className="h-3 w-3" /> Name mismatch</span>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 capitalize text-xs">{(k.id_type || '').replace(/_/g, ' ')}</td>
+                    <td className="px-4 py-3"><StatusBadge status={k.status} className="text-[10px]" /></td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{k.created_date ? format(new Date(k.created_date), 'MMM d') : ''}</td>
+                    <td className="px-4 py-3"><Button variant="ghost" size="sm" onClick={() => setSelected(k)}><Eye className="w-4 h-4" /></Button></td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -196,6 +211,21 @@ export default function AdminKYC() {
           <DialogHeader><DialogTitle>KYC Details</DialogTitle></DialogHeader>
           {selected && (
             <div className="space-y-4">
+              {(() => {
+                const mismatch = getNameMismatch(userByEmail.get(selected.user_id), selected);
+                if (!mismatch) return null;
+                return (
+                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-600">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <div>
+                        <p className="font-semibold">Registration name does not match KYC name.</p>
+                        <p className="mt-1">Account: <span className="font-medium">{mismatch.accountName}</span> - KYC: <span className="font-medium">{mismatch.kycName}</span></p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><span className="text-muted-foreground">Name:</span> {selected.legal_name}</div>
                 <div><span className="text-muted-foreground">KYC ID:</span> <span className="font-mono">{selected.id}</span></div>
