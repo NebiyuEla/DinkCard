@@ -15,7 +15,6 @@ import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
 import { ExistingImageEditButton } from '@/components/EditableImageUpload';
 import SecretInput from '@/components/SecretInput';
-import { getNameMismatch } from '@/lib/identityMismatch';
 
 function getActionCopy(action, user) {
   if (!action || !user) return {};
@@ -375,7 +374,6 @@ export default function AdminUsers() {
           </DialogHeader>
           {detailUser && (() => {
             const kyc = latestKycByUser.get(detailUser.email);
-            const mismatch = getNameMismatch(detailUser, kyc);
             return (
               <div className="space-y-4">
                 <div className="grid gap-3 md:grid-cols-3">
@@ -401,17 +399,6 @@ export default function AdminUsers() {
                     <h3 className="font-semibold">KYC profile</h3>
                     <StatusBadge status={kyc?.status || 'not_started'} />
                   </div>
-                  {mismatch && (
-                    <div className="mb-3 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-600">
-                      <div className="flex items-start gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <div>
-                          <p className="font-semibold">Registration name does not match KYC name.</p>
-                          <p className="mt-1">Account: <span className="font-medium">{mismatch.accountName}</span> - KYC: <span className="font-medium">{mismatch.kycName}</span></p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div><span className="text-muted-foreground">First name:</span> {kyc?.first_name || detailUser.first_name || '-'}</div>
                     <div><span className="text-muted-foreground">Last name:</span> {kyc?.last_name || detailUser.last_name || '-'}</div>

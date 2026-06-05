@@ -82,9 +82,9 @@ export default function VirtualCardDisplay({ card, showDetails = false, compact 
               </p>
             </div>
           </div>
-          <div className="min-w-[104px] shrink-0 rounded-xl bg-background/25 px-2.5 py-1.5 text-right backdrop-blur-sm">
+          <div className="min-w-[118px] shrink-0 rounded-xl bg-background/25 px-3 py-2 text-right backdrop-blur-sm">
             <p className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground">Card balance</p>
-            <p className="whitespace-nowrap font-mono text-sm font-bold">${balance.toFixed(2)}</p>
+            <p className="whitespace-nowrap font-mono text-base font-bold">${balance.toFixed(2)}</p>
             <div className="mt-0.5 flex items-center justify-end gap-1">
               {card.status === 'frozen' && <Snowflake className="w-3 h-3 text-accent" />}
               <span className={cn(

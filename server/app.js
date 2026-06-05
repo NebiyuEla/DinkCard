@@ -741,6 +741,50 @@ function mapRows(rows = []) {
   return rows.map((row) => mapRow(row));
 }
 
+function getKycOfficialName(kyc) {
+  const legalName = String(kyc?.legal_name || '').trim().replace(/\s+/g, ' ');
+  const firstName = String(kyc?.first_name || '').trim().replace(/\s+/g, ' ');
+  const lastName = String(kyc?.last_name || '').trim().replace(/\s+/g, ' ');
+  if (firstName && lastName) {
+    return { firstName, lastName, fullName: legalName || `${firstName} ${lastName}`.trim() };
+  }
+  if (!legalName) return null;
+  const parts = legalName.split(' ').filter(Boolean);
+  return {
+    firstName: firstName || parts[0] || legalName,
+    lastName: lastName || parts.slice(1).join(' ') || '',
+    fullName: legalName
+  };
+}
+
+function syncUserNameFromApprovedKyc(kyc, userOrEmail) {
+  if (!kyc || kyc.status !== 'approved') return null;
+  const email = typeof userOrEmail === 'string' ? userOrEmail : userOrEmail?.email;
+  if (!email) return null;
+  const official = getKycOfficialName(kyc);
+  if (!official?.fullName || !official.firstName) return null;
+  const user = typeof userOrEmail === 'object' ? userOrEmail : db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  if (!user) return null;
+  if (user.first_name === official.firstName && user.last_name === official.lastName && user.full_name === official.fullName) return user;
+  const now = nowIso();
+  db.prepare('UPDATE users SET first_name = ?, last_name = ?, full_name = ?, updated_at = ? WHERE email = ?')
+    .run(official.firstName, official.lastName, official.fullName, now, email);
+  return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+}
+
+function syncApprovedKycNames() {
+  const users = db.prepare('SELECT email FROM users').all();
+  for (const user of users) {
+    const kyc = db.prepare(`
+      SELECT * FROM kyc_submissions
+      WHERE user_id = ? AND status = 'approved'
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1
+    `).get(user.email);
+    syncUserNameFromApprovedKyc(kyc, user.email);
+  }
+}
+
 function buildUserDashboard(user) {
   const wallet = ensureWallet(user.email);
   const kyc = db.prepare(`
@@ -782,9 +826,10 @@ function buildUserDashboard(user) {
     || transactions.some((tx) => Number(tx.amount || 0) > 0);
   const twoFactorEnabled = isTwoFactorEnabled(user);
   const completedSteps = [true, hasApprovedKyc, hasFundStep, visibleCards.length > 0, twoFactorEnabled].filter(Boolean).length;
+  const officialUser = hasApprovedKyc ? (syncUserNameFromApprovedKyc(kyc, user) || user) : user;
 
   return {
-    user: serializeTwoFactorUser(user),
+    user: serializeTwoFactorUser(officialUser),
     wallet: mapRow(wallet),
     kyc: kyc ? mapRow(kyc) : { user_id: user.email, status: 'not_started', level: 0 },
     cards: mapRows(cards),
@@ -2349,7 +2394,13 @@ export function createApp() {
     }
 
     ensureWallet(user.email);
-    return res.json(serializeTwoFactorUser(user));
+    const approvedKyc = db.prepare(`
+      SELECT * FROM kyc_submissions
+      WHERE user_id = ? AND status = 'approved'
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1
+    `).get(user.email);
+    return res.json(serializeTwoFactorUser(syncUserNameFromApprovedKyc(approvedKyc, user) || user));
   });
 
   app.get('/api/dashboard', authMiddleware(db), (req, res) => {
@@ -2779,6 +2830,9 @@ export function createApp() {
 
   app.get('/api/entities/:entity', authMiddleware(db), async (req, res) => {
     try {
+      if (req.params.entity === 'User' && req.user.role !== 'user') {
+        syncApprovedKycNames();
+      }
       if (req.params.entity === 'Deposit') {
         expirePendingChapaDeposits(req.user.role === 'user' ? req.user.email : undefined);
         await reconcilePendingUsdcDeposits();
@@ -3740,6 +3794,8 @@ export function createApp() {
         LIMIT 1
       `).get(target.email));
 
+      syncUserNameFromApprovedKyc(kyc, target);
+
       let bitnobCustomer = null;
       let bitnobWarning = null;
       try {
@@ -4532,6 +4588,8 @@ export function createApp() {
             updated_at = ?
         WHERE id = ?
       `).run(req.user.email, now, now, kyc.id);
+
+      syncUserNameFromApprovedKyc({ ...kyc, status: 'approved' }, target);
 
       db.prepare(`
         INSERT INTO notifications (id, user_id, title, message, type, read, created_at)
