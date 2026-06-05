@@ -3296,7 +3296,7 @@ export function createApp() {
     try {
       if (!requireAdmin(req, res)) return;
       const provider = await bitnobService.getAllCardTransactions();
-      res.json({ provider, transactions: normalizeProviderList(provider) });
+      res.json({ provider, transactions: normalizeProviderList(provider).map(normalizeProviderTransaction) });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list transactions.' });
     }
@@ -3414,7 +3414,7 @@ export function createApp() {
       const card = db.prepare('SELECT * FROM virtual_cards WHERE (id = ? OR provider_card_id = ?) AND environment = ?').get(req.params.cardId, req.params.cardId, config.bitnob.env);
       const providerCardId = card?.provider_card_id || req.params.cardId;
       const provider = await bitnobService.getCardTransactions(providerCardId);
-      res.json({ provider, transactions: normalizeProviderList(provider) });
+      res.json({ provider, card: card ? mapRow(card) : null, transactions: normalizeProviderList(provider).map(normalizeProviderTransaction) });
     } catch (error) {
       res.status(400).json({ message: error.message || 'Unable to list card transactions.' });
     }

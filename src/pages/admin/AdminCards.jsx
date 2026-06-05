@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { BadgeCheck, CreditCard, Eye, PauseCircle, Plus, RefreshCw, Search, Send, Trash2, WalletCards } from 'lucide-react';
@@ -93,6 +93,7 @@ export default function AdminCards() {
   const [deleteReason, setDeleteReason] = useState('');
   const [secureDetails, setSecureDetails] = useState(null);
   const [activeTab, setActiveTab] = useState('cards');
+  const [lastProviderTransactions, setLastProviderTransactions] = useState([]);
 
   const providerStatusQuery = useQuery({ queryKey: ['provider-status'], queryFn: apiClient.admin.providerStatus, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
   const balancesQuery = useQuery({ queryKey: ['bitnob-balances'], queryFn: apiClient.admin.balances, refetchInterval: REFRESH.fees, retry: false, staleTime: 0, refetchOnMount: 'always' });
@@ -103,13 +104,37 @@ export default function AdminCards() {
   const cardsQuery = useQuery({ queryKey: ['admin-cards', environmentKey], queryFn: apiClient.admin.cards.list, enabled: providerReady, refetchInterval: REFRESH.admin, staleTime: 0, refetchOnMount: 'always' });
   const txQuery = useQuery({ queryKey: ['bitnob-transactions', environmentKey], queryFn: apiClient.admin.cards.allTransactions, enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
   const providerTransactionsQuery = useQuery({ queryKey: ['bitnob-provider-transactions', environmentKey], queryFn: () => apiClient.admin.bitnob.transactions('all'), enabled: providerReady, refetchInterval: REFRESH.admin, retry: false, staleTime: 0, refetchOnMount: 'always' });
+  const cardDetailQuery = useQuery({
+    queryKey: ['admin-card-detail', actionCard?.id, environmentKey],
+    queryFn: () => apiClient.admin.cards.get(actionCard.id),
+    enabled: Boolean(actionCard?.id && action === 'view'),
+    refetchInterval: actionCard?.id && action === 'view' ? REFRESH.admin : false,
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: 'always'
+  });
+  const cardTransactionsQuery = useQuery({
+    queryKey: ['admin-card-transactions', actionCard?.id, environmentKey],
+    queryFn: () => apiClient.admin.cards.transactions(actionCard.id),
+    enabled: Boolean(actionCard?.id && action === 'view'),
+    refetchInterval: actionCard?.id && action === 'view' ? REFRESH.admin : false,
+    retry: false,
+    staleTime: 0,
+    refetchOnMount: 'always'
+  });
   const auditQuery = useQuery({ queryKey: ['audit-logs'], queryFn: apiClient.admin.auditLogs, refetchInterval: REFRESH.admin });
 
   const customers = (customersQuery.data || []).filter((customer) => matchesProviderEnvironment(customer, activeEnvironment));
   const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const transactions = txQuery.data?.transactions || [];
-  const providerTransactions = providerTransactionsQuery.data?.transactions || [];
+  const providerTransactions = providerTransactionsQuery.data?.transactions?.length ? providerTransactionsQuery.data.transactions : lastProviderTransactions;
   const auditLogs = auditQuery.data || [];
+
+  useEffect(() => {
+    if (providerTransactionsQuery.data?.transactions?.length) {
+      setLastProviderTransactions(providerTransactionsQuery.data.transactions);
+    }
+  }, [providerTransactionsQuery.data]);
 
   const filteredCustomers = customers.filter((customer) => {
     const haystack = `${getName(customer)} ${customer.email || ''} ${customer.bitnob_customer_id || ''}`.toLowerCase();
@@ -376,8 +401,18 @@ export default function AdminCards() {
         </TabsContent>
 
         <TabsContent value="transactions">
-          <div>
-            <p className="mb-2 text-sm font-semibold">Provider transactions</p>
+          <div className="space-y-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Provider transactions</p>
+                <p className="text-xs text-muted-foreground">
+                  {providerTransactionsQuery.isFetching ? 'Refreshing...' : providerTransactionsQuery.data?.providerUnavailable ? 'Provider returned no fresh rows; keeping the last loaded rows when available.' : 'Auto-refreshes while this page is open.'}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => providerTransactionsQuery.refetch()} disabled={providerTransactionsQuery.isFetching}>
+                <RefreshCw className="h-3.5 w-3.5" /> {providerTransactionsQuery.isFetching ? 'Refreshing...' : 'Refresh'}
+              </Button>
+            </div>
             <ProviderTransactionsTable rows={providerTransactions} empty="No provider transactions returned yet." />
           </div>
         </TabsContent>
@@ -484,21 +519,36 @@ export default function AdminCards() {
       </Dialog>
 
       <Dialog open={Boolean(actionCard)} onOpenChange={(open) => !open && setActionCard(null)}>
-        <DialogContent>
+        <DialogContent className={action === 'view' ? 'max-w-4xl' : undefined}>
           <DialogHeader>
-            <DialogTitle className="capitalize">{action} card</DialogTitle>
+            <DialogTitle className="capitalize">{action === 'view' ? 'Card details and transactions' : `${action} card`}</DialogTitle>
             <DialogDescription>
               {action === 'terminate'
                 ? 'This permanently terminates the card and removes it from active use.'
                 : `${actionCard?.card_nickname || 'Virtual Card'} ${actionCard?.masked_pan || ''}`}
             </DialogDescription>
           </DialogHeader>
-          {['fund', 'withdraw'].includes(action) && <div><Label className="text-xs">Amount USD</Label><Input type="number" min="1" step="0.01" value={actionForm.amount} onChange={(event) => setActionForm((current) => ({ ...current, amount: event.target.value }))} /></div>}
-          {!secureDetails && <div className="mt-3"><Label className="text-xs">Reason</Label><Textarea value={actionForm.reason} onChange={(event) => setActionForm((current) => ({ ...current, reason: event.target.value }))} rows={2} /></div>}
-          {secureDetails && <pre className="max-h-64 overflow-auto rounded bg-secondary p-3 text-xs">{JSON.stringify(secureDetails, null, 2)}</pre>}
+          {action === 'view' ? (
+            <CardDetailPanel
+              card={cardDetailQuery.data?.card || actionCard}
+              transactions={cardTransactionsQuery.data?.transactions || []}
+              loadingDetails={cardDetailQuery.isFetching}
+              loadingTransactions={cardTransactionsQuery.isFetching}
+              onRefresh={() => {
+                cardDetailQuery.refetch();
+                cardTransactionsQuery.refetch();
+              }}
+            />
+          ) : (
+            <>
+              {['fund', 'withdraw'].includes(action) && <div><Label className="text-xs">Amount USD</Label><Input type="number" min="1" step="0.01" value={actionForm.amount} onChange={(event) => setActionForm((current) => ({ ...current, amount: event.target.value }))} /></div>}
+              {!secureDetails && <div className="mt-3"><Label className="text-xs">Reason</Label><Textarea value={actionForm.reason} onChange={(event) => setActionForm((current) => ({ ...current, reason: event.target.value }))} rows={2} /></div>}
+              {secureDetails && <pre className="max-h-64 overflow-auto rounded bg-secondary p-3 text-xs">{JSON.stringify(secureDetails, null, 2)}</pre>}
+            </>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setActionCard(null)}>Close</Button>
-            {!secureDetails && (
+            {action !== 'view' && !secureDetails && (
               <Button
                 variant={action === 'terminate' ? 'destructive' : 'default'}
                 onClick={() => cardAction.mutate()}
@@ -510,6 +560,44 @@ export default function AdminCards() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function CardDetailPanel({ card, transactions, loadingDetails, loadingTransactions, onRefresh }) {
+  const rows = transactions || [];
+  const displayName = card?.first_name ? `${card.first_name} ${card.last_name || ''}`.trim() : card?.card_nickname || card?.user_id || 'Cardholder';
+  const createdAt = card?.created_at || card?.created_date;
+
+  return (
+    <div className="max-h-[72vh] space-y-4 overflow-y-auto pr-1">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <InfoPill label="Holder" value={displayName} />
+        <InfoPill label="Card" value={card?.masked_pan || `**** ${card?.last_four || '----'}`} />
+        <InfoPill label="Status" value={card?.status || 'pending'} />
+        <InfoPill label="Balance" value={money(card?.balance)} />
+        <InfoPill label="User" value={card?.user_id || '-'} />
+        <InfoPill label="Customer" value={card?.customer_email || card?.bitnob_customer_id || '-'} />
+        <InfoPill label="Provider card ID" value={card?.provider_card_id || '-'} />
+        <InfoPill label="Created" value={createdAt ? formatProviderDate(createdAt) : '-'} />
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Card transactions</p>
+            <p className="text-xs text-muted-foreground">
+              {loadingDetails || loadingTransactions ? 'Refreshing card data...' : 'Latest provider card activity for this user card.'}
+            </p>
+          </div>
+          <Button type="button" size="sm" variant="outline" onClick={onRefresh} disabled={loadingDetails || loadingTransactions}>
+            <RefreshCw className="h-3.5 w-3.5" /> {loadingDetails || loadingTransactions ? 'Refreshing...' : 'Refresh'}
+          </Button>
+        </div>
+        <div className="mt-3">
+          <ProviderTransactionsTable rows={rows} empty="No card transactions returned yet." />
+        </div>
+      </div>
     </div>
   );
 }
@@ -545,7 +633,7 @@ function CompactCards({ cards, onAction }) {
             <div className="grid grid-cols-2 gap-2">
               <Button size="sm" variant="outline" onClick={() => onAction(card, 'fund')}>Fund</Button>
               <Button size="sm" variant="outline" onClick={() => onAction(card, card.status === 'frozen' ? 'unfreeze' : 'freeze')}>{card.status === 'frozen' ? 'Unfreeze' : 'Freeze'}</Button>
-              <Button size="sm" variant="outline" onClick={() => onAction(card, 'secure')}>Secure Details</Button>
+              <Button size="sm" variant="outline" onClick={() => onAction(card, 'view')}>View</Button>
               {card.status !== 'terminated' && (
                 <Button size="sm" variant="destructive" onClick={() => onAction(card, 'terminate')}>Terminate</Button>
               )}
@@ -571,7 +659,7 @@ function CompactCards({ cards, onAction }) {
                 <div className="flex flex-wrap justify-end gap-1">
                   <Button size="sm" variant="outline" onClick={() => onAction(card, 'fund')}>Fund</Button>
                   <Button size="sm" variant="outline" onClick={() => onAction(card, card.status === 'frozen' ? 'unfreeze' : 'freeze')}>{card.status === 'frozen' ? 'Unfreeze' : 'Freeze'}</Button>
-                  <Button size="sm" variant="outline" onClick={() => onAction(card, 'secure')}><Eye className="h-3.5 w-3.5" /></Button>
+                  <Button size="sm" variant="outline" onClick={() => onAction(card, 'view')}><Eye className="h-3.5 w-3.5" /></Button>
                   {card.status !== 'terminated' && (
                     <Button size="sm" variant="destructive" onClick={() => onAction(card, 'terminate')}>
                       <Trash2 className="h-3.5 w-3.5" />
