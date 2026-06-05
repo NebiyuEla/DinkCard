@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import StatusBadge from '@/components/ui-custom/StatusBadge';
 import FilePreview from '@/components/FilePreview';
-import EditableImageUpload from '@/components/EditableImageUpload';
+import FileUploadControl from '@/components/FileUploadControl';
 import { ShieldCheck, Upload, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -410,15 +410,14 @@ export default function KYCPage() {
                     </button>
                   </div>
                 ) : (
-                  <EditableImageUpload
+                  <FileUploadControl
                     className="min-h-[92px] w-full rounded-lg flex flex-col items-center justify-center"
                     disabled={uploading[item.key]}
-                    uploading={uploading[item.key]}
-                    onUpload={(file) => handleUpload(file, item.setter, item.key)}
+                    onFile={(file) => handleUpload(file, item.setter, item.key)}
                   >
                     <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
                     <p className="text-xs text-muted-foreground">{uploading[item.key] ? 'Uploading...' : 'Tap to upload'}</p>
-                  </EditableImageUpload>
+                  </FileUploadControl>
                 )}
               </div>
             </div>

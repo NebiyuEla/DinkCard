@@ -125,8 +125,11 @@ export const apiClient = {
           throw new Error('Upload could not reach the server. Check your connection and try again.');
         }
         if (!response.ok) {
-          const payload = await response.json().catch(() => ({}));
-          throw new Error(payload.message || 'Upload failed');
+          const payload = await response.json().catch(async () => {
+            const text = await response.text().catch(() => '');
+            return { message: text };
+          });
+          throw new Error(payload.message || 'Upload failed. Please try again.');
         }
         return response.json();
       }
