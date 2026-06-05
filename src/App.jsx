@@ -28,7 +28,6 @@ import KYCPage from './pages/KYCPage';
 import SupportPage from './pages/SupportPage';
 import NotificationsPage from './pages/NotificationsPage';
 import AccountPage from './pages/AccountPage';
-import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminKYC from './pages/admin/AdminKYC';
 import AdminDeposits from './pages/admin/AdminDeposits';
@@ -150,7 +149,22 @@ function HomeRoute() {
 function RequireOwner({ children }) {
   const { isLoadingAuth, user } = useAuth();
   if (isLoadingAuth) return <LoadingScreen />;
-  return user?.role === 'superadmin' ? children : <Navigate to="/admin" replace />;
+  return user?.role === 'superadmin' ? children : <Navigate to="/superadmin/dashboard" replace />;
+}
+
+function RequireAdminRoles({ allowed, children }) {
+  const { isLoadingAuth, user } = useAuth();
+  if (isLoadingAuth) return <LoadingScreen />;
+  if (user?.role === 'superadmin' || allowed.includes(user?.role)) return children;
+  return <Navigate to="/superadmin/dashboard" replace />;
+}
+
+function AdminRedirect() {
+  const location = useLocation();
+  const target = location.pathname === '/admin' || location.pathname === '/admin/dashboard'
+    ? '/superadmin/dashboard'
+    : location.pathname.replace(/^\/admin/, '/superadmin');
+  return <Navigate to={target} replace />;
 }
 
 function AppRoutes() {
@@ -169,17 +183,17 @@ function AppRoutes() {
       <Route path="/reset-password" element={<PublicOnly><ResetPassword /></PublicOnly>} />
       <Route path="/superadmin" element={<SuperAdminLogin />} />
 
-      <Route element={<RequireAuth roles={['superadmin']} />}>
+      <Route element={<RequireAuth roles={ADMIN_ROLES} />}>
         <Route element={<SuperAdminLayout />}>
           <Route path="/superadmin/dashboard" element={<SAOverview />} />
-          <Route path="/superadmin/users" element={<AdminUsers />} />
-          <Route path="/superadmin/kyc" element={<AdminKYC />} />
-          <Route path="/superadmin/deposits" element={<AdminDeposits />} />
-          <Route path="/superadmin/cards" element={<AdminCards />} />
-          <Route path="/superadmin/tickets" element={<AdminTickets />} />
-          <Route path="/superadmin/broadcast" element={<AdminBroadcast />} />
-          <Route path="/superadmin/fees" element={<AdminFees />} />
-          <Route path="/superadmin/audit" element={<AdminAuditLogs />} />
+          <Route path="/superadmin/users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
+          <Route path="/superadmin/kyc" element={<RequireAdminRoles allowed={['admin', 'kyc_checker']}><AdminKYC /></RequireAdminRoles>} />
+          <Route path="/superadmin/deposits" element={<RequireAdminRoles allowed={['admin']}><AdminDeposits /></RequireAdminRoles>} />
+          <Route path="/superadmin/cards" element={<RequireAdminRoles allowed={['admin']}><AdminCards /></RequireAdminRoles>} />
+          <Route path="/superadmin/tickets" element={<RequireAdminRoles allowed={['admin', 'support', 'support_response']}><AdminTickets /></RequireAdminRoles>} />
+          <Route path="/superadmin/broadcast" element={<RequireAdminRoles allowed={['admin']}><AdminBroadcast /></RequireAdminRoles>} />
+          <Route path="/superadmin/fees" element={<RequireOwner><AdminFees /></RequireOwner>} />
+          <Route path="/superadmin/audit" element={<RequireOwner><AdminAuditLogs /></RequireOwner>} />
         </Route>
       </Route>
 
@@ -201,16 +215,7 @@ function AppRoutes() {
       </Route>
 
       <Route element={<RequireAuth roles={ADMIN_ROLES} />}>
-        <Route path="/admin" element={<AdminDashboard />}>
-          <Route path="users" element={<RequireOwner><AdminUsers /></RequireOwner>} />
-          <Route path="kyc" element={<AdminKYC />} />
-          <Route path="deposits" element={<AdminDeposits />} />
-          <Route path="cards" element={<AdminCards />} />
-          <Route path="tickets" element={<AdminTickets />} />
-          <Route path="broadcast" element={<AdminBroadcast />} />
-          <Route path="fees" element={<RequireOwner><AdminFees /></RequireOwner>} />
-          <Route path="audit" element={<RequireOwner><AdminAuditLogs /></RequireOwner>} />
-        </Route>
+        <Route path="/admin/*" element={<AdminRedirect />} />
       </Route>
 
       <Route path="*" element={<PageNotFound />} />

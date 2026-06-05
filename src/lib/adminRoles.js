@@ -7,8 +7,6 @@ export function hasAdminRole(userOrRole) {
 
 export function getRoleHome(userOrRole) {
   const role = typeof userOrRole === 'string' ? userOrRole : userOrRole?.role;
-  if (role === 'superadmin') return '/superadmin/dashboard';
-  if (hasAdminRole(role)) return '/admin';
+  if (hasAdminRole(role)) return '/superadmin/dashboard';
   return '/dashboard';
 }
-

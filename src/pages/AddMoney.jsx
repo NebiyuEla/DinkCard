@@ -159,29 +159,15 @@ export default function AddMoney() {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                <span className="text-muted-foreground">Conversion amount</span>
-                <span className="text-right font-mono font-semibold">{fees.etbAmount.toLocaleString()} ETB</span>
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
                 <span className="text-muted-foreground">Fees & charges</span>
                 <span className="text-right font-mono font-semibold">{fees.feesAndChargesEtb.toLocaleString()} ETB</span>
               </div>
-              {fees.showGatewayFeePercent && (
-                <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                  <span className="text-muted-foreground">Gateway fee (%)</span>
-                  <span className="text-right font-mono font-semibold">{fees.gatewayFeePercentage.toFixed(2)}%</span>
-                </div>
-              )}
               <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-semibold">Total payable</span>
                   <span className="text-right font-mono text-lg font-bold text-primary">{fees.checkoutPreviewTotalEtb.toLocaleString()} ETB</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} service balance.</p>
-              </div>
-              <div className="flex items-center justify-between gap-3 rounded-xl bg-secondary/35 p-3">
-                <span className="text-muted-foreground">Effective rate</span>
-                <span className="text-right font-mono font-semibold">{fees.effectivePayableRate.toLocaleString()} ETB/USD</span>
               </div>
 
               {displayStyle === 'hybrid' && (
@@ -195,8 +181,25 @@ export default function AddMoney() {
               )}
 
               {shouldShowDetails && (
-                <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
-                  Fees & charges include service processing, payment gateway cost, and rounding where applicable. The final amount shown above is the amount payable before you continue.
+                <div className="space-y-2 rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Conversion amount</span>
+                    <span className="font-mono text-foreground">{fees.etbAmount.toLocaleString()} ETB</span>
+                  </div>
+                  {fees.showGatewayFeePercent && (
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Payment fee</span>
+                      <span className="font-mono text-foreground">{fees.gatewayFeePercentage.toFixed(2)}%</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Checkout preview fee</span>
+                    <span className="font-mono text-foreground">{fees.checkoutPreviewFeeEtb.toLocaleString()} ETB</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Effective rate</span>
+                    <span className="font-mono text-foreground">{fees.effectivePayableRate.toLocaleString()} ETB/USD</span>
+                  </div>
                 </div>
               )}
             </div>

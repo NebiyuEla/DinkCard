@@ -78,8 +78,8 @@ export default function AdminFees() {
   const pricingFields = [
     { key: 'usd_to_etb_rate', label: 'USD exchange rate', suffix: 'ETB' },
     { key: 'service_margin_percentage', label: 'Platform fee percent', suffix: '%' },
-    { key: 'gateway_fee_percentage', label: 'Gateway fee percent', suffix: '%' },
-    { key: 'total_amount_fee_percentage', label: 'Exact total fee percent', suffix: '%' },
+    { key: 'gateway_fee_percentage', label: 'Chapa customer fee percent', suffix: '%' },
+    { key: 'total_amount_fee_percentage', label: 'Settlement cost percent', suffix: '%' },
     { key: 'checkout_preview_fee_percentage', label: 'Checkout preview fee percent', suffix: '%' },
     { key: 'rounding_rule_etb', label: 'Round up to nearest', suffix: 'ETB' },
   ];
@@ -136,18 +136,10 @@ export default function AdminFees() {
               className="mt-1 font-mono"
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Card amount</p>
               <p className="font-mono font-semibold">${preview.cardAmountUsd.toFixed(2)}</p>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Conversion</p>
-              <p className="font-mono font-semibold">{preview.etbAmount.toLocaleString()} ETB</p>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Fees & charges</p>
-              <p className="font-mono font-semibold">{preview.feesAndChargesEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
               <p className="text-muted-foreground">Chargeable total</p>
@@ -158,15 +150,15 @@ export default function AdminFees() {
               <p className="font-mono font-semibold">{preview.exchangeRate.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Effective rate</p>
-              <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB/USD</p>
+              <p className="text-muted-foreground">Platform profit</p>
+              <p className="font-mono font-semibold">{preview.platformFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Gateway display</p>
-              <p className="font-mono font-semibold">{form.show_gateway_fee_percentage ? `${preview.gatewayFeePercentage.toFixed(2)}%` : 'Hidden'}</p>
+              <p className="text-muted-foreground">Chapa customer fee</p>
+              <p className="font-mono font-semibold">{preview.gatewayFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Exact total fee</p>
+              <p className="text-muted-foreground">Settlement cost</p>
               <p className="font-mono font-semibold">{preview.totalAmountFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
@@ -174,14 +166,10 @@ export default function AdminFees() {
               <p className="font-mono font-semibold">{preview.checkoutPreviewFeeEtb.toLocaleString()} ETB</p>
             </div>
             <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Total payable preview</p>
+              <p className="text-muted-foreground">User sees</p>
               <p className="font-mono font-semibold">{preview.checkoutPreviewTotalEtb.toLocaleString()} ETB</p>
             </div>
-            <div className="rounded-lg bg-background/80 p-2">
-              <p className="text-muted-foreground">Profit preview</p>
-              <p className="font-mono font-semibold">{preview.platformFeeEtb.toLocaleString()} ETB</p>
-            </div>
-            <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-4">
+            <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-3">
               <p className="text-muted-foreground">Locked provider rules</p>
               <p className="font-mono font-semibold">Max cards per user: 3 • Min create: ${effectiveMinCreation.toFixed(2)} • Min top-up: ${effectiveMinFunding.toFixed(2)}</p>
             </div>

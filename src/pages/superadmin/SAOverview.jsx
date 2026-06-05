@@ -205,18 +205,8 @@ export default function SAOverview() {
 
   const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, companyBalancesQuery, walletTxQuery, auditQuery];
   const overviewLoading = overviewQueries.some((query) => query.isLoading);
-  const overviewError = overviewQueries.some((query) => query.isError && !query.data);
 
   if (overviewLoading) return <SuperOverviewSkeleton />;
-  if (overviewError) {
-    return (
-      <div className="rounded-2xl border border-border bg-card p-5 text-sm">
-        <p className="font-semibold">Could not load superadmin overview.</p>
-        <p className="mt-1 text-muted-foreground">Retry when the connection is stable.</p>
-        <button type="button" onClick={refreshDashboard} className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">Retry</button>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

@@ -105,12 +105,12 @@ export default function Sidebar({ user, unreadCount = 0, onCollapsedChange }) {
                 {!collapsed ? <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Admin</p> : <div className="border-t border-border" />}
               </div>
               <Link
-                to="/admin"
+                to="/superadmin/dashboard"
                 title={collapsed ? 'Admin Panel' : undefined}
                 aria-label="Admin Panel"
                 className={cn(
                   'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
-                  location.pathname.startsWith('/admin') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                  location.pathname.startsWith('/superadmin') ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
                 )}
               >
                 <Settings className="h-5 w-5 shrink-0" />

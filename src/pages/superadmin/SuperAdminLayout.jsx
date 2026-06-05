@@ -44,15 +44,23 @@ function playSuperAdminTone() {
 
 const nav = [
   { label: 'Overview', path: '/superadmin/dashboard', icon: LayoutDashboard },
-  { label: 'Users', path: '/superadmin/users', icon: Users },
+  { label: 'Users', path: '/superadmin/users', icon: Users, ownerOnly: true },
   { label: 'KYC', path: '/superadmin/kyc', icon: ShieldCheck },
   { label: 'Deposits', path: '/superadmin/deposits', icon: DollarSign },
   { label: 'Cards', path: '/superadmin/cards', icon: CreditCard },
   { label: 'Tickets', path: '/superadmin/tickets', icon: HeadphonesIcon },
-  { label: 'Broadcast', path: '/superadmin/broadcast', icon: BellRing },
-  { label: 'Pricing Settings', path: '/superadmin/fees', icon: Settings },
-  { label: 'Audit Logs', path: '/superadmin/audit', icon: FileText },
+  { label: 'Broadcast', path: '/superadmin/broadcast', icon: BellRing, adminOnly: true },
+  { label: 'Pricing Settings', path: '/superadmin/fees', icon: Settings, ownerOnly: true },
+  { label: 'Audit Logs', path: '/superadmin/audit', icon: FileText, ownerOnly: true },
 ];
+
+const roleNavAccess = {
+  support: new Set(['/superadmin/dashboard', '/superadmin/tickets']),
+  support_response: new Set(['/superadmin/dashboard', '/superadmin/tickets']),
+  kyc_checker: new Set(['/superadmin/dashboard', '/superadmin/kyc']),
+  admin: new Set(['/superadmin/dashboard', '/superadmin/kyc', '/superadmin/deposits', '/superadmin/cards', '/superadmin/tickets', '/superadmin/broadcast']),
+  superadmin: null
+};
 
 export default function SuperAdminLayout() {
   const queryClient = useQueryClient();
@@ -72,6 +80,13 @@ export default function SuperAdminLayout() {
   const pendingDeposits = deposits?.filter(d => d.status === 'awaiting_review')?.length || 0;
   const openTickets = tickets?.filter(t => ['open', 'under_review'].includes(t.status))?.length || 0;
   const alertsLabel = getAlertsButtonLabel(permission);
+  const access = roleNavAccess[user?.role] || roleNavAccess.support;
+  const visibleNav = nav.filter((item) => {
+    if (user?.role === 'superadmin') return true;
+    if (item.ownerOnly) return false;
+    if (item.adminOnly && !['admin', 'superadmin'].includes(user?.role)) return false;
+    return access?.has(item.path);
+  });
 
   const badges = {
     '/superadmin/kyc': pendingKYC,
@@ -160,7 +175,7 @@ export default function SuperAdminLayout() {
           </div>
         </div>
         <nav className="flex gap-2 overflow-x-auto px-3 pb-3">
-          {nav.map(item => {
+          {visibleNav.map(item => {
             const badge = badges[item.path] || 0;
             const active = location.pathname === item.path;
             return (
@@ -189,7 +204,7 @@ export default function SuperAdminLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-hidden px-3 py-3">
-          {nav.map(item => {
+          {visibleNav.map(item => {
             const badge = badges[item.path] || 0;
             const active = location.pathname === item.path;
             return (

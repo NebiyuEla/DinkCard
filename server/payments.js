@@ -2,8 +2,9 @@ import { db, mapRow } from './db.js';
 import { config } from './config.js';
 import { generateId, money, nowIso, hmacSha256Hex } from './utils.js';
 
-export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 5.6;
+export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.88;
 export const DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_TOTAL_AMOUNT_FEE_PERCENTAGE = 2.5;
 export const DEFAULT_PERCENT_CHARGE = 5;
 const PENDING_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -40,7 +41,7 @@ export function calculateDeposit(usdAmount, settings = getFeeSettings()) {
   const rate = Math.max(0, safeNumber(settings?.usd_to_etb_rate, 190));
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
-  const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, 0));
+  const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, DEFAULT_TOTAL_AMOUNT_FEE_PERCENTAGE));
   const checkoutPreviewFeePercentage = Math.max(0, safeNumber(settings?.checkout_preview_fee_percentage, DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE));
   const showGatewayFeePercent = Number(settings?.show_gateway_fee_percentage ?? 1) ? true : false;
   const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));

@@ -1,5 +1,6 @@
-export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 5.6;
+export const DEFAULT_GATEWAY_FEE_PERCENTAGE = 2.88;
 export const DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE = 2.5;
+export const DEFAULT_TOTAL_AMOUNT_FEE_PERCENTAGE = 2.5;
 export const DEFAULT_PERCENT_CHARGE = 5;
 
 export function getGatewayFeePercentage(settings = {}) {
@@ -46,7 +47,7 @@ export function calculateDepositFees(usdAmount, exchangeRate, settings = {}) {
   const gatewayFeePercentage = getGatewayFeePercentage(settings);
   const rate = Math.max(0, safeNumber(exchangeRate || settings?.usd_to_etb_rate, 190));
   const serviceMarginPercentage = Math.max(0, safeNumber(settings?.service_margin_percentage, DEFAULT_PERCENT_CHARGE));
-  const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, 0));
+  const totalAmountFeePercentage = Math.max(0, safeNumber(settings?.total_amount_fee_percentage, DEFAULT_TOTAL_AMOUNT_FEE_PERCENTAGE));
   const checkoutPreviewFeePercentage = Math.max(0, safeNumber(settings?.checkout_preview_fee_percentage, DEFAULT_CHECKOUT_PREVIEW_FEE_PERCENTAGE));
   const showGatewayFeePercent = Number(settings?.show_gateway_fee_percentage ?? 1) ? true : false;
   const roundingRuleEtb = Math.max(0, safeNumber(settings?.rounding_rule_etb, 0));
@@ -140,7 +141,7 @@ export function calculateCardFundingFees(amount, settings = {}) {
 
 export const DEFAULT_SETTINGS = {
   usd_to_etb_rate: 190,
-  gateway_fee_percentage: 5.6,
+  gateway_fee_percentage: 2.88,
   checkout_preview_fee_percentage: 2.5,
   deposit_fee_percentage: 0,
   deposit_fixed_fee_etb: 0,
@@ -149,7 +150,7 @@ export const DEFAULT_SETTINGS = {
   maximum_service_fee_etb: 0,
   enable_minimum_fee: 0,
   show_gateway_fee_percentage: 1,
-  total_amount_fee_percentage: 0,
+  total_amount_fee_percentage: 2.5,
   safety_buffer_percentage: 0,
   chapa_settlement_fee_etb: 0,
   card_creation_fee_usd: 1,

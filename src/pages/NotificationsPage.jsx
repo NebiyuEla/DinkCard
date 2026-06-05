@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { getNotificationPermission, requestDeviceNotificationPermission } from '@/lib/deviceNotifications';
 import FilePreview from '@/components/FilePreview';
+import { hasAdminRole } from '@/lib/adminRoles';
 
 const typeIcons = {
   deposit: DollarSign,
@@ -71,7 +72,7 @@ export default function NotificationsPage() {
   const notificationLink = (link) => {
     const raw = String(link || '');
     if (!raw) return '';
-    if (user?.role === 'superadmin' && raw.startsWith('/admin')) {
+    if (hasAdminRole(user) && raw.startsWith('/admin')) {
       if (raw === '/admin' || raw === '/admin/dashboard') return '/superadmin/dashboard';
       return raw.replace(/^\/admin/, '/superadmin');
     }
