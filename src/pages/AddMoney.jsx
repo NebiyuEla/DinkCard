@@ -168,6 +168,7 @@ export default function AddMoney() {
                   <span className="text-right font-mono text-lg font-bold text-primary">{fees.checkoutPreviewTotalEtb.toLocaleString()} ETB</span>
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">You will get ${fees.finalUsdCredit.toFixed(2)} service balance.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Effective rate: {fees.effectivePayableRate.toLocaleString()} ETB/USD</p>
               </div>
 
               {displayStyle === 'hybrid' && (
@@ -196,10 +197,7 @@ export default function AddMoney() {
                     <span>Checkout preview fee</span>
                     <span className="font-mono text-foreground">{fees.checkoutPreviewFeeEtb.toLocaleString()} ETB</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span>Effective rate</span>
-                    <span className="font-mono text-foreground">{fees.effectivePayableRate.toLocaleString()} ETB/USD</span>
-                  </div>
+                  <p className="pt-1">Fees include service processing, payment cost, settlement cost, preview adjustment, and rounding where applicable.</p>
                 </div>
               )}
             </div>

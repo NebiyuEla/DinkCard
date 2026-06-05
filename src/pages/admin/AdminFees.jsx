@@ -169,6 +169,10 @@ export default function AdminFees() {
               <p className="text-muted-foreground">User sees</p>
               <p className="font-mono font-semibold">{preview.checkoutPreviewTotalEtb.toLocaleString()} ETB</p>
             </div>
+            <div className="rounded-lg bg-background/80 p-2">
+              <p className="text-muted-foreground">Effective rate</p>
+              <p className="font-mono font-semibold">{preview.effectivePayableRate.toFixed(2)} ETB/USD</p>
+            </div>
             <div className="rounded-lg bg-background/80 p-2 col-span-2 sm:col-span-3">
               <p className="text-muted-foreground">Locked provider rules</p>
               <p className="font-mono font-semibold">Max cards per user: 3 • Min create: ${effectiveMinCreation.toFixed(2)} • Min top-up: ${effectiveMinFunding.toFixed(2)}</p>

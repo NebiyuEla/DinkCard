@@ -117,7 +117,11 @@ export default function AdminDeposits() {
         </div>
       </div>
 
-      <ProviderTransactionsPanel rows={latestCryptoDepositTransactions} isError={providerTxQuery.isError} error={providerTxQuery.error} />
+      <ProviderTransactionsPanel
+        rows={latestCryptoDepositTransactions}
+        isError={providerTxQuery.isError || Boolean(providerTxData?.providerUnavailable)}
+        error={providerTxQuery.error || providerTxData?.errors?.[0]}
+      />
 
       {/* Detail dialog */}
       <Dialog open={!!selected} onOpenChange={() => setSelected(null)}>
@@ -274,8 +278,9 @@ function ProviderTransactionsPanel({ rows, isError = false, error = null }) {
         <span className="text-[11px] text-muted-foreground">Showing latest {Math.min(rows?.length || 0, 8)}</span>
       </div>
       {isError ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
-          Provider transactions could not load: {error?.message || 'Check provider credentials and transaction permissions.'}
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4 text-xs text-yellow-600 dark:text-yellow-400">
+          Provider transactions are not available right now. Refresh later or verify from the provider dashboard before manual approval.
+          {error?.message && <span className="mt-1 block break-words opacity-80">Last response: {error.message}</span>}
         </div>
       ) : (
         <ProviderMiniRows rows={rows} />

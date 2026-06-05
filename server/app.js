@@ -878,22 +878,23 @@ function normalizeProviderBaseAmount(value, currency) {
 function normalizeProviderTransaction(tx = {}) {
   const currency = String(providerTransactionValue(tx, ['currency', 'asset', 'symbol', 'data.currency', 'metadata.currency']) || 'USD').toUpperCase();
   const formattedAmount = parseProviderFormattedAmount(providerTransactionValue(tx, ['amount_formatted', 'formatted_amount']));
-  const displayAmount = Number(providerTransactionValue(tx, ['display_amount', 'displayAmount', 'amount_usd', 'usd_amount', 'metadata.display_amount', 'metadata.usd_amount', 'metadata.original_amount']));
+  const displayAmount = Number(providerTransactionValue(tx, ['display_amount', 'displayAmount', 'amount_usd', 'usd_amount', 'metadata.display_amount', 'metadata.usd_amount']));
   const amount = Number.isFinite(formattedAmount)
     ? formattedAmount
     : Number.isFinite(displayAmount)
       ? displayAmount
-      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['amount', 'value', 'data.amount', 'metadata.amount']), currency);
+      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['amount', 'value', 'data.amount', 'metadata.amount', 'metadata.original_amount', 'metadata.base_amount']), currency);
   const formattedFee = parseProviderFormattedAmount(providerTransactionValue(tx, ['fee_formatted', 'formatted_fee']));
   const displayFee = Number(providerTransactionValue(tx, ['display_fee', 'displayFee', 'fee_usd', 'metadata.display_fee']));
   const fee = Number.isFinite(formattedFee)
     ? formattedFee
     : Number.isFinite(displayFee)
       ? displayFee
-      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['fee', 'charges', 'metadata.fee']), currency);
+      : normalizeProviderBaseAmount(providerTransactionValue(tx, ['fee', 'charges', 'metadata.fee', 'metadata.fee_amount']), currency);
 
   return {
     raw: tx,
+    id: String(providerTransactionValue(tx, ['transaction_id', 'id', 'uuid', 'data.transaction_id', 'metadata.transaction_id'])).trim(),
     date: providerTransactionValue(tx, ['created_at', 'createdAt', 'date', 'timestamp', 'updated_at']),
     reference: String(providerTransactionValue(tx, ['reference', 'tx_ref', 'transaction_reference', 'id', 'transaction_id', 'metadata.reference', 'metadata.tx_ref', 'metadata.request_id'])).trim(),
     txHash: String(providerTransactionValue(tx, ['tx_hash', 'txHash', 'transaction_hash', 'hash', 'metadata.tx_hash', 'metadata.txHash', 'metadata.transaction_hash'])).trim(),
@@ -905,6 +906,59 @@ function normalizeProviderTransaction(tx = {}) {
     currency,
     address: String(providerTransactionValue(tx, ['address', 'deposit_address', 'wallet_address', 'to_address', 'destination_address', 'recipient_address', 'metadata.address', 'metadata.wallet_address'])).trim(),
     network: String(providerTransactionValue(tx, ['chain', 'network', 'metadata.chain', 'metadata.network', 'metadata.channel'])).trim()
+  };
+}
+
+async function collectBitnobTransactions({ type = 'all', maxPages = 5 } = {}) {
+  const requestedType = String(type || '').trim();
+  const queryTypes = requestedType && requestedType !== 'all' ? [requestedType] : ['', 'credit'];
+  const transactions = [];
+  const pages = [];
+  const errors = [];
+  const seen = new Set();
+  let hasMore = false;
+
+  for (const queryType of queryTypes) {
+    let cursor = '';
+    for (let page = 0; page < maxPages; page += 1) {
+      const query = [
+        'limit=100',
+        queryType ? `type=${encodeURIComponent(queryType)}` : '',
+        cursor ? `cursor=${encodeURIComponent(cursor)}` : ''
+      ].filter(Boolean).join('&');
+
+      let provider;
+      try {
+        provider = await bitnobService.listTransactions(query);
+      } catch (error) {
+        errors.push({
+          query,
+          message: error?.message || 'Provider transactions endpoint failed.',
+          status: error?.providerStatus || null
+        });
+        break;
+      }
+
+      pages.push(provider);
+      for (const tx of normalizeProviderList(provider).map(normalizeProviderTransaction)) {
+        const key = [tx.id, tx.reference, tx.txHash, tx.date, tx.type, tx.amount, tx.currency].filter(Boolean).join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
+        transactions.push(tx);
+      }
+      cursor = String(provider?.data?.next_cursor || provider?.next_cursor || provider?.data?.nextCursor || provider?.nextCursor || '').trim();
+      hasMore = hasMore || Boolean(cursor);
+      if (!cursor) break;
+    }
+  }
+
+  return {
+    provider: pages[0] || null,
+    transactions,
+    pages: pages.length,
+    hasMore,
+    providerUnavailable: !pages.length && errors.length > 0,
+    errors
   };
 }
 
@@ -3198,35 +3252,16 @@ export function createApp() {
     try {
       if (!requireAdmin(req, res)) return;
       const type = String(req.query.type || '').trim();
-      const transactions = [];
-      const pages = [];
-      const seen = new Set();
-      const queryTypes = type && type !== 'all' ? [type] : ['', 'credit'];
-      let hasMore = false;
-      for (const queryType of queryTypes) {
-        let cursor = '';
-        for (let page = 0; page < 5; page += 1) {
-          const query = [
-            'limit=100',
-            queryType ? `type=${encodeURIComponent(queryType)}` : '',
-            cursor ? `cursor=${encodeURIComponent(cursor)}` : ''
-          ].filter(Boolean).join('&');
-          const provider = await bitnobService.listTransactions(query);
-          pages.push(provider);
-          for (const tx of normalizeProviderList(provider).map(normalizeProviderTransaction)) {
-            const key = [tx.reference, tx.txHash, tx.date, tx.type, tx.amount, tx.currency].filter(Boolean).join('|');
-            if (seen.has(key)) continue;
-            seen.add(key);
-            transactions.push(tx);
-          }
-          cursor = String(provider?.data?.next_cursor || provider?.next_cursor || '').trim();
-          hasMore = hasMore || Boolean(cursor);
-          if (!cursor) break;
-        }
-      }
-      res.json({ provider: pages[0] || null, transactions, pages: pages.length, hasMore });
+      res.json(await collectBitnobTransactions({ type }));
     } catch (error) {
-      res.status(400).json({ message: error.message || 'Unable to list provider transactions.' });
+      res.json({
+        provider: null,
+        transactions: [],
+        pages: 0,
+        hasMore: false,
+        providerUnavailable: true,
+        errors: [{ message: error.message || 'Unable to list provider transactions.' }]
+      });
     }
   });
 
