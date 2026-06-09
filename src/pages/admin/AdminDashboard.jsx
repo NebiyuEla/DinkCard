@@ -91,6 +91,10 @@ function isCountableCard(card) {
   return !['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(normalizeCardStatus(card?.status));
 }
 
+function isVisibleUserForStats(user) {
+  return user?.role !== 'superadmin';
+}
+
 function AdminOverviewSkeleton() {
   return (
     <div className="space-y-6 rounded-[28px] border border-border bg-card p-4 md:p-6">
@@ -149,6 +153,7 @@ export default function AdminDashboard() {
   const { data: users } = usersQuery;
   const { data: kycSubs } = kycQuery;
   const { data: deposits } = depositsQuery;
+  const visibleUsers = (users || []).filter(isVisibleUserForStats);
   const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const { data: tickets } = ticketsQuery;
   const { data: walletSummary } = walletSummaryQuery;
@@ -170,7 +175,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const stats = {
-      users: users?.length || 0,
+      users: visibleUsers.length,
       kyc: pendingKYC,
       deposits: pendingDeposits,
       cards: countableCards.length,
@@ -184,7 +189,7 @@ export default function AdminDashboard() {
     else if (stats.tickets > previous.tickets) playAdminTone('support');
     else if (stats.cards > previous.cards) playAdminTone('card');
     else if (stats.users > previous.users) playAdminTone('user');
-  }, [countableCards.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, users?.length]);
+  }, [countableCards.length, currentUser, openTickets, pendingDeposits, pendingKYC, soundMuted, visibleUsers.length]);
 
   const isOverview = location.pathname === '/admin';
   const overviewQueries = [usersQuery, kycQuery, depositsQuery, cardsQuery, ticketsQuery, walletSummaryQuery, companyBalancesQuery];
@@ -367,7 +372,7 @@ export default function AdminDashboard() {
             All deposits, KYC reviews, card requests, refunds, and manual approvals must be reviewed according to provider rules, customer verification, transaction records, internal policy, and applicable compliance requirements.
           </div>
           <div className="grid auto-rows-fr grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-4">
-            <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
+            <StatCard title="Total Users" value={visibleUsers.length} icon={Users} />
             <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
             <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />

@@ -29,6 +29,10 @@ function isCountableCard(card) {
   return !['deleted_remote', 'deleted', 'archived', 'failed', 'rejected'].includes(normalizeCardStatus(card?.status));
 }
 
+function isVisibleUserForStats(user) {
+  return user?.role !== 'superadmin';
+}
+
 function shortId(value) {
   const clean = String(value || '');
   if (!clean) return '-';
@@ -144,6 +148,7 @@ export default function SAOverview() {
   const { data: users } = usersQuery;
   const { data: kycSubs } = kycQuery;
   const { data: deposits } = depositsQuery;
+  const visibleUsers = (users || []).filter(isVisibleUserForStats);
   const cards = (cardsQuery.data || []).filter((card) => matchesProviderEnvironment(card, activeEnvironment));
   const { data: tickets } = ticketsQuery;
   const { data: walletTransactions } = walletTxQuery;
@@ -240,7 +245,7 @@ export default function SAOverview() {
       </div>
 
       <div className="grid auto-rows-fr grid-cols-1 items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
-        <StatCard title="Total Users" value={users?.length || 0} icon={Users} />
+        <StatCard title="Total Users" value={visibleUsers.length} icon={Users} />
         <StatCard title="Pending KYC" value={pendingKYC} icon={ShieldCheck} accentClass={pendingKYC > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Pending Deposits" value={pendingDeposits} icon={DollarSign} accentClass={pendingDeposits > 0 ? 'text-yellow-500' : 'text-primary'} />
         <StatCard title="Company Wallet" value={`$${stableCompanyBalance.toFixed(2)}`} subtitle={`${Number(companyBalances?.usdc || 0).toFixed(2)} USDC / ${Number(companyBalances?.usdt || 0).toFixed(4)} USDT`} icon={WalletCards} />
